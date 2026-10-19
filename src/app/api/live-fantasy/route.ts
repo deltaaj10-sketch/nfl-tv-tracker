@@ -12,17 +12,31 @@ import {
 
 export const dynamic = 'force-dynamic';
 
+interface CachedRosterAthlete {
+  id: string;
+  name: string;
+  shortName: string;
+  position: FantasyPosition;
+  headshot: string;
+  jersey?: string;
+  teamId: string;
+}
+
 // Global in-memory roster cache to map athlete ID -> official position
 const rosterCache = new Map<string, string>();
+// In-memory cache to map teamId -> list of active fantasy-relevant athletes (QB, RB, WR, TE, K)
+const teamAthletesCache = new Map<string, CachedRosterAthlete[]>();
 let lastRosterFetchTime = 0;
 const ROSTER_CACHE_TTL = 1000 * 60 * 60 * 2; // 2 hours
 
 /**
  * Fetch and populate team rosters in the background to accurately map player positions
+ * and pre-seed full active team rosters for betting and fantasy tracking
  */
 async function ensureRostersLoaded(teamIds: string[]): Promise<void> {
   const now = Date.now();
-  if (rosterCache.size > 500 && now - lastRosterFetchTime < ROSTER_CACHE_TTL) {
+  const allCached = teamIds.every((id) => teamAthletesCache.has(id));
+  if (allCached && rosterCache.size > 500 && now - lastRosterFetchTime < ROSTER_CACHE_TTL) {
     return;
   }
 
@@ -33,18 +47,45 @@ async function ensureRostersLoaded(teamIds: string[]): Promise<void> {
         next: { revalidate: 7200 },
       })
         .then((r) => (r.ok ? r.json() : null))
-        .catch(() => null)
+        .then((data) => ({ teamId: id, data }))
+        .catch(() => ({ teamId: id, data: null }))
     );
 
     const results = await Promise.all(fetchPromises);
-    for (const data of results) {
+    for (const { teamId, data } of results) {
       if (!data?.athletes) continue;
+      const teamList: CachedRosterAthlete[] = [];
       for (const group of data.athletes) {
+        const groupPos = (group.position || '').toLowerCase();
+        if (groupPos === 'practicesquad' || groupPos === 'suspended') continue;
+
         for (const item of group.items || []) {
-          if (item?.id && item.position?.abbreviation) {
-            rosterCache.set(item.id, item.position.abbreviation.toUpperCase());
+          if (!item?.id) continue;
+          const rawPos = item.position?.abbreviation?.toUpperCase() || '';
+          if (rawPos) {
+            rosterCache.set(item.id, rawPos);
+          }
+
+          const fantasyPos = normalizePosition(rawPos);
+          // Cache fantasy skill positions: QB, RB, WR, TE, K
+          if (fantasyPos) {
+            const headshot =
+              item.headshot?.href ||
+              `https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/${item.id}.png&w=96&h=70&cb=1`;
+            teamList.push({
+              id: String(item.id),
+              name: item.displayName || item.fullName || item.name || 'Unknown Player',
+              shortName: item.shortName || item.displayName || item.name || '',
+              position: fantasyPos,
+              headshot,
+              jersey: item.jersey,
+              teamId: String(teamId),
+            });
           }
         }
+      }
+      if (teamList.length > 0) {
+        teamAthletesCache.set(String(teamId), teamList);
       }
     }
     lastRosterFetchTime = Date.now();
@@ -507,6 +548,86 @@ export async function GET() {
       };
 
       games.push(liveGame);
+
+      // Pre-seed all active skill-position players from team rosters for both teams
+      // This guarantees players are available for betting, props, and ownership even before kickoff or before recording stats
+      const preSeedRoster = (team: GameTeam, oppTeam: GameTeam, isHome: boolean) => {
+        const athletes = teamAthletesCache.get(String(team.id)) || [];
+        for (const ath of athletes) {
+          if (!allPlayersMap.has(ath.id)) {
+            const playerObj: FantasyPlayer = {
+              id: ath.id,
+              name: ath.name,
+              shortName: ath.shortName,
+              position: ath.position,
+              headshot: ath.headshot,
+              jersey: ath.jersey,
+              team: {
+                id: team.id,
+                abbreviation: team.abbreviation,
+                displayName: team.displayName,
+                logo: team.logo,
+                color: team.color,
+              },
+              opponent: {
+                abbreviation: oppTeam.abbreviation,
+                isHome: !isHome,
+              },
+              stats: {
+                completions: 0,
+                passingAttempts: 0,
+                passingYards: 0,
+                passingTouchdowns: 0,
+                interceptions: 0,
+                rushingAttempts: 0,
+                rushingYards: 0,
+                rushingTouchdowns: 0,
+                receptions: 0,
+                receivingYards: 0,
+                receivingTouchdowns: 0,
+                receivingTargets: 0,
+                fumblesLost: 0,
+                fgMade: 0,
+                fgAttempts: 0,
+                xpMade: 0,
+                xpAttempts: 0,
+              },
+              points: {
+                standard: 0,
+                ppr: 0,
+                halfPpr: 0,
+              },
+              rawStatLine: state === 'pre' ? 'Upcoming' : '0 PTS',
+              isGameLive: state === 'in',
+              isLive: state === 'in',
+              gameStatus: {
+                state,
+                clock: status.displayClock || '',
+                period: status.period || 0,
+                detail: statusType.shortDetail || '',
+                isRedZone,
+                isGameLive: state === 'in',
+                isLive: state === 'in',
+              },
+              playerRawStats: {
+                passYds: 0,
+                passTD: 0,
+                rushYds: 0,
+                rushTD: 0,
+                rec: 0,
+                recYds: 0,
+                recTD: 0,
+                anytimeTD: false,
+              },
+            };
+            (playerObj as any).hasOfficialPosition = true;
+            allPlayersMap.set(ath.id, playerObj);
+          }
+        }
+      };
+
+      preSeedRoster(awayTeam, homeTeam, false);
+      preSeedRoster(homeTeam, awayTeam, true);
 
       // Process Game Summary details
       const summaryResult = summaries[idx];

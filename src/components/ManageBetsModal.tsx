@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   X,
   Plus,
@@ -65,21 +65,97 @@ export default function ManageBetsModal({
   const [totalDirection, setTotalDirection] = useState<'OVER' | 'UNDER'>('OVER');
   const [totalLine, setTotalLine] = useState('47.5');
 
-  if (!isOpen) return null;
-
   const selectedGame = availableGames.find((g) => g.id === selectedGameId) || availableGames[0];
 
+  // Quick team filter for props: 'ALL' or team abbreviation (e.g. 'DAL', 'GB', etc.)
+  const [teamPropFilter, setTeamPropFilter] = useState<string>('ALL');
+
+  // Extract all unique teams from available games and players
+  const uniqueTeams = useMemo(() => {
+    const map = new Map<string, { abbreviation: string; name: string; isLive: boolean }>();
+    for (const g of availableGames) {
+      const isLive = g.status?.state === 'in';
+      if (g.awayTeam?.abbreviation) {
+        map.set(g.awayTeam.abbreviation, {
+          abbreviation: g.awayTeam.abbreviation,
+          name: g.awayTeam.displayName || g.awayTeam.name || g.awayTeam.abbreviation,
+          isLive,
+        });
+      }
+      if (g.homeTeam?.abbreviation) {
+        map.set(g.homeTeam.abbreviation, {
+          abbreviation: g.homeTeam.abbreviation,
+          name: g.homeTeam.displayName || g.homeTeam.name || g.homeTeam.abbreviation,
+          isLive,
+        });
+      }
+    }
+    for (const p of availablePlayers) {
+      if (p.team?.abbreviation && !map.has(p.team.abbreviation)) {
+        map.set(p.team.abbreviation, {
+          abbreviation: p.team.abbreviation,
+          name: p.team.displayName || p.team.abbreviation,
+          isLive: p.isGameLive || false,
+        });
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => {
+      if (a.isLive !== b.isLive) return a.isLive ? -1 : 1;
+      return a.abbreviation.localeCompare(b.abbreviation);
+    });
+  }, [availableGames, availablePlayers]);
+
   // Filtered Players for Prop Search
-  const filteredPlayers = playerSearch.trim()
-    ? availablePlayers
-        .filter(
-          (p) =>
-            p.name.toLowerCase().includes(playerSearch.toLowerCase()) ||
-            p.team.abbreviation.toLowerCase().includes(playerSearch.toLowerCase()) ||
-            p.position.toLowerCase().includes(playerSearch.toLowerCase())
-        )
-        .slice(0, 8)
-    : availablePlayers.slice(0, 8);
+  const filteredPlayers = useMemo(() => {
+    const query = playerSearch.trim().toLowerCase();
+    let list = availablePlayers;
+
+    if (teamPropFilter !== 'ALL') {
+      list = list.filter((p) => p.team.abbreviation.toUpperCase() === teamPropFilter.toUpperCase());
+    }
+
+    if (query) {
+      list = list.filter((p) => {
+        const nameMatch = p.name.toLowerCase().includes(query);
+        const abbrMatch = p.team.abbreviation.toLowerCase().includes(query);
+        const teamNameMatch = (p.team.displayName || '').toLowerCase().includes(query);
+        const posMatch = p.position.toLowerCase().includes(query);
+        const nicknameMatch =
+          (query.includes('pack') && p.team.abbreviation === 'GB') ||
+          (query.includes('cowboy') && p.team.abbreviation === 'DAL') ||
+          (query.includes('chief') && p.team.abbreviation === 'KC') ||
+          (query.includes('raven') && p.team.abbreviation === 'BAL') ||
+          (query.includes('eagle') && p.team.abbreviation === 'PHI') ||
+          (query.includes('bear') && p.team.abbreviation === 'CHI') ||
+          (query.includes('falcon') && p.team.abbreviation === 'ATL') ||
+          (query.includes('texan') && p.team.abbreviation === 'HOU') ||
+          (query.includes('jag') && p.team.abbreviation === 'JAX') ||
+          (query.includes('titan') && p.team.abbreviation === 'TEN') ||
+          (query.includes('colt') && p.team.abbreviation === 'IND') ||
+          (query.includes('jet') && p.team.abbreviation === 'NYJ') ||
+          (query.includes('patriot') && p.team.abbreviation === 'NE') ||
+          (query.includes('saint') && p.team.abbreviation === 'NO') ||
+          (query.includes('giant') && p.team.abbreviation === 'NYG') ||
+          (query.includes('panther') && p.team.abbreviation === 'CAR') ||
+          (query.includes('steeler') && p.team.abbreviation === 'PIT') ||
+          (query.includes('bucs') && p.team.abbreviation === 'TB') ||
+          (query.includes('buccaneer') && p.team.abbreviation === 'TB') ||
+          (query.includes('cardinal') && p.team.abbreviation === 'ARI') ||
+          (query.includes('ram') && p.team.abbreviation === 'LAR') ||
+          (query.includes('charger') && p.team.abbreviation === 'LAC') ||
+          (query.includes('bill') && p.team.abbreviation === 'BUF') ||
+          (query.includes('raider') && p.team.abbreviation === 'LV') ||
+          (query.includes('seahawk') && p.team.abbreviation === 'SEA') ||
+          (query.includes('bronco') && p.team.abbreviation === 'DEN') ||
+          (query.includes('49er') && p.team.abbreviation === 'SF') ||
+          (query.includes('commander') && p.team.abbreviation === 'WSH');
+
+        return nameMatch || abbrMatch || teamNameMatch || posMatch || nicknameMatch;
+      });
+    }
+
+    return list.slice(0, 36);
+  }, [availablePlayers, teamPropFilter, playerSearch]);
 
   // Add Leg to pending slip
   const handleAddLeg = () => {
@@ -241,6 +317,8 @@ export default function ManageBetsModal({
 
     onUpdateBets([demoSlip, ...savedBets]);
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
@@ -480,16 +558,63 @@ export default function ManageBetsModal({
                   <div className="space-y-3">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <div>
-                        <label className="text-[10px] font-black uppercase text-slate-400 block mb-1">
-                          Select Player
-                        </label>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-[10px] font-black uppercase text-slate-400">
+                            Select Player
+                          </label>
+                          {teamPropFilter !== 'ALL' && (
+                            <button
+                              type="button"
+                              onClick={() => setTeamPropFilter('ALL')}
+                              className="text-[9px] font-black text-amber-400 hover:underline uppercase"
+                            >
+                              Reset Filter
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Quick Team Filter Bar */}
+                        <div className="flex items-center gap-1 overflow-x-auto no-scrollbar pb-1 mb-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setTeamPropFilter('ALL')}
+                            className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider shrink-0 transition-all ${
+                              teamPropFilter === 'ALL'
+                                ? 'bg-amber-400 text-slate-950 font-black'
+                                : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                            }`}
+                          >
+                            All Teams
+                          </button>
+                          {uniqueTeams.map((t) => {
+                            const active = teamPropFilter === t.abbreviation;
+                            return (
+                              <button
+                                key={t.abbreviation}
+                                type="button"
+                                onClick={() => setTeamPropFilter(t.abbreviation)}
+                                className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider shrink-0 flex items-center gap-1 transition-all ${
+                                  active
+                                    ? 'bg-amber-400 text-slate-950 font-black'
+                                    : t.isLive
+                                    ? 'bg-emerald-950/80 border border-emerald-500/50 text-emerald-300 hover:border-emerald-400'
+                                    : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                                }`}
+                              >
+                                {t.isLive && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />}
+                                {t.abbreviation}
+                              </button>
+                            );
+                          })}
+                        </div>
+
                         <div className="relative">
                           <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-2.5" />
                           <input
                             type="text"
                             value={playerSearch}
                             onChange={(e) => setPlayerSearch(e.target.value)}
-                            placeholder="Type to search player name..."
+                            placeholder="Type player, team, or nickname (e.g. Love, Packers, DAL, Lamb)..."
                             className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-amber-400 font-bold"
                           />
                         </div>

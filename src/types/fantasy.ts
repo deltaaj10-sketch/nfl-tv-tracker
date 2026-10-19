@@ -47,6 +47,7 @@ export interface FantasyPlayer {
   shortName: string;
   position: FantasyPosition;
   headshot: string;
+  jersey?: string;
   isGameLive?: boolean;
   isLive?: boolean;
   team: {
