@@ -373,37 +373,37 @@ export default function ManageBetsModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
-      <div className="relative w-full max-w-4xl bg-slate-950 border border-slate-800 rounded-3xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/85 backdrop-blur-md p-0 sm:p-4">
+      <div className="relative w-full max-w-full sm:max-w-4xl bg-slate-950 border border-slate-800 rounded-t-2xl sm:rounded-3xl shadow-2xl flex flex-col max-h-[92vh] sm:max-h-[90vh] overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-900/60">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
-              <DollarSign className="w-5 h-5" />
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-4 border-b border-slate-800 bg-slate-900/60">
+          <div className="flex items-center gap-2.5 sm:gap-3">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0">
+              <DollarSign className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
             <div>
-              <h2 className="text-base font-black text-white uppercase tracking-wider">
+              <h2 className="text-sm sm:text-base font-black text-white uppercase tracking-wider">
                 Parlay &amp; Bet Tracker
               </h2>
-              <p className="text-xs text-slate-400 font-medium">
+              <p className="text-[11px] sm:text-xs text-slate-400 font-medium line-clamp-1">
                 Track live player props, spreads, totals, and anytime TDs across all games
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors"
+            className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors shrink-0"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Modal Navigation Tabs */}
-        <div className="flex items-center justify-between px-6 pt-3 pb-2 border-b border-slate-800/80 bg-slate-950">
-          <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between px-4 sm:px-6 pt-3 pb-2 border-b border-slate-800/80 bg-slate-950 overflow-x-auto no-scrollbar gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={() => setActiveTab('list')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase transition-all flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase transition-all flex items-center gap-1.5 shrink-0 ${
                 activeTab === 'list'
                   ? 'bg-amber-500 text-slate-950 shadow-sm'
                   : 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800'
@@ -413,7 +413,7 @@ export default function ManageBetsModal({
             </button>
             <button
               onClick={() => setActiveTab('create')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase transition-all flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase transition-all flex items-center gap-1.5 shrink-0 ${
                 activeTab === 'create'
                   ? 'bg-amber-500 text-slate-950 shadow-sm'
                   : 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800'
@@ -427,7 +427,7 @@ export default function ManageBetsModal({
           {savedBets.length === 0 && (
             <button
               onClick={handleLoadDemoBets}
-              className="px-2.5 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 text-[11px] font-black uppercase flex items-center gap-1.5 transition-all"
+              className="px-2.5 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 text-[11px] font-black uppercase flex items-center gap-1.5 transition-all shrink-0"
             >
               <Sparkles className="w-3 h-3 text-emerald-400" />
               <span>Load Sample Parlay</span>
@@ -436,7 +436,7 @@ export default function ManageBetsModal({
         </div>
 
         {/* Modal Content */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
           {activeTab === 'list' ? (
             /* ACTIVE BET SLIPS LIST */
             <div className="space-y-3">
@@ -539,7 +539,7 @@ export default function ManageBetsModal({
                     value={slipTitle}
                     onChange={(e) => setSlipTitle(e.target.value)}
                     placeholder="e.g. Alex's 4PM Lock, Room Parlay (+650)"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-amber-400 font-bold"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 sm:py-1.5 text-base sm:text-xs text-white placeholder-slate-600 focus:outline-none focus:border-amber-400 font-bold"
                   />
                 </div>
                 <div>
@@ -551,7 +551,7 @@ export default function ManageBetsModal({
                     value={slipOwner}
                     onChange={(e) => setSlipOwner(e.target.value)}
                     placeholder="e.g. Alex, Room"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-amber-400 font-bold"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 sm:py-1.5 text-base sm:text-xs text-white placeholder-slate-600 focus:outline-none focus:border-amber-400 font-bold"
                   />
                 </div>
                 <div>
@@ -563,7 +563,7 @@ export default function ManageBetsModal({
                     value={slipPayout}
                     onChange={(e) => setSlipPayout(e.target.value)}
                     placeholder="e.g. $10 -> $85"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-amber-400 font-bold"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 sm:py-1.5 text-base sm:text-xs text-white placeholder-slate-600 focus:outline-none focus:border-amber-400 font-bold"
                   />
                 </div>
               </div>
@@ -728,7 +728,7 @@ export default function ManageBetsModal({
                             value={playerSearch}
                             onChange={(e) => setPlayerSearch(e.target.value)}
                             placeholder="Search any NFL player, team, or position... e.g., Matthew Golden"
-                            className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-amber-400 font-bold"
+                            className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-8 pr-3 py-2 sm:py-1.5 text-base sm:text-xs text-white placeholder-slate-600 focus:outline-none focus:border-amber-400 font-bold"
                           />
                         </div>
 
@@ -881,7 +881,7 @@ export default function ManageBetsModal({
                                 step="0.5"
                                 value={propLine}
                                 onChange={(e) => setPropLine(e.target.value)}
-                                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1 text-xs text-white font-black focus:outline-none focus:border-amber-400"
+                                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 sm:py-1 text-base sm:text-xs text-white font-black focus:outline-none focus:border-amber-400"
                               />
                             </div>
                           </div>
@@ -908,7 +908,7 @@ export default function ManageBetsModal({
                             const g = availableGames.find((game) => game.id === e.target.value);
                             if (g) setSelectedTeamAbbr(g.awayTeam.abbreviation);
                           }}
-                          className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-bold focus:outline-none focus:border-amber-400"
+                          className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-base sm:text-xs text-white font-bold focus:outline-none focus:border-amber-400"
                         >
                           {availableGames.map((g) => (
                             <option key={g.id} value={g.id}>
@@ -957,7 +957,7 @@ export default function ManageBetsModal({
                                 step="0.5"
                                 value={spreadValue}
                                 onChange={(e) => setSpreadValue(e.target.value)}
-                                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1 text-xs text-white font-black focus:outline-none focus:border-amber-400"
+                                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 sm:py-1 text-base sm:text-xs text-white font-black focus:outline-none focus:border-amber-400"
                               />
                             </div>
                           )}
@@ -1000,7 +1000,7 @@ export default function ManageBetsModal({
                               step="0.5"
                               value={totalLine}
                               onChange={(e) => setTotalLine(e.target.value)}
-                              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1 text-xs text-white font-black focus:outline-none focus:border-amber-400"
+                              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 sm:py-1 text-base sm:text-xs text-white font-black focus:outline-none focus:border-amber-400"
                             />
                           </div>
                         </div>
@@ -1013,7 +1013,7 @@ export default function ManageBetsModal({
                   <button
                     type="button"
                     onClick={handleAddLeg}
-                    className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs uppercase transition-all shadow flex items-center gap-1.5"
+                    className="px-3.5 py-2.5 sm:py-1.5 min-h-[44px] rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs uppercase transition-all shadow flex items-center justify-center gap-1.5"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     <span>Add Leg to Slip</span>
@@ -1067,7 +1067,7 @@ export default function ManageBetsModal({
                 <button
                   type="button"
                   onClick={() => setActiveTab('list')}
-                  className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 font-bold text-xs uppercase"
+                  className="px-4 py-2.5 sm:py-2 min-h-[44px] rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 font-bold text-xs uppercase flex items-center justify-center"
                 >
                   Cancel
                 </button>
@@ -1075,7 +1075,7 @@ export default function ManageBetsModal({
                   type="button"
                   disabled={legs.length === 0}
                   onClick={handleSaveSlip}
-                  className="px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed text-slate-950 font-black text-xs uppercase shadow-[0_0_15px_rgba(16,185,129,0.5)] transition-all"
+                  className="px-5 py-2.5 sm:py-2 min-h-[44px] rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed text-slate-950 font-black text-xs uppercase shadow-[0_0_15px_rgba(16,185,129,0.5)] transition-all flex items-center justify-center"
                 >
                   Save Slip ({legs.length} {legs.length === 1 ? 'Leg' : 'Legs'})
                 </button>

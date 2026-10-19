@@ -889,6 +889,9 @@ export default function TVCommandCenter() {
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
 
+  // Mobile QR Scan Room Sync Banner
+  const [showMobileWelcome, setShowMobileWelcome] = useState(false);
+
   // Web Audio Alert Sound Settings & Cashed Bet Tracking
   const [isSoundEnabled, setIsSoundEnabled] = useState<boolean>(true);
   const seenCashedItemsRef = useRef<Set<string>>(new Set());
@@ -927,9 +930,21 @@ export default function TVCommandCenter() {
   // Scoreboard scroll ref
   const scoreboardRef = useRef<HTMLDivElement>(null);
 
-  // Mark client mounted to prevent hydration mismatches
+  // Mark client mounted and check for mobile QR arrival (?mobile=1 or < 768px screen)
   useEffect(() => {
     setMounted(true);
+    if (typeof window !== 'undefined') {
+      try {
+        const isMobileParam = new URLSearchParams(window.location.search).get('mobile') === '1';
+        const isSmallScreen = window.innerWidth < 768;
+        const dismissed = sessionStorage.getItem('dismiss_mobile_welcome') === '1';
+        if ((isMobileParam || isSmallScreen) && !dismissed) {
+          setShowMobileWelcome(true);
+        }
+      } catch (e) {
+        console.error('Error detecting mobile room sync:', e);
+      }
+    }
   }, []);
 
   // Load Persisted Leagues, Guests & Bets from localStorage + seen TDs from sessionStorage on Mount
@@ -2142,7 +2157,7 @@ export default function TVCommandCenter() {
   }, []);
 
   return (
-    <div className="flex flex-col h-screen max-h-screen w-screen bg-[#07080C] text-slate-100 select-none overflow-hidden font-condensed justify-between pb-14">
+    <div className="flex flex-col min-h-screen lg:h-screen lg:max-h-screen w-screen bg-[#07080C] text-slate-100 select-none overflow-x-hidden overflow-y-auto lg:overflow-hidden font-condensed justify-between pb-24 lg:pb-14">
       {/* 1. AUTO-CYCLE PROGRESS BAR (Visual bar at the top of the TV) */}
       <div className="w-full h-1 bg-[#0E1017] relative overflow-hidden shrink-0">
         {autoCycle && (
@@ -2153,26 +2168,72 @@ export default function TVCommandCenter() {
         )}
       </div>
 
+      {/* MOBILE WELCOME BANNER FOR PHONES JOINING VIA QR CODE */}
+      {showMobileWelcome && (
+        <div className="md:hidden bg-gradient-to-r from-amber-950/95 via-[#141722] to-cyan-950/95 border-b border-amber-500/40 px-3 py-2 flex items-center justify-between gap-2 shrink-0 z-30 animate-fadeIn">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="relative flex h-2 w-2 shrink-0">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+            </span>
+            <div className="min-w-0">
+              <div className="text-[11px] font-condensed font-bold uppercase text-amber-300 leading-tight">
+                CONNECTED TO LIVING ROOM TV
+              </div>
+              <div className="text-[10px] text-slate-300 font-medium truncate">
+                Add your Fantasy Team or Parlays below to display them on the big screen
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              onClick={() => setIsManageModalOpen(true)}
+              className="px-2 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 text-[10px] font-condensed font-bold uppercase rounded-[2px] transition-colors"
+            >
+              + MY PLAYERS
+            </button>
+            <button
+              onClick={() => setIsBetsModalOpen(true)}
+              className="px-2 py-1 bg-[#00E676] hover:bg-emerald-400 text-slate-950 text-[10px] font-condensed font-bold uppercase rounded-[2px] transition-colors"
+            >
+              + ADD PARLAY
+            </button>
+            <button
+              onClick={() => {
+                setShowMobileWelcome(false);
+                try {
+                  sessionStorage.setItem('dismiss_mobile_welcome', '1');
+                } catch {}
+              }}
+              className="p-1 text-slate-400 hover:text-white"
+              title="Dismiss"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* 2. UNIFIED 48PX BROADCAST HEADER BAR */}
-      <header className="h-12 bg-[#0B0D13] border-b border-white/10 px-4 flex items-center justify-between shrink-0 gap-3">
-        {/* Left Controls: LIVE REDZONE bug + segmented LIVE / ALL + PPR / HALF / STD */}
-        <div className="flex items-center gap-2.5">
+      <header className="h-12 bg-[#0B0D13] border-b border-white/10 px-2 sm:px-4 flex items-center justify-between shrink-0 gap-1.5 sm:gap-3 overflow-x-auto no-scrollbar">
+        {/* Left Controls: LIVE REDZONE bug + segmented LIVE / ALL */}
+        <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
           {/* LIVE REDZONE bug */}
-          <div className="flex items-center gap-1.5 px-2.5 py-1 bg-red-950/80 border border-red-500/50 rounded-[4px] text-red-400 shadow-sm">
+          <div className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1 bg-red-950/80 border border-red-500/50 rounded-[4px] text-red-400 shadow-sm shrink-0">
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
             </span>
-            <span className="text-[11px] font-condensed font-black tracking-wider uppercase text-red-200">
-              LIVE REDZONE
+            <span className="text-[10px] sm:text-[11px] font-condensed font-black tracking-wider uppercase text-red-200">
+              REDZONE
             </span>
           </div>
 
           {/* Segmented LIVE / ALL */}
-          <div className="flex items-center bg-[#141722] p-0.5 rounded-[4px] border border-white/10">
+          <div className="flex items-center bg-[#141722] p-0.5 rounded-[4px] border border-white/10 shrink-0">
             <button
               onClick={() => handleSelectFilterMode('live')}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-[2px] text-xs font-condensed font-bold uppercase transition-all ${
+              className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1 rounded-[2px] text-xs font-condensed font-bold uppercase transition-all ${
                 gameFilterMode === 'live'
                   ? 'bg-red-600 text-white shadow-sm'
                   : 'text-slate-400 hover:text-slate-200'
@@ -2192,7 +2253,7 @@ export default function TVCommandCenter() {
             </button>
             <button
               onClick={() => handleSelectFilterMode('all')}
-              className={`px-2.5 py-1 rounded-[2px] text-xs font-condensed font-bold uppercase transition-all ${
+              className={`px-2 sm:px-2.5 py-1 rounded-[2px] text-xs font-condensed font-bold uppercase transition-all ${
                 gameFilterMode === 'all'
                   ? 'bg-white/15 text-white shadow-sm'
                   : 'text-slate-400 hover:text-slate-200'
@@ -2201,9 +2262,12 @@ export default function TVCommandCenter() {
               ALL
             </button>
           </div>
+        </div>
 
+        {/* Right Controls: PPR / HALF / STD + mobile ADD button + desktop TV controls */}
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           {/* Segmented PPR / HALF / STD */}
-          <div className="flex items-center bg-[#141722] p-0.5 rounded-[4px] border border-white/10">
+          <div className="flex items-center bg-[#141722] p-0.5 rounded-[4px] border border-white/10 shrink-0">
             {(['ppr', 'halfPpr', 'standard'] as ScoringFormat[]).map((fmt) => {
               const label = fmt === 'ppr' ? 'PPR' : fmt === 'halfPpr' ? 'HALF' : 'STD';
               const active = scoringFormat === fmt;
@@ -2211,7 +2275,7 @@ export default function TVCommandCenter() {
                 <button
                   key={fmt}
                   onClick={() => setScoringFormat(fmt)}
-                  className={`px-2.5 py-1 rounded-[2px] text-xs font-condensed font-bold uppercase transition-all ${
+                  className={`px-1.5 sm:px-2.5 py-1 rounded-[2px] text-[11px] sm:text-xs font-condensed font-bold uppercase transition-all ${
                     active
                       ? 'bg-[#00E676] text-black shadow-sm'
                       : 'text-slate-400 hover:text-slate-200'
@@ -2222,67 +2286,78 @@ export default function TVCommandCenter() {
               );
             })}
           </div>
-        </div>
 
-        {/* Right Controls: LEAGUES, ROOM QR, AUDIO, CYCLE, and <SyncCountdown /> */}
-        <div className="flex items-center gap-2">
-          {/* LEAGUES Button */}
+          {/* Mobile-Only Prominent Quick Add Button */}
           <button
             onClick={() => setIsManageModalOpen(true)}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-[4px] bg-[#141722] hover:bg-[#1E2330] text-xs font-condensed font-bold uppercase text-amber-300 border border-white/10 transition-colors"
+            className="flex md:hidden items-center gap-1 px-2.5 py-1 rounded-[4px] bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-condensed font-bold uppercase transition-colors shadow-sm shrink-0"
+            title="Add your fantasy players or parlay"
           >
-            <Settings className="w-3.5 h-3.5 text-amber-400" />
-            <span>LEAGUES</span>
-            {(syncedLeagues.length > 0 || guestTags.length > 0) && (
-              <span className="px-1.5 py-0.2 rounded-[2px] bg-amber-500/20 text-amber-300 text-[10px] font-mono-score font-bold">
-                {syncedLeagues.length + guestTags.length}
-              </span>
-            )}
+            <Plus className="w-3.5 h-3.5" />
+            <span className="hidden xs:inline">+ ADD BET / TEAM</span>
+            <span className="xs:hidden">+ ADD</span>
           </button>
 
-          {/* ROOM QR Button */}
-          <button
-            onClick={() => setIsQrModalOpen(true)}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-[4px] bg-[#141722] hover:bg-[#1E2330] text-xs font-condensed font-bold uppercase text-cyan-400 border border-white/10 transition-colors"
-            title="Scan QR Code with phone to join and add bets"
-          >
-            <QrCode className="w-3.5 h-3.5 text-cyan-400" />
-            <span>ROOM QR</span>
-          </button>
+          {/* TV-Only Controls (Hidden on Mobile < 768px) */}
+          <div className="hidden md:flex items-center gap-2">
+            {/* LEAGUES Button */}
+            <button
+              onClick={() => setIsManageModalOpen(true)}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-[4px] bg-[#141722] hover:bg-[#1E2330] text-xs font-condensed font-bold uppercase text-amber-300 border border-white/10 transition-colors"
+            >
+              <Settings className="w-3.5 h-3.5 text-amber-400" />
+              <span>LEAGUES</span>
+              {(syncedLeagues.length > 0 || guestTags.length > 0) && (
+                <span className="px-1.5 py-0.2 rounded-[2px] bg-amber-500/20 text-amber-300 text-[10px] font-mono-score font-bold">
+                  {syncedLeagues.length + guestTags.length}
+                </span>
+              )}
+            </button>
 
-          {/* Sound Toggle Button */}
-          <button
-            onClick={handleToggleSound}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-[4px] text-xs font-condensed font-bold uppercase transition-colors border ${
-              isSoundEnabled
-                ? 'bg-[#00E676]/15 border-[#00E676]/40 text-[#00E676]'
-                : 'bg-[#141722] border-white/10 text-slate-400 hover:text-slate-200'
-            }`}
-            title={isSoundEnabled ? 'Sound is ON' : 'Sound is MUTED'}
-          >
-            {isSoundEnabled ? (
-              <Volume2 className="w-3.5 h-3.5 text-[#00E676]" />
-            ) : (
-              <VolumeX className="w-3.5 h-3.5 text-slate-500" />
-            )}
-            <span>{isSoundEnabled ? 'AUDIO: ON' : 'MUTE'}</span>
-          </button>
+            {/* ROOM QR Button */}
+            <button
+              onClick={() => setIsQrModalOpen(true)}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-[4px] bg-[#141722] hover:bg-[#1E2330] text-xs font-condensed font-bold uppercase text-cyan-400 border border-white/10 transition-colors"
+              title="Scan QR Code with phone to join and add bets"
+            >
+              <QrCode className="w-3.5 h-3.5 text-cyan-400" />
+              <span>ROOM QR</span>
+            </button>
 
-          {/* TV Auto-Cycle Toggle */}
-          <button
-            onClick={() => setAutoCycle(!autoCycle)}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-[4px] text-xs font-condensed font-bold uppercase transition-colors border ${
-              autoCycle
-                ? 'bg-cyan-500/15 border-cyan-500/40 text-cyan-300'
-                : 'bg-[#141722] border-white/10 text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Tv className={`w-3.5 h-3.5 ${autoCycle ? 'text-cyan-400' : 'text-slate-500'}`} />
-            <span>CYCLE: {autoCycle ? 'ON' : 'PAUSED'}</span>
-          </button>
+            {/* Sound Toggle Button */}
+            <button
+              onClick={handleToggleSound}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-[4px] text-xs font-condensed font-bold uppercase transition-colors border ${
+                isSoundEnabled
+                  ? 'bg-[#00E676]/15 border-[#00E676]/40 text-[#00E676]'
+                  : 'bg-[#141722] border-white/10 text-slate-400 hover:text-slate-200'
+              }`}
+              title={isSoundEnabled ? 'Sound is ON' : 'Sound is MUTED'}
+            >
+              {isSoundEnabled ? (
+                <Volume2 className="w-3.5 h-3.5 text-[#00E676]" />
+              ) : (
+                <VolumeX className="w-3.5 h-3.5 text-slate-500" />
+              )}
+              <span>{isSoundEnabled ? 'AUDIO: ON' : 'MUTE'}</span>
+            </button>
 
-          {/* Center/Right Sync Countdown */}
-          <SyncCountdown onSync={handleSync} />
+            {/* TV Auto-Cycle Toggle */}
+            <button
+              onClick={() => setAutoCycle(!autoCycle)}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-[4px] text-xs font-condensed font-bold uppercase transition-colors border ${
+                autoCycle
+                  ? 'bg-cyan-500/15 border-cyan-500/40 text-cyan-300'
+                  : 'bg-[#141722] border-white/10 text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Tv className={`w-3.5 h-3.5 ${autoCycle ? 'text-cyan-400' : 'text-slate-500'}`} />
+              <span>CYCLE: {autoCycle ? 'ON' : 'PAUSED'}</span>
+            </button>
+
+            {/* Center/Right Sync Countdown */}
+            <SyncCountdown onSync={handleSync} />
+          </div>
         </div>
       </header>
 
@@ -2371,7 +2446,7 @@ export default function TVCommandCenter() {
       </section>
 
       {/* 4. EDGE-TO-EDGE BROADCAST NAVIGATION TABS */}
-      <nav className="h-10 bg-[#0B0D13] border-b border-white/10 px-2 flex items-center shrink-0 w-full justify-between">
+      <nav className="h-10 bg-[#0B0D13] border-b border-white/10 px-2 flex items-center shrink-0 w-full justify-between overflow-x-auto whitespace-nowrap no-scrollbar scroll-smooth">
         {TABS.map((tab) => {
           const active = activeTab === tab.id;
           return (
@@ -2381,7 +2456,7 @@ export default function TVCommandCenter() {
                 setActiveTab(tab.id);
                 setAutoCycle(false);
               }}
-              className={`flex-1 h-full flex items-center justify-center font-condensed text-xs md:text-sm tracking-wider uppercase transition-colors relative font-bold ${
+              className={`flex-shrink-0 lg:flex-1 h-full px-3 lg:px-0 flex items-center justify-center font-condensed text-xs md:text-sm tracking-wider uppercase transition-colors relative font-bold ${
                 active
                   ? 'text-[#00E676] border-b-2 border-[#00E676] bg-white/[0.03]'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.02]'
@@ -2403,8 +2478,8 @@ export default function TVCommandCenter() {
         })}
       </nav>
 
-      {/* 5. MAIN CONTENT AREA (Fills 100% of the Available Viewport Without Scrolling) */}
-      <main className={`flex-1 overflow-hidden flex flex-col min-h-0 ${activeTab === 'live' ? 'px-4 py-2' : 'p-3 md:p-4'}`}>
+      {/* 5. MAIN CONTENT AREA (Fills 100% of the Available Viewport Without Scrolling on Desktop, Smooth Touch Scroll on Mobile) */}
+      <main className={`flex-1 overflow-visible lg:overflow-hidden flex flex-col min-h-0 ${activeTab === 'live' ? 'px-2 sm:px-4 py-2' : 'p-2 sm:p-3 md:p-4'}`}>
         {loading && !data ? (
           <div className="flex-1 flex flex-col items-center justify-center gap-2">
             <RefreshCw className="w-8 h-8 animate-spin text-emerald-400" />
@@ -2417,9 +2492,9 @@ export default function TVCommandCenter() {
           </div>
         ) : activeTab === 'live' ? (
           /* TAB 1: 12-COLUMN BROADCAST GRID (8-COL STUDS + 4-COL VERTICAL PLAY FEED) */
-          <div className="grid grid-cols-12 gap-3 h-full overflow-hidden min-h-0">
-            {/* LEFT 8 COLUMNS: #1 OVERALL STUDS RIGHT NOW (2x3 Grid) */}
-            <div className="col-span-12 lg:col-span-8 flex flex-col h-full bg-[#0E1017] rounded-[4px] border border-white/10 p-3 overflow-hidden shadow-xl min-h-0">
+          <div className="grid grid-cols-12 gap-3 min-h-0 lg:h-full lg:overflow-hidden">
+            {/* LEFT 8 COLUMNS: #1 OVERALL STUDS RIGHT NOW (2x3 Grid on Desktop, Single Column Stack on Mobile) */}
+            <div className="col-span-12 lg:col-span-8 flex flex-col min-h-0 lg:h-full bg-[#0E1017] rounded-[4px] border border-white/10 p-2.5 sm:p-3 overflow-visible lg:overflow-hidden shadow-xl">
               <div className="flex items-center justify-between pb-2 border-b border-white/10 shrink-0">
                 <div className="flex items-center gap-2">
                   <Trophy className="w-4 h-4 text-amber-400" />
@@ -2442,7 +2517,7 @@ export default function TVCommandCenter() {
                 </span>
               </div>
 
-              {/* 2 Columns x 3 Rows Grid */}
+              {/* 2 Columns x 3 Rows Grid on Desktop, Single Column Stack on Mobile */}
               <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-2.5 pt-2 overflow-y-auto pr-1 min-h-0">
                 {[
                   { pos: 'QB' as FantasyPosition, label: 'TOP QB' },
@@ -2498,11 +2573,11 @@ export default function TVCommandCenter() {
                           : 'bg-[#141722] border-white/10 hover:border-white/20'
                       }`}
                     >
-                      {/* Top Row: Position badge, larger headshot, Name, Clock, Matchup, and massive glowing Points */}
-                      <div className="flex items-center justify-between gap-2.5">
-                        <div className="flex items-center gap-3 min-w-0 flex-1">
-                          {/* Larger Player Headshot */}
-                          <div className="relative w-14 h-14 md:w-16 md:h-16 rounded-[4px] overflow-hidden bg-[#07080C] border border-white/10 shadow-md shrink-0">
+                      {/* Top Row: Position badge, responsive headshot, Name, Clock, Matchup, and Points */}
+                      <div className="flex items-center justify-between gap-2 sm:gap-2.5">
+                        <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                          {/* Responsive Player Headshot */}
+                          <div className="relative w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-[4px] overflow-hidden bg-[#07080C] border border-white/10 shadow-md shrink-0">
                             <img
                               src={player.headshot}
                               alt={player.name}
@@ -2515,7 +2590,7 @@ export default function TVCommandCenter() {
 
                           <div className="min-w-0 flex-1 flex flex-col justify-center gap-0.5">
                             {/* Meta badges: Position Badge + Matchup + Clock + Owner */}
-                            <div className="flex items-center gap-1.5 flex-wrap">
+                            <div className="flex items-center gap-1 sm:gap-1.5 flex-wrap">
                               <span className="text-[10px] font-condensed font-bold tracking-wider uppercase px-1.5 py-0.5 rounded-[2px] bg-[#0E1017] text-amber-300 border border-amber-500/40 shrink-0">
                                 {label}
                               </span>
@@ -2543,9 +2618,9 @@ export default function TVCommandCenter() {
                           </div>
                         </div>
 
-                        {/* Right: Massive Glowing Fantasy Points Readout */}
-                        <div className="flex flex-col items-end shrink-0 pl-2">
-                          <span className="text-3xl md:text-4xl font-mono-score font-bold text-[#00E676] leading-none">
+                        {/* Right: High-Contrast Fantasy Points Readout */}
+                        <div className="flex flex-col items-end shrink-0 pl-1.5 sm:pl-2">
+                          <span className="text-2xl sm:text-3xl md:text-4xl font-mono-score font-bold text-[#00E676] leading-none">
                             {formatPoints(pts)}
                           </span>
                           <span className="text-[9px] font-condensed font-bold uppercase text-slate-400 tracking-widest mt-1">
@@ -2555,7 +2630,7 @@ export default function TVCommandCenter() {
                       </div>
 
                       {/* Bottom Stat Pills Area: Individual Crisp High-Contrast Pills (Never truncated!) */}
-                      <div className="flex flex-wrap gap-1.5 mt-2 pt-2 border-t border-white/10">
+                      <div className="flex flex-wrap gap-1 sm:gap-1.5 mt-2 pt-2 border-t border-white/10">
                         {statPills.length > 0 ? (
                           statPills.map((pill, pIdx) => {
                             const isTD = pill.toUpperCase().includes('TD');
@@ -2563,7 +2638,7 @@ export default function TVCommandCenter() {
                             return (
                               <span
                                 key={`pill-${player.id}-${pIdx}`}
-                                className={`px-2 py-0.5 rounded-[2px] text-[10px] md:text-[11px] font-mono-score font-bold tracking-wide uppercase border ${
+                                className={`px-1.5 sm:px-2 py-0.5 rounded-[2px] text-[10px] md:text-[11px] font-mono-score font-bold tracking-wide uppercase border ${
                                   isTD
                                     ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50'
                                     : isTurnover
@@ -2588,7 +2663,7 @@ export default function TVCommandCenter() {
             </div>
 
             {/* RIGHT 4 COLUMNS: VERTICAL LIVE SCORING & BIG PLAYS FEED */}
-            <div className="col-span-12 lg:col-span-4 flex flex-col h-full bg-[#0E1017] rounded-[4px] border border-white/10 p-3 overflow-hidden shadow-xl min-h-0">
+            <div className="col-span-12 lg:col-span-4 flex flex-col min-h-[350px] lg:h-full bg-[#0E1017] rounded-[4px] border border-white/10 p-2.5 sm:p-3 overflow-hidden shadow-xl min-h-0">
               <div className="flex items-center justify-between pb-2 border-b border-white/10 shrink-0">
                 <div className="flex items-center gap-2">
                   <Zap className="w-4 h-4 text-amber-400" />
@@ -3015,7 +3090,7 @@ export default function TVCommandCenter() {
                       value={bettingSearch}
                       onChange={(e) => setBettingSearch(e.target.value)}
                       placeholder="Search any NFL player, team, or position... e.g., Matthew Golden"
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 font-bold"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2 sm:py-1.5 text-base sm:text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 font-bold"
                     />
                   </div>
 
@@ -3552,8 +3627,8 @@ export default function TVCommandCenter() {
           )}
         </div>
 
-        {/* Fixed Right Sync Time & Screen WakeLock Status */}
-        <div className="h-full px-3 bg-[#07080C] border-l border-white/10 flex items-center gap-3 text-[10px] text-slate-500 shrink-0 z-20 font-condensed">
+        {/* Fixed Right Sync Time & Screen WakeLock Status (Hidden on Mobile < 768px) */}
+        <div className="h-full px-3 bg-[#07080C] border-l border-white/10 hidden md:flex items-center gap-3 text-[10px] text-slate-500 shrink-0 z-20 font-condensed">
           <div
             className="flex items-center gap-1.5 cursor-pointer hover:text-slate-300 transition-colors"
             onClick={requestWakeLock}
@@ -3634,7 +3709,7 @@ export default function TVCommandCenter() {
             <div className="p-4 bg-white rounded-2xl shadow-2xl border-4 border-cyan-400/80 mb-5 flex items-center justify-center">
               <img
                 src={`https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(
-                  typeof window !== 'undefined' ? window.location.origin : ''
+                  typeof window !== 'undefined' ? `${window.location.origin}/?mobile=1` : ''
                 )}`}
                 alt="Room QR Code"
                 className="w-48 h-48 md:w-56 md:h-56 object-contain"
@@ -3644,12 +3719,12 @@ export default function TVCommandCenter() {
             {/* Room URL & Copy Button */}
             <div className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs">
               <span className="text-slate-400 font-mono truncate text-[11px]">
-                {typeof window !== 'undefined' ? window.location.origin : ''}
+                {typeof window !== 'undefined' ? `${window.location.origin}/?mobile=1` : ''}
               </span>
               <button
                 onClick={() => {
                   if (typeof window !== 'undefined') {
-                    navigator.clipboard?.writeText(window.location.origin);
+                    navigator.clipboard?.writeText(`${window.location.origin}/?mobile=1`);
                     setCopiedLink(true);
                     setTimeout(() => setCopiedLink(false), 2000);
                   }
