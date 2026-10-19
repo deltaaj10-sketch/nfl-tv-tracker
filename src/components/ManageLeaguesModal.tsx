@@ -201,10 +201,15 @@ export default function ManageLeaguesModal({
 
   // Filtered available players for guest tagging autocomplete
   const filteredPlayers = guestSearch.trim()
-    ? availablePlayers.filter((p) =>
-        p.name.toLowerCase().includes(guestSearch.trim().toLowerCase())
-      )
-    : availablePlayers.slice(0, 10);
+    ? availablePlayers
+        .filter(
+          (p) =>
+            p.name.toLowerCase().includes(guestSearch.trim().toLowerCase()) ||
+            p.team.toLowerCase().includes(guestSearch.trim().toLowerCase()) ||
+            p.position.toLowerCase().includes(guestSearch.trim().toLowerCase())
+        )
+        .slice(0, 30)
+    : availablePlayers.slice(0, 20);
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">

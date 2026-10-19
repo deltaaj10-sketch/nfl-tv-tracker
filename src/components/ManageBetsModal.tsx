@@ -31,6 +31,35 @@ const STAT_OPTIONS: { id: PropStatType; label: string }[] = [
   { id: 'rushRecYds', label: 'Rush + Rec Yds' },
 ];
 
+export function getRealisticPropLine(position: string, statType: PropStatType): string {
+  if (statType === 'passYds') return position === 'QB' ? '238.5' : '0.5';
+  if (statType === 'passTD') return '1.5';
+  if (statType === 'rushYds') {
+    if (position === 'RB') return '62.5';
+    if (position === 'QB') return '21.5';
+    if (position === 'WR') return '6.5';
+    return '14.5';
+  }
+  if (statType === 'recYds') {
+    if (position === 'WR') return '48.5';
+    if (position === 'TE') return '36.5';
+    if (position === 'RB') return '16.5';
+    return '24.5';
+  }
+  if (statType === 'rec') {
+    if (position === 'WR') return '4.5';
+    if (position === 'TE') return '3.5';
+    if (position === 'RB') return '2.5';
+    return '3.5';
+  }
+  if (statType === 'rushRecYds') {
+    if (position === 'RB') return '76.5';
+    if (position === 'WR') return '54.5';
+    return '38.5';
+  }
+  return '45.5';
+}
+
 export default function ManageBetsModal({
   isOpen,
   onClose,
@@ -56,7 +85,7 @@ export default function ManageBetsModal({
   const [selectedPlayer, setSelectedPlayer] = useState<FantasyPlayer | null>(null);
   const [propStat, setPropStat] = useState<PropStatType>('recYds');
   const [propDirection, setPropDirection] = useState<'OVER' | 'UNDER'>('OVER');
-  const [propLine, setPropLine] = useState('64.5');
+  const [propLine, setPropLine] = useState('48.5');
 
   // Game Spread / Moneyline / Total
   const [selectedGameId, setSelectedGameId] = useState(availableGames[0]?.id || '');
@@ -67,8 +96,10 @@ export default function ManageBetsModal({
 
   const selectedGame = availableGames.find((g) => g.id === selectedGameId) || availableGames[0];
 
-  // Quick team filter for props: 'ALL' or team abbreviation (e.g. 'DAL', 'GB', etc.)
+  // Filters for player props: Team, Game, and Position
   const [teamPropFilter, setTeamPropFilter] = useState<string>('ALL');
+  const [gamePropFilter, setGamePropFilter] = useState<string>('ALL');
+  const [positionPropFilter, setPositionPropFilter] = useState<string>('ALL');
 
   // Extract all unique teams from available games and players
   const uniqueTeams = useMemo(() => {
@@ -110,16 +141,37 @@ export default function ManageBetsModal({
     const query = playerSearch.trim().toLowerCase();
     let list = availablePlayers;
 
+    // 1. Filter by Game
+    if (gamePropFilter !== 'ALL') {
+      const g = availableGames.find((game) => game.id === gamePropFilter);
+      if (g) {
+        const away = g.awayTeam.abbreviation.toUpperCase();
+        const home = g.homeTeam.abbreviation.toUpperCase();
+        list = list.filter((p) => {
+          const t = p.team.abbreviation.toUpperCase();
+          return t === away || t === home;
+        });
+      }
+    }
+
+    // 2. Filter by Position
+    if (positionPropFilter !== 'ALL') {
+      list = list.filter((p) => p.position === positionPropFilter);
+    }
+
+    // 3. Filter by Team
     if (teamPropFilter !== 'ALL') {
       list = list.filter((p) => p.team.abbreviation.toUpperCase() === teamPropFilter.toUpperCase());
     }
 
+    // 4. Search Query Match
     if (query) {
       list = list.filter((p) => {
         const nameMatch = p.name.toLowerCase().includes(query);
         const abbrMatch = p.team.abbreviation.toLowerCase().includes(query);
         const teamNameMatch = (p.team.displayName || '').toLowerCase().includes(query);
         const posMatch = p.position.toLowerCase().includes(query);
+        const jerseyMatch = p.jersey ? p.jersey.includes(query) : false;
         const nicknameMatch =
           (query.includes('pack') && p.team.abbreviation === 'GB') ||
           (query.includes('cowboy') && p.team.abbreviation === 'DAL') ||
@@ -150,12 +202,12 @@ export default function ManageBetsModal({
           (query.includes('49er') && p.team.abbreviation === 'SF') ||
           (query.includes('commander') && p.team.abbreviation === 'WSH');
 
-        return nameMatch || abbrMatch || teamNameMatch || posMatch || nicknameMatch;
+        return nameMatch || abbrMatch || teamNameMatch || posMatch || jerseyMatch || nicknameMatch;
       });
     }
 
-    return list.slice(0, 36);
-  }, [availablePlayers, teamPropFilter, playerSearch]);
+    return list.slice(0, 48);
+  }, [availablePlayers, availableGames, gamePropFilter, positionPropFilter, teamPropFilter, playerSearch]);
 
   // Add Leg to pending slip
   const handleAddLeg = () => {
@@ -562,18 +614,79 @@ export default function ManageBetsModal({
                           <label className="text-[10px] font-black uppercase text-slate-400">
                             Select Player
                           </label>
-                          {teamPropFilter !== 'ALL' && (
+                          {(teamPropFilter !== 'ALL' || gamePropFilter !== 'ALL' || positionPropFilter !== 'ALL' || playerSearch) && (
                             <button
                               type="button"
-                              onClick={() => setTeamPropFilter('ALL')}
+                              onClick={() => {
+                                setTeamPropFilter('ALL');
+                                setGamePropFilter('ALL');
+                                setPositionPropFilter('ALL');
+                                setPlayerSearch('');
+                              }}
                               className="text-[9px] font-black text-amber-400 hover:underline uppercase"
                             >
-                              Reset Filter
+                              Reset Filters
                             </button>
                           )}
                         </div>
 
-                        {/* Quick Team Filter Bar */}
+                        {/* 1. Position Filter Pills */}
+                        <div className="flex items-center gap-1 overflow-x-auto no-scrollbar pb-1 mb-1">
+                          {(['ALL', 'QB', 'RB', 'WR', 'TE', 'K'] as const).map((pos) => (
+                            <button
+                              key={pos}
+                              type="button"
+                              onClick={() => setPositionPropFilter(pos)}
+                              className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider shrink-0 transition-all ${
+                                positionPropFilter === pos
+                                  ? 'bg-cyan-400 text-slate-950 font-black'
+                                  : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                              }`}
+                            >
+                              {pos}
+                            </button>
+                          ))}
+                        </div>
+
+                        {/* 2. Game Filter Pills */}
+                        {availableGames.length > 0 && (
+                          <div className="flex items-center gap-1 overflow-x-auto no-scrollbar pb-1 mb-1">
+                            <button
+                              type="button"
+                              onClick={() => setGamePropFilter('ALL')}
+                              className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider shrink-0 transition-all ${
+                                gamePropFilter === 'ALL'
+                                  ? 'bg-amber-400 text-slate-950 font-black'
+                                  : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                              }`}
+                            >
+                              All Games
+                            </button>
+                            {availableGames.map((g) => {
+                              const isLive = g.status?.state === 'in';
+                              const active = gamePropFilter === g.id;
+                              return (
+                                <button
+                                  key={g.id}
+                                  type="button"
+                                  onClick={() => setGamePropFilter(g.id)}
+                                  className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider shrink-0 flex items-center gap-1 transition-all ${
+                                    active
+                                      ? 'bg-amber-400 text-slate-950 font-black'
+                                      : isLive
+                                      ? 'bg-emerald-950/80 border border-emerald-500/50 text-emerald-300 hover:border-emerald-400'
+                                      : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                                  }`}
+                                >
+                                  {isLive && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />}
+                                  {g.awayTeam.abbreviation} @ {g.homeTeam.abbreviation}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {/* 3. Team Filter Bar */}
                         <div className="flex items-center gap-1 overflow-x-auto no-scrollbar pb-1 mb-1.5">
                           <button
                             type="button"
@@ -614,15 +727,16 @@ export default function ManageBetsModal({
                             type="text"
                             value={playerSearch}
                             onChange={(e) => setPlayerSearch(e.target.value)}
-                            placeholder="Type player, team, or nickname (e.g. Love, Packers, DAL, Lamb)..."
+                            placeholder="Search any NFL player, team, or position... e.g., Matthew Golden"
                             className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-amber-400 font-bold"
                           />
                         </div>
 
                         {/* Player Search Results Grid */}
-                        <div className="grid grid-cols-2 gap-1.5 mt-2 max-h-36 overflow-y-auto pr-1">
+                        <div className="grid grid-cols-2 gap-1.5 mt-2 max-h-40 overflow-y-auto pr-1">
                           {filteredPlayers.map((p) => {
                             const isSelected = selectedPlayer?.id === p.id;
+                            const isLive = p.isGameLive || p.isLive;
                             return (
                               <button
                                 key={p.id}
@@ -630,6 +744,12 @@ export default function ManageBetsModal({
                                 onClick={() => {
                                   setSelectedPlayer(p);
                                   setPlayerSearch(p.name);
+                                  let defaultStat: PropStatType = 'recYds';
+                                  if (p.position === 'QB') defaultStat = 'passYds';
+                                  else if (p.position === 'RB') defaultStat = 'rushYds';
+                                  else if (p.position === 'WR' || p.position === 'TE') defaultStat = 'recYds';
+                                  setPropStat(defaultStat);
+                                  setPropLine(getRealisticPropLine(p.position, defaultStat));
                                 }}
                                 className={`p-1.5 rounded-lg border text-left flex items-center gap-2 transition-all ${
                                   isSelected
@@ -646,10 +766,18 @@ export default function ManageBetsModal({
                                   }}
                                 />
                                 <div className="min-w-0 flex-1">
-                                  <span className="text-xs font-black block truncate">{p.name}</span>
-                                  <span className="text-[9px] text-slate-400 font-bold block">
-                                    {p.team.abbreviation} • {p.position}
+                                  <span className="text-xs font-black block truncate">
+                                    {p.name} {p.jersey ? `#${p.jersey}` : ''}
                                   </span>
+                                  <div className="flex items-center gap-1.5 text-[9px] text-slate-400 font-bold">
+                                    <span>{p.team.abbreviation} • {p.position}</span>
+                                    {isLive && (
+                                      <span className="text-emerald-400 font-black flex items-center gap-0.5">
+                                        <span className="w-1 h-1 rounded-full bg-emerald-400 animate-pulse" />
+                                        {p.rawStatLine || 'LIVE'}
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
                                 {isSelected && <Check className="w-3.5 h-3.5 text-amber-400 shrink-0" />}
                               </button>
@@ -661,6 +789,32 @@ export default function ManageBetsModal({
                       {/* Stat Type & Target Line (only for player_prop) */}
                       {selectedLegType === 'player_prop' && (
                         <div className="space-y-2">
+                          {selectedPlayer && (
+                            <div className="p-2 rounded-xl bg-slate-950 border border-slate-800/80 flex items-center justify-between">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <img
+                                  src={selectedPlayer.headshot}
+                                  alt=""
+                                  className="w-5 h-5 rounded-full object-cover bg-slate-900 border border-slate-700 shrink-0"
+                                  onError={(e) => {
+                                    (e.currentTarget as HTMLImageElement).src = selectedPlayer.team.logo;
+                                  }}
+                                />
+                                <span className="text-xs font-black text-white truncate">
+                                  {selectedPlayer.name} {selectedPlayer.jersey ? `#${selectedPlayer.jersey}` : ''}
+                                </span>
+                                <span className="text-[10px] text-slate-400 font-bold">
+                                  ({selectedPlayer.team.abbreviation})
+                                </span>
+                              </div>
+                              <div className="text-right shrink-0">
+                                <span className="text-[10px] font-black text-amber-300 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/30">
+                                  {selectedPlayer.rawStatLine || '0 PTS'}
+                                </span>
+                              </div>
+                            </div>
+                          )}
+
                           <div>
                             <label className="text-[10px] font-black uppercase text-slate-400 block mb-1">
                               Prop Stat Category
@@ -670,7 +824,12 @@ export default function ManageBetsModal({
                                 <button
                                   key={st.id}
                                   type="button"
-                                  onClick={() => setPropStat(st.id)}
+                                  onClick={() => {
+                                    setPropStat(st.id);
+                                    if (selectedPlayer) {
+                                      setPropLine(getRealisticPropLine(selectedPlayer.position, st.id));
+                                    }
+                                  }}
                                   className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase transition-all ${
                                     propStat === st.id
                                       ? 'bg-cyan-500 text-slate-950'

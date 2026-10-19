@@ -168,6 +168,7 @@ export interface LiveFantasyResponse {
   leaderboards: Record<FantasyPosition, FantasyPlayer[]>;
   liveUpdates: LiveUpdate[];
   allPlayers?: FantasyPlayer[];
+  allAvailablePlayers?: FantasyPlayer[];
 }
 
 // Bets & Parlays Data Models

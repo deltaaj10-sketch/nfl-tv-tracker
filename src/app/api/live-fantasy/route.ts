@@ -9,6 +9,7 @@ import {
   GameTeam,
   GameSituation,
 } from '@/types/fantasy';
+import { getMasterNflPlayers, MasterPlayer } from '@/lib/nflPlayers';
 
 export const dynamic = 'force-dynamic';
 
@@ -414,6 +415,17 @@ export async function GET() {
     // Warm roster cache (doesn't block if already cached)
     await ensureRostersLoaded(Array.from(teamIdsSet));
 
+    // Load master active NFL player database (cached in-memory for 1 hr)
+    const masterPlayers = await getMasterNflPlayers();
+    const masterByTeam = new Map<string, MasterPlayer[]>();
+    for (const mp of masterPlayers) {
+      const abbr = mp.teamAbbr.toUpperCase();
+      if (!masterByTeam.has(abbr)) {
+        masterByTeam.set(abbr, []);
+      }
+      masterByTeam.get(abbr)!.push(mp);
+    }
+
     // 2. Fetch detailed boxscores and summaries in parallel
     const summaryPromises = events.map((ev) =>
       fetch(`https://site.api.espn.com/apis/site/v2/sports/football/nfl/summary?event=${ev.id}`, {
@@ -431,6 +443,7 @@ export async function GET() {
 
     const games: LiveGame[] = [];
     const allPlayersMap = new Map<string, FantasyPlayer>();
+    const allPlayersByName = new Map<string, FantasyPlayer>();
     const defPlayers: FantasyPlayer[] = [];
     const liveUpdates: LiveUpdate[] = [];
 
@@ -549,11 +562,36 @@ export async function GET() {
 
       games.push(liveGame);
 
-      // Pre-seed all active skill-position players from team rosters for both teams
-      // This guarantees players are available for betting, props, and ownership even before kickoff or before recording stats
+      // Pre-seed all active skill-position players from team rosters and master database
+      // This guarantees every player (including Matthew Golden #0 WR) is available for betting/props even before recording stats
       const preSeedRoster = (team: GameTeam, oppTeam: GameTeam, isHome: boolean) => {
-        const athletes = teamAthletesCache.get(String(team.id)) || [];
-        for (const ath of athletes) {
+        const espnAthletes = teamAthletesCache.get(String(team.id)) || [];
+        const masterAthletes = masterByTeam.get(team.abbreviation.toUpperCase()) || [];
+
+        const combinedAthletes = new Map<string, { id: string; name: string; shortName: string; position: FantasyPosition; headshot: string; jersey?: string }>();
+        for (const ath of masterAthletes) {
+          if (ath.position === 'DEF') continue;
+          combinedAthletes.set(ath.id, {
+            id: ath.id,
+            name: ath.name,
+            shortName: ath.shortName,
+            position: ath.position,
+            headshot: ath.headshot,
+            jersey: ath.jersey,
+          });
+        }
+        for (const ath of espnAthletes) {
+          combinedAthletes.set(ath.id, {
+            id: ath.id,
+            name: ath.name,
+            shortName: ath.shortName,
+            position: ath.position,
+            headshot: ath.headshot,
+            jersey: ath.jersey || combinedAthletes.get(ath.id)?.jersey,
+          });
+        }
+
+        for (const ath of combinedAthletes.values()) {
           if (!allPlayersMap.has(ath.id)) {
             const playerObj: FantasyPlayer = {
               id: ath.id,
@@ -622,6 +660,7 @@ export async function GET() {
             };
             (playerObj as any).hasOfficialPosition = true;
             allPlayersMap.set(ath.id, playerObj);
+            allPlayersByName.set(`${ath.name.toLowerCase()}_${team.abbreviation.toLowerCase()}`, playerObj);
           }
         }
       };
@@ -768,12 +807,21 @@ export async function GET() {
             // Retrieve or initialize aggregated player
             let player = allPlayersMap.get(athleteId);
             if (!player) {
+              const fallbackKey = `${athleteName.toLowerCase()}_${currentTeam.abbreviation.toLowerCase()}`;
+              player = allPlayersByName.get(fallbackKey);
+              if (player) {
+                // Re-key under ESPN athleteId for future lookups
+                allPlayersMap.set(athleteId, player);
+              }
+            }
+            if (!player) {
               player = {
                 id: athleteId,
                 name: athleteName,
                 shortName: athleteShort,
                 position,
                 headshot,
+                jersey: athlete.jersey,
                 isGameLive: state === 'in',
                 isLive: state === 'in',
                 team: {
@@ -802,6 +850,7 @@ export async function GET() {
               };
               (player as any).hasOfficialPosition = hasOfficial;
               allPlayersMap.set(athleteId, player);
+              allPlayersByName.set(`${athleteName.toLowerCase()}_${currentTeam.abbreviation.toLowerCase()}`, player);
             } else {
               // Player already exists across multiple categories (e.g. rushing and receiving)
               if (hasOfficial && !(player as any).hasOfficialPosition) {
@@ -1186,6 +1235,23 @@ export async function GET() {
       return b.id.localeCompare(a.id);
     });
 
+    // Merge all active players and defenses across all games on the weekly slate
+    const allAvailable = Array.from(allPlayersMap.values()).concat(defPlayers);
+    allAvailable.sort((a, b) => {
+      // Priority 1: Currently active live games first
+      const aLive = a.isGameLive || a.isLive ? 1 : 0;
+      const bLive = b.isGameLive || b.isLive ? 1 : 0;
+      if (bLive !== aLive) return bLive - aLive;
+
+      // Priority 2: Higher fantasy scoring points
+      if (b.points.ppr !== a.points.ppr) {
+        return b.points.ppr - a.points.ppr;
+      }
+
+      // Priority 3: Alphabetical by player name
+      return a.name.localeCompare(b.name);
+    });
+
     const responsePayload: LiveFantasyResponse = {
       lastUpdated: new Date().toISOString(),
       season: {
@@ -1196,7 +1262,8 @@ export async function GET() {
       games,
       leaderboards,
       liveUpdates: liveUpdates.slice(0, 50), // Top 50 recent updates
-      allPlayers: Array.from(allPlayersMap.values()).concat(defPlayers),
+      allPlayers: allAvailable,
+      allAvailablePlayers: allAvailable,
     };
 
     return NextResponse.json(responsePayload, {

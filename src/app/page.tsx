@@ -18,6 +18,7 @@ import {
   Crown,
   DollarSign,
   Plus,
+  Search,
 } from 'lucide-react';
 import {
   LiveFantasyResponse,
@@ -638,6 +639,132 @@ interface SyncedLeaguePayload {
   }>;
 }
 
+/**
+ * Dynamically generates realistic live prop lines and evaluates current progress
+ * for player props market cards in the Betting tab
+ */
+function getPlayerPropsSummary(player: FantasyPlayer) {
+  const pos = player.position;
+  const raw = player.playerRawStats;
+  const stats = player.stats;
+
+  if (pos === 'QB') {
+    const passYdsTarget = 238.5;
+    const currentPassYds = raw?.passYds ?? (stats.passingYards || 0);
+    const passTdsTarget = 1.5;
+    const currentPassTds = raw?.passTD ?? (stats.passingTouchdowns || 0);
+    return [
+      {
+        id: 'passYds',
+        label: 'Pass Yds',
+        target: passYdsTarget,
+        current: currentPassYds,
+        unit: 'YDS',
+        pct: Math.min(100, Math.round((currentPassYds / passYdsTarget) * 100)),
+        statusText: currentPassYds >= passYdsTarget ? '✅ COVERED' : `${currentPassYds} / ${passYdsTarget} YDS`,
+        isCashed: currentPassYds >= passYdsTarget,
+      },
+      {
+        id: 'passTD',
+        label: 'Pass TDs',
+        target: passTdsTarget,
+        current: currentPassTds,
+        unit: 'TD',
+        pct: Math.min(100, Math.round((currentPassTds / passTdsTarget) * 100)),
+        statusText: currentPassTds >= passTdsTarget ? '✅ COVERED' : `${currentPassTds} / ${passTdsTarget} TD`,
+        isCashed: currentPassTds >= passTdsTarget,
+      },
+    ];
+  }
+
+  if (pos === 'RB') {
+    const rushYdsTarget = 62.5;
+    const currentRushYds = raw?.rushYds ?? (stats.rushingYards || 0);
+    const rushTds = (raw?.rushTD ?? 0) + (raw?.recTD ?? 0) + (stats.rushingTouchdowns || 0);
+    return [
+      {
+        id: 'rushYds',
+        label: 'Rush Yds',
+        target: rushYdsTarget,
+        current: currentRushYds,
+        unit: 'YDS',
+        pct: Math.min(100, Math.round((currentRushYds / rushYdsTarget) * 100)),
+        statusText: currentRushYds >= rushYdsTarget ? '✅ COVERED' : `${currentRushYds} / ${rushYdsTarget} YDS`,
+        isCashed: currentRushYds >= rushYdsTarget,
+      },
+      {
+        id: 'anytimeTD',
+        label: 'Anytime TD',
+        target: 1,
+        current: rushTds,
+        unit: 'TD',
+        pct: rushTds > 0 ? 100 : 35,
+        statusText: rushTds > 0 ? '✅ TD CASHED' : '🟡 HUNTING TD',
+        isCashed: rushTds > 0,
+      },
+    ];
+  }
+
+  if (pos === 'WR' || pos === 'TE') {
+    const recYdsTarget = pos === 'WR' ? 48.5 : 36.5;
+    const currentRecYds = raw?.recYds ?? (stats.receivingYards || 0);
+    const recTarget = pos === 'WR' ? 4.5 : 3.5;
+    const currentRec = raw?.rec ?? (stats.receptions || 0);
+    const tds = (raw?.recTD ?? 0) + (raw?.rushTD ?? 0) + (stats.receivingTouchdowns || 0);
+    return [
+      {
+        id: 'recYds',
+        label: 'Rec Yds',
+        target: recYdsTarget,
+        current: currentRecYds,
+        unit: 'YDS',
+        pct: Math.min(100, Math.round((currentRecYds / recYdsTarget) * 100)),
+        statusText: currentRecYds >= recYdsTarget ? '✅ COVERED' : `${currentRecYds} / ${recYdsTarget} YDS`,
+        isCashed: currentRecYds >= recYdsTarget,
+      },
+      {
+        id: 'rec',
+        label: 'Receptions',
+        target: recTarget,
+        current: currentRec,
+        unit: 'REC',
+        pct: Math.min(100, Math.round((currentRec / recTarget) * 100)),
+        statusText: currentRec >= recTarget ? '✅ COVERED' : `${currentRec} / ${recTarget} REC`,
+        isCashed: currentRec >= recTarget,
+      },
+      {
+        id: 'anytimeTD',
+        label: 'Anytime TD',
+        target: 1,
+        current: tds,
+        unit: 'TD',
+        pct: tds > 0 ? 100 : 35,
+        statusText: tds > 0 ? '✅ TD CASHED' : '🟡 HUNTING TD',
+        isCashed: tds > 0,
+      },
+    ];
+  }
+
+  if (pos === 'K') {
+    const fgTarget = 1.5;
+    const currentFg = stats.fgMade || 0;
+    return [
+      {
+        id: 'fgMade',
+        label: 'FG Made',
+        target: fgTarget,
+        current: currentFg,
+        unit: 'FG',
+        pct: Math.min(100, Math.round((currentFg / fgTarget) * 100)),
+        statusText: currentFg >= fgTarget ? '✅ COVERED' : `${currentFg} / ${fgTarget} FG`,
+        isCashed: currentFg >= fgTarget,
+      },
+    ];
+  }
+
+  return [];
+}
+
 export default function TVCommandCenter() {
   const [data, setData] = useState<LiveFantasyResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -662,6 +789,10 @@ export default function TVCommandCenter() {
   const [guestTags, setGuestTags] = useState<GuestTagConfig[]>([]);
   const [syncedLeagueData, setSyncedLeagueData] = useState<Record<string, SyncedLeaguePayload>>({});
   const [savedBets, setSavedBets] = useState<BetSlip[]>([]);
+  const [bettingSubView, setBettingSubView] = useState<'slips' | 'props'>('slips');
+  const [bettingSearch, setBettingSearch] = useState('');
+  const [bettingGameFilter, setBettingGameFilter] = useState('ALL');
+  const [bettingPosFilter, setBettingPosFilter] = useState<'ALL' | 'QB' | 'RB' | 'WR' | 'TE' | 'K'>('ALL');
 
   // Timers & Cycling
   const [pollCountdown, setPollCountdown] = useState(15);
@@ -1232,6 +1363,9 @@ export default function TVCommandCenter() {
 
   // All active players flat array for search, matching, and props
   const allActivePlayers = useMemo(() => {
+    if (data?.allAvailablePlayers && data.allAvailablePlayers.length > 0) {
+      return data.allAvailablePlayers;
+    }
     if (data?.allPlayers && data.allPlayers.length > 0) {
       return data.allPlayers;
     }
@@ -1242,6 +1376,53 @@ export default function TVCommandCenter() {
     }
     return list;
   }, [data]);
+
+  // Filtered master player market for Betting Tab
+  const filteredMarketPlayers = useMemo(() => {
+    const query = bettingSearch.trim().toLowerCase();
+    let list = allActivePlayers;
+
+    // Filter by game
+    if (bettingGameFilter !== 'ALL') {
+      const g = data?.games.find((gm) => gm.id === bettingGameFilter);
+      if (g) {
+        const away = g.awayTeam.abbreviation.toUpperCase();
+        const home = g.homeTeam.abbreviation.toUpperCase();
+        list = list.filter((p) => {
+          const t = p.team.abbreviation.toUpperCase();
+          return t === away || t === home;
+        });
+      }
+    }
+
+    // Filter by position
+    if (bettingPosFilter !== 'ALL') {
+      list = list.filter((p) => p.position === bettingPosFilter);
+    }
+
+    // Filter by search query
+    if (query) {
+      list = list.filter((p) => {
+        const nameMatch = p.name.toLowerCase().includes(query);
+        const abbrMatch = p.team.abbreviation.toLowerCase().includes(query);
+        const teamMatch = (p.team.displayName || '').toLowerCase().includes(query);
+        const posMatch = p.position.toLowerCase().includes(query);
+        const jerseyMatch = p.jersey ? p.jersey.includes(query) : false;
+        const nicknameMatch =
+          (query.includes('pack') && p.team.abbreviation === 'GB') ||
+          (query.includes('cowboy') && p.team.abbreviation === 'DAL') ||
+          (query.includes('chief') && p.team.abbreviation === 'KC') ||
+          (query.includes('raven') && p.team.abbreviation === 'BAL') ||
+          (query.includes('eagle') && p.team.abbreviation === 'PHI') ||
+          (query.includes('bear') && p.team.abbreviation === 'CHI') ||
+          (query.includes('falcon') && p.team.abbreviation === 'ATL') ||
+          (query.includes('texan') && p.team.abbreviation === 'HOU');
+        return nameMatch || abbrMatch || teamMatch || posMatch || jerseyMatch || nicknameMatch;
+      });
+    }
+
+    return list.slice(0, 48);
+  }, [allActivePlayers, data?.games, bettingSearch, bettingGameFilter, bettingPosFilter]);
 
   // Sort leaderboards by active scoring format and filter by game state
   const sortedLeaderboards = useMemo(() => {
@@ -2392,14 +2573,38 @@ export default function TVCommandCenter() {
         ) : activeTab === 'bets' ? (
           /* TAB 9: BETS & PARLAYS TRACKER (10-FOOT TV BROADCAST UI) */
           <div className="h-full flex flex-col justify-between overflow-hidden">
-            {/* Header row with Summary & Add Button */}
-            <div className="flex items-center justify-between pb-2 shrink-0 border-b border-slate-800">
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2">
+            {/* Header row with Summary, View Toggle & Add Button */}
+            <div className="flex items-center justify-between pb-2 shrink-0 border-b border-slate-800 gap-2 flex-wrap">
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <div className="flex items-center gap-1.5">
                   <DollarSign className="w-5 h-5 text-emerald-400" />
                   <h2 className="text-base font-black tracking-wide uppercase text-white">
                     Live Parlay &amp; Bet Tracker
                   </h2>
+                </div>
+
+                {/* Sub-View Switcher: Slips vs Live Props Market */}
+                <div className="flex items-center bg-slate-950 p-0.5 rounded-xl border border-slate-800">
+                  <button
+                    onClick={() => setBettingSubView('slips')}
+                    className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase transition-all ${
+                      bettingSubView === 'slips'
+                        ? 'bg-amber-400 text-slate-950 shadow'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    Tracked Slips ({savedBets.length})
+                  </button>
+                  <button
+                    onClick={() => setBettingSubView('props')}
+                    className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase transition-all ${
+                      bettingSubView === 'props'
+                        ? 'bg-emerald-400 text-slate-950 shadow'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    Live Props Market ({allActivePlayers.length})
+                  </button>
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -2437,32 +2642,226 @@ export default function TVCommandCenter() {
               </div>
             </div>
 
-            {/* Slips 2-Column Grid */}
-            <div className="flex-1 overflow-y-auto pr-1 pt-2">
-              {savedBets.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center gap-3 text-slate-400 py-12">
-                  <div className="p-4 rounded-full bg-slate-900 border border-slate-800">
-                    <DollarSign className="w-10 h-10 text-emerald-400" />
+            {/* Main Content: Slips vs Live Props Market */}
+            {bettingSubView === 'props' ? (
+              /* LIVE PROPS & PLAYER MARKET BOARD */
+              <div className="flex-1 flex flex-col min-h-0 pt-2">
+                {/* Search & Filters Bar */}
+                <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-2 pb-2 shrink-0 border-b border-slate-800/80">
+                  {/* Search Bar */}
+                  <div className="relative flex-1 max-w-md">
+                    <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
+                    <input
+                      type="text"
+                      value={bettingSearch}
+                      onChange={(e) => setBettingSearch(e.target.value)}
+                      placeholder="Search any NFL player, team, or position... e.g., Matthew Golden"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 font-bold"
+                    />
                   </div>
-                  <div className="text-center">
-                    <p className="text-base font-black text-white uppercase">
-                      No Bets or Parlays Currently Tracked
-                    </p>
-                    <p className="text-xs text-slate-500 max-w-sm mt-1 font-medium">
-                      Add player props, game spreads, totals, and anytime touchdown scorers to watch them grade live on your second TV.
-                    </p>
+
+                  {/* Filter Pills: Position + Game */}
+                  <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+                    {/* Position Pills */}
+                    <div className="flex items-center gap-1 bg-slate-950 p-0.5 rounded-lg border border-slate-800 shrink-0">
+                      {(['ALL', 'QB', 'RB', 'WR', 'TE', 'K'] as const).map((pos) => (
+                        <button
+                          key={pos}
+                          onClick={() => setBettingPosFilter(pos)}
+                          className={`px-2 py-0.5 rounded text-[9px] font-black uppercase transition-all ${
+                            bettingPosFilter === pos
+                              ? 'bg-cyan-400 text-slate-950 font-black'
+                              : 'text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          {pos}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Game Filter Pills */}
+                    {data?.games && data.games.length > 0 && (
+                      <div className="flex items-center gap-1 overflow-x-auto no-scrollbar shrink-0">
+                        <button
+                          onClick={() => setBettingGameFilter('ALL')}
+                          className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase transition-all ${
+                            bettingGameFilter === 'ALL'
+                              ? 'bg-amber-400 text-slate-950 font-black'
+                              : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
+                          }`}
+                        >
+                          All Games
+                        </button>
+                        {data.games.map((g) => {
+                          const isLive = g.status?.state === 'in';
+                          const active = bettingGameFilter === g.id;
+                          return (
+                            <button
+                              key={g.id}
+                              onClick={() => setBettingGameFilter(g.id)}
+                              className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase transition-all flex items-center gap-1 shrink-0 ${
+                                active
+                                  ? 'bg-amber-400 text-slate-950 font-black'
+                                  : isLive
+                                  ? 'bg-emerald-950/80 border border-emerald-500/50 text-emerald-300'
+                                  : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
+                              }`}
+                            >
+                              {isLive && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />}
+                              {g.awayTeam.abbreviation} @ {g.homeTeam.abbreviation}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
-                  <button
-                    onClick={() => setIsBetsModalOpen(true)}
-                    className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs uppercase shadow-lg transition-all"
-                  >
-                    + Add Your First Bet / Parlay
-                  </button>
                 </div>
-              ) : (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 pb-2">
-                  {savedBets.map((slip) => {
-                    const summary = getSlipSummary(slip, allActivePlayers, data?.games || []);
+
+                {/* Player Props Cards Grid */}
+                <div className="flex-1 overflow-y-auto pr-1 pt-2">
+                  {filteredMarketPlayers.length === 0 ? (
+                    <div className="h-full flex flex-col items-center justify-center text-slate-400 py-12">
+                      <p className="text-sm font-bold uppercase text-slate-300">No matching players found</p>
+                      <button
+                        onClick={() => {
+                          setBettingSearch('');
+                          setBettingPosFilter('ALL');
+                          setBettingGameFilter('ALL');
+                        }}
+                        className="mt-2 text-xs font-black text-amber-400 hover:underline"
+                      >
+                        Reset Search &amp; Filters
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pb-3">
+                      {filteredMarketPlayers.map((player) => {
+                        const props = getPlayerPropsSummary(player);
+                        const isLive = player.isGameLive || player.isLive || player.gameStatus?.state === 'in';
+                        return (
+                          <div
+                            key={player.id}
+                            className={`rounded-2xl border p-3 flex flex-col justify-between backdrop-blur-sm transition-all shadow-lg ${
+                              isLive
+                                ? 'bg-slate-900/90 border-emerald-500/40 shadow-[0_0_15px_rgba(16,185,129,0.15)]'
+                                : 'bg-slate-900/80 border-slate-800 hover:border-slate-700'
+                            }`}
+                          >
+                            {/* Card Header */}
+                            <div className="flex items-center justify-between pb-2 border-b border-slate-800/80">
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <img
+                                  src={player.headshot}
+                                  alt={player.name}
+                                  className="w-8 h-8 rounded-full object-cover bg-slate-950 border border-slate-700 shrink-0"
+                                  onError={(e) => {
+                                    (e.currentTarget as HTMLImageElement).src = player.team.logo;
+                                  }}
+                                />
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-xs font-black text-white truncate">
+                                      {player.name} {player.jersey ? `#${player.jersey}` : ''}
+                                    </span>
+                                    <span className="text-[9px] font-black text-amber-400 px-1 py-0.2 rounded bg-amber-500/10 border border-amber-500/30 shrink-0">
+                                      {player.position}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-1 text-[10px] text-slate-400 font-bold truncate">
+                                    <span>{player.team.abbreviation} vs {player.opponent.abbreviation}</span>
+                                    <span>•</span>
+                                    <span className={isLive ? 'text-emerald-400 font-black' : ''}>
+                                      {player.gameStatus?.detail || (isLive ? 'LIVE' : 'Upcoming')}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <button
+                                onClick={() => setIsBetsModalOpen(true)}
+                                className="px-2 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 text-[10px] font-black uppercase transition-all shrink-0"
+                              >
+                                + Bet Prop
+                              </button>
+                            </div>
+
+                            {/* Live In-Game Stat Line */}
+                            <div className="py-2 flex items-center justify-between text-[11px] font-bold">
+                              <span className="text-slate-400 uppercase text-[9px] tracking-wider">
+                                Live In-Game Stats
+                              </span>
+                              <span className="text-white tv-tabular font-black">
+                                {player.rawStatLine || '0 PTS'}
+                              </span>
+                            </div>
+
+                            {/* Dynamic Prop Lines with Live Progress */}
+                            <div className="space-y-2 pt-1 border-t border-slate-800/60">
+                              {props.map((pr) => (
+                                <div key={pr.id} className="space-y-1">
+                                  <div className="flex items-center justify-between text-[10px] font-bold">
+                                    <span className="text-slate-300">
+                                      {pr.label} (O/U {pr.target})
+                                    </span>
+                                    <span className={`font-black tv-tabular ${pr.isCashed ? 'text-emerald-400' : 'text-slate-400'}`}>
+                                      {pr.statusText}
+                                    </span>
+                                  </div>
+                                  <div className="w-full h-1.5 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
+                                    <div
+                                      className={`h-full transition-all duration-300 ${
+                                        pr.isCashed
+                                          ? 'bg-gradient-to-r from-emerald-500 to-teal-400 shadow-[0_0_6px_rgba(16,185,129,0.8)]'
+                                          : 'bg-gradient-to-r from-cyan-400 to-blue-500'
+                                      }`}
+                                      style={{ width: `${Math.max(4, pr.pct)}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              /* Slips 2-Column Grid */
+              <div className="flex-1 overflow-y-auto pr-1 pt-2">
+                {savedBets.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center gap-3 text-slate-400 py-12">
+                    <div className="p-4 rounded-full bg-slate-900 border border-slate-800">
+                      <DollarSign className="w-10 h-10 text-emerald-400" />
+                    </div>
+                    <div className="text-center">
+                      <p className="text-base font-black text-white uppercase">
+                        No Bets or Parlays Currently Tracked
+                      </p>
+                      <p className="text-xs text-slate-500 max-w-sm mt-1 font-medium">
+                        Add player props, game spreads, totals, and anytime touchdown scorers to watch them grade live on your second TV.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setIsBetsModalOpen(true)}
+                        className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs uppercase shadow-lg transition-all"
+                      >
+                        + Add Your First Bet / Parlay
+                      </button>
+                      <button
+                        onClick={() => setBettingSubView('props')}
+                        className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-white font-black text-xs uppercase transition-all"
+                      >
+                        Browse Player Props Market
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 pb-2">
+                    {savedBets.map((slip) => {
+                      const summary = getSlipSummary(slip, allActivePlayers, data?.games || []);
                     return (
                       <div
                         key={slip.id}
@@ -2589,8 +2988,9 @@ export default function TVCommandCenter() {
                 </div>
               )}
             </div>
-          </div>
-        ) : (
+          )}
+        </div>
+      ) : (
           /* TABS 2-7: TOP 10 LEADERBOARDS (2-COLUMN GRID: 1-5 ON LEFT, 6-10 ON RIGHT) */
           <div className="h-full flex flex-col justify-between overflow-hidden">
             {/* Compact Subheader with Inline Burst Alert */}
@@ -2821,7 +3221,7 @@ export default function TVCommandCenter() {
         savedBets={savedBets}
         onUpdateBets={handleUpdateBets}
         availableGames={data?.games || []}
-        availablePlayers={data?.allPlayers || allActivePlayers}
+        availablePlayers={data?.allAvailablePlayers || data?.allPlayers || allActivePlayers}
       />
 
       {/* 8. FULL-SCREEN BROADCAST TOUCHDOWN ALERT BANNER OVERLAY */}
