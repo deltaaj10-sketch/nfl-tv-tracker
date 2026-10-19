@@ -19,7 +19,15 @@ import {
   DollarSign,
   Plus,
   Search,
+  Volume2,
+  VolumeX,
+  Smartphone,
+  QrCode,
+  Copy,
+  Check,
+  X,
 } from 'lucide-react';
+import { playBroadcastAlertSound } from '@/lib/soundEffects';
 import {
   LiveFantasyResponse,
   FantasyPosition,
@@ -765,6 +773,12 @@ function getPlayerPropsSummary(player: FantasyPlayer) {
   return [];
 }
 
+interface WakeLockSentinelLike {
+  released: boolean;
+  release: () => Promise<void>;
+  addEventListener: (type: 'release', listener: () => void) => void;
+}
+
 export default function TVCommandCenter() {
   const [data, setData] = useState<LiveFantasyResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -783,6 +797,17 @@ export default function TVCommandCenter() {
   // Modal State
   const [isManageModalOpen, setIsManageModalOpen] = useState(false);
   const [isBetsModalOpen, setIsBetsModalOpen] = useState(false);
+  const [isQrModalOpen, setIsQrModalOpen] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
+
+  // Web Audio Alert Sound Settings & Cashed Bet Tracking
+  const [isSoundEnabled, setIsSoundEnabled] = useState<boolean>(true);
+  const seenCashedItemsRef = useRef<Set<string>>(new Set());
+  const hasInitializedBetsRef = useRef<boolean>(false);
+
+  // Continuous 6-Hour TV Run Stability: Screen Wake Lock
+  const [isWakeLockActive, setIsWakeLockActive] = useState<boolean>(false);
+  const wakeLockSentinelRef = useRef<WakeLockSentinelLike | null>(null);
 
   // Persisted Leagues, Guests & Bets State
   const [syncedLeagues, setSyncedLeagues] = useState<SyncedLeagueConfig[]>([]);
@@ -939,12 +964,177 @@ export default function TVCommandCenter() {
         setSavedBets(defaultBets);
         localStorage.setItem('nfl_tv_bets', JSON.stringify(defaultBets));
       }
+
+      // 4. Load Audio Sound setting
+      const storedSound = localStorage.getItem('nfl_tv_sound');
+      if (storedSound !== null) {
+        setIsSoundEnabled(storedSound === 'true');
+      }
     } catch (e) {
       console.error('Failed to load localStorage leagues/guests/bets:', e);
     }
   }, []);
 
-  // Save changes to localStorage
+  // Room State Synchronization (/api/room-state)
+  const lastRoomStateSyncRef = useRef<number>(0);
+
+  const pushRoomState = useCallback(
+    async (override?: {
+      syncedLeagues?: SyncedLeagueConfig[];
+      guestTags?: GuestTagConfig[];
+      savedBets?: BetSlip[];
+    }) => {
+      try {
+        const payload = {
+          syncedLeagues: override?.syncedLeagues ?? syncedLeagues,
+          guestTags: override?.guestTags ?? guestTags,
+          savedBets: override?.savedBets ?? savedBets,
+        };
+        const res = await fetch('/api/room-state', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (res.ok) {
+          const json = await res.json();
+          if (json.state?.lastUpdated) {
+            lastRoomStateSyncRef.current = json.state.lastUpdated;
+          }
+        }
+      } catch (e) {
+        console.error('Failed to push room state to server:', e);
+      }
+    },
+    [syncedLeagues, guestTags, savedBets]
+  );
+
+  const fetchRoomState = useCallback(async () => {
+    try {
+      const res = await fetch('/api/room-state', { cache: 'no-store' });
+      if (!res.ok) return;
+      const json = await res.json();
+      if (json.success && json.state) {
+        const serverState = json.state;
+        if (serverState.lastUpdated > lastRoomStateSyncRef.current) {
+          const hasServerData =
+            (Array.isArray(serverState.syncedLeagues) && serverState.syncedLeagues.length > 0) ||
+            (Array.isArray(serverState.guestTags) && serverState.guestTags.length > 0) ||
+            (Array.isArray(serverState.savedBets) && serverState.savedBets.length > 0);
+
+          if (lastRoomStateSyncRef.current === 0 && !hasServerData) {
+            // First run and server is empty: seed server with current local storage
+            lastRoomStateSyncRef.current = serverState.lastUpdated;
+            try {
+              const localLeagues = JSON.parse(localStorage.getItem('nfl_tv_synced_leagues') || '[]');
+              const localGuests = JSON.parse(localStorage.getItem('nfl_tv_guest_tags') || '[]');
+              const localBets = JSON.parse(localStorage.getItem('nfl_tv_bets') || '[]');
+              if (localLeagues.length > 0 || localGuests.length > 0 || localBets.length > 0) {
+                pushRoomState({
+                  syncedLeagues: localLeagues,
+                  guestTags: localGuests,
+                  savedBets: localBets,
+                });
+              }
+            } catch {}
+          } else {
+            // Sync server state down to client
+            lastRoomStateSyncRef.current = serverState.lastUpdated;
+            if (Array.isArray(serverState.syncedLeagues)) {
+              setSyncedLeagues(serverState.syncedLeagues);
+              try {
+                localStorage.setItem('nfl_tv_synced_leagues', JSON.stringify(serverState.syncedLeagues));
+              } catch {}
+            }
+            if (Array.isArray(serverState.guestTags)) {
+              setGuestTags(serverState.guestTags);
+              try {
+                localStorage.setItem('nfl_tv_guest_tags', JSON.stringify(serverState.guestTags));
+              } catch {}
+            }
+            if (Array.isArray(serverState.savedBets)) {
+              setSavedBets(serverState.savedBets);
+              try {
+                localStorage.setItem('nfl_tv_bets', JSON.stringify(serverState.savedBets));
+              } catch {}
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Failed to sync room state from server:', e);
+    }
+  }, [pushRoomState]);
+
+  // Initial Room State Sync
+  useEffect(() => {
+    fetchRoomState();
+  }, [fetchRoomState]);
+
+  const handleToggleSound = () => {
+    setIsSoundEnabled((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('nfl_tv_sound', String(next));
+      } catch {}
+      if (next) {
+        playBroadcastAlertSound('cashed');
+      }
+      return next;
+    });
+  };
+
+  // Continuous 6-Hour TV Run Stability: Screen Wake Lock
+  const requestWakeLock = useCallback(async () => {
+    if (typeof window === 'undefined') return;
+    const nav = navigator as unknown as { wakeLock?: { request: (type: 'screen') => Promise<WakeLockSentinelLike> } };
+    if (!nav.wakeLock) return;
+
+    try {
+      if (wakeLockSentinelRef.current && !wakeLockSentinelRef.current.released) {
+        setIsWakeLockActive(true);
+        return;
+      }
+      const sentinel = await nav.wakeLock.request('screen');
+      wakeLockSentinelRef.current = sentinel;
+      setIsWakeLockActive(true);
+      sentinel.addEventListener('release', () => {
+        setIsWakeLockActive(false);
+      });
+    } catch {
+      setIsWakeLockActive(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    requestWakeLock();
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        requestWakeLock();
+      }
+    };
+
+    const handleUserInteraction = () => {
+      if (!wakeLockSentinelRef.current || wakeLockSentinelRef.current.released) {
+        requestWakeLock();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('click', handleUserInteraction);
+    window.addEventListener('keydown', handleUserInteraction);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('click', handleUserInteraction);
+      window.removeEventListener('keydown', handleUserInteraction);
+      if (wakeLockSentinelRef.current) {
+        wakeLockSentinelRef.current.release().catch(() => {});
+      }
+    };
+  }, [requestWakeLock]);
+
+  // Save changes to localStorage and push to shared room state
   const handleUpdateLeagues = (leagues: SyncedLeagueConfig[]) => {
     setSyncedLeagues(leagues);
     try {
@@ -952,6 +1142,7 @@ export default function TVCommandCenter() {
     } catch (e) {
       console.error(e);
     }
+    pushRoomState({ syncedLeagues: leagues });
   };
 
   const handleUpdateGuests = (guests: GuestTagConfig[]) => {
@@ -961,6 +1152,7 @@ export default function TVCommandCenter() {
     } catch (e) {
       console.error(e);
     }
+    pushRoomState({ guestTags: guests });
   };
 
   const handleUpdateBets = (bets: BetSlip[]) => {
@@ -970,6 +1162,7 @@ export default function TVCommandCenter() {
     } catch (e) {
       console.error('Failed to save bets to localStorage:', e);
     }
+    pushRoomState({ savedBets: bets });
   };
 
   // Sync connected leagues (Sleeper & ESPN) with stale-while-revalidate safety
@@ -1143,7 +1336,10 @@ export default function TVCommandCenter() {
         setBurstAlerts((prev) => [...newAlerts, ...prev].slice(0, 5));
       }
 
-      // Check for Touchdown Alerts with Strict Baseline Initialization
+      // Cap liveUpdates to max 60 items in memory to guarantee long-running stability
+      if (json.liveUpdates && json.liveUpdates.length > 60) {
+        json.liveUpdates = json.liveUpdates.slice(0, 60);
+      }
       const allUpdates = json.liveUpdates || [];
       const tdUpdates = allUpdates.filter((u) => u.type === 'touchdown');
 
@@ -1215,6 +1411,8 @@ export default function TVCommandCenter() {
 
       setData(json);
       setError(null);
+      // Periodically sync room state so mobile entries appear on TV
+      fetchRoomState();
     } catch (err: unknown) {
       console.error('Failed to poll live fantasy data:', err);
       const message = err instanceof Error ? err.message : 'Error updating data';
@@ -1222,7 +1420,7 @@ export default function TVCommandCenter() {
     } finally {
       setLoading(false);
     }
-  }, [scoringFormat, getOwnershipTags]);
+  }, [scoringFormat, getOwnershipTags, fetchRoomState]);
 
   // Dequeue Touchdown Alerts into active display
   useEffect(() => {
@@ -1231,8 +1429,11 @@ export default function TVCommandCenter() {
       setTdAlertQueue((prev) => prev.slice(1));
       setActiveTdAlert(nextAlert);
       setTdProgress(100);
+      if (isSoundEnabled) {
+        playBroadcastAlertSound('touchdown');
+      }
     }
-  }, [activeTdAlert, tdAlertQueue]);
+  }, [activeTdAlert, tdAlertQueue, isSoundEnabled]);
 
   // 8-Second auto-dismiss countdown timer for active Touchdown Alert
   useEffect(() => {
@@ -1376,6 +1577,44 @@ export default function TVCommandCenter() {
     }
     return list;
   }, [data]);
+
+  // Monitor Bet Slips & Legs for newly Cashed Wins
+  useEffect(() => {
+    if (!data?.games || savedBets.length === 0) return;
+
+    const currentAvailablePlayers = data.allAvailablePlayers || data.allPlayers || allActivePlayers;
+    const currentCashedIds = new Set<string>();
+
+    savedBets.forEach((slip) => {
+      const summary = getSlipSummary(slip, currentAvailablePlayers, data.games);
+      if (summary.overallStatus === 'cashed') {
+        currentCashedIds.add(`slip-${slip.id}`);
+      }
+      summary.gradedLegs.forEach((item) => {
+        if (item.result.status === 'cashed') {
+          currentCashedIds.add(`leg-${item.leg.id}`);
+        }
+      });
+    });
+
+    if (!hasInitializedBetsRef.current) {
+      seenCashedItemsRef.current = currentCashedIds;
+      hasInitializedBetsRef.current = true;
+      return;
+    }
+
+    let newlyCashed = false;
+    for (const id of currentCashedIds) {
+      if (!seenCashedItemsRef.current.has(id)) {
+        newlyCashed = true;
+        seenCashedItemsRef.current.add(id);
+      }
+    }
+
+    if (newlyCashed && isSoundEnabled) {
+      playBroadcastAlertSound('cashed');
+    }
+  }, [data, savedBets, allActivePlayers, isSoundEnabled]);
 
   // Filtered master player market for Betting Tab
   const filteredMarketPlayers = useMemo(() => {
@@ -1866,6 +2105,34 @@ export default function TVCommandCenter() {
               </span>
             )}
           </button>
+
+          {/* Phone Sync QR Button */}
+          <button
+            onClick={() => setIsQrModalOpen(true)}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-[11px] font-black uppercase text-cyan-400 border border-cyan-500/50 shadow-sm transition-all"
+            title="Scan QR Code with phone to join and add bets"
+          >
+            <Smartphone className="w-3 h-3 text-cyan-400" />
+            <span>📱 Room Sync</span>
+          </button>
+
+          {/* Sound Toggle Button */}
+          <button
+            onClick={handleToggleSound}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-black uppercase transition-all border ${
+              isSoundEnabled
+                ? 'bg-emerald-950/80 border-emerald-500/60 text-emerald-300 shadow-[0_0_10px_rgba(16,185,129,0.25)]'
+                : 'bg-slate-900/80 border-slate-800 text-slate-400 hover:text-slate-200'
+            }`}
+            title={isSoundEnabled ? 'Sound is ON (stadium horns and cashed chimes)' : 'Sound is MUTED'}
+          >
+            {isSoundEnabled ? (
+              <Volume2 className="w-3 h-3 text-emerald-400" />
+            ) : (
+              <VolumeX className="w-3 h-3 text-slate-500" />
+            )}
+            <span>{isSoundEnabled ? 'SOUND: ON' : 'MUTE'}</span>
+          </button>
         </div>
 
         {/* Center: Live Polling Countdown & Refresh */}
@@ -1881,6 +2148,7 @@ export default function TVCommandCenter() {
               setPollCountdown(15);
               fetchData();
               syncLeaguesData();
+              fetchRoomState();
             }}
             title="Force Refresh Data"
             className="p-0.5 rounded hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
@@ -3210,12 +3478,35 @@ export default function TVCommandCenter() {
           )}
         </div>
 
-        {/* Fixed Right Sync Time */}
-        <div className="h-full px-3 bg-slate-950/90 border-l border-slate-800/80 flex items-center gap-2 text-[10px] text-slate-500 shrink-0 z-20">
-          <Activity className="w-3.5 h-3.5 text-emerald-400" />
-          <span suppressHydrationWarning>{mounted && data?.lastUpdated ? `SYNC: ${new Date(data.lastUpdated).toLocaleTimeString()}` : ''}</span>
+        {/* Fixed Right Sync Time & Screen WakeLock Status */}
+        <div className="h-full px-3 bg-slate-950/90 border-l border-slate-800/80 flex items-center gap-3 text-[10px] text-slate-500 shrink-0 z-20">
+          <div
+            className="flex items-center gap-1.5 cursor-pointer hover:text-slate-300 transition-colors"
+            onClick={requestWakeLock}
+            title={isWakeLockActive ? "Screen WakeLock Active: TV display will stay awake" : "Click to activate Screen WakeLock"}
+          >
+            <Tv className={`w-3.5 h-3.5 ${isWakeLockActive ? 'text-emerald-400' : 'text-slate-600'}`} />
+            <span className="hidden md:inline font-bold uppercase text-[9px]">
+              {isWakeLockActive ? 'WAKELOCK' : 'SLEEP-DEFENSE'}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <Activity className="w-3.5 h-3.5 text-emerald-400" />
+            <span suppressHydrationWarning>{mounted && data?.lastUpdated ? `SYNC: ${new Date(data.lastUpdated).toLocaleTimeString()}` : ''}</span>
+          </div>
         </div>
       </footer>
+
+      {/* Floating Bottom-Right QR Code Pill */}
+      <button
+        onClick={() => setIsQrModalOpen(true)}
+        className="fixed bottom-12 right-4 z-40 flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900/90 hover:bg-slate-800 text-cyan-300 hover:text-white border border-cyan-500/40 shadow-[0_0_15px_rgba(6,182,212,0.35)] backdrop-blur-md transition-all text-xs font-black uppercase group"
+        title="Scan with phone to add bets & leagues"
+      >
+        <QrCode className="w-4 h-4 text-cyan-400 group-hover:scale-110 transition-transform" />
+        <span className="hidden sm:inline">📱 Scan to Add Bets</span>
+      </button>
 
       {/* 7. MANAGE LEAGUES & GUESTS MODAL */}
       <ManageLeaguesModal
@@ -3243,6 +3534,76 @@ export default function TVCommandCenter() {
         availableGames={data?.games || []}
         availablePlayers={data?.allAvailablePlayers || data?.allPlayers || allActivePlayers}
       />
+
+      {/* 7c. ROOM PHONE SYNC QR CODE MODAL */}
+      {isQrModalOpen && (
+        <div
+          onClick={() => setIsQrModalOpen(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 cursor-pointer animate-fadeIn"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative max-w-md w-full p-6 md:p-8 rounded-3xl bg-slate-900 border border-cyan-500/40 shadow-[0_0_60px_rgba(6,182,212,0.3)] flex flex-col items-center text-center cursor-default"
+          >
+            {/* Close button */}
+            <button
+              onClick={() => setIsQrModalOpen(false)}
+              className="absolute top-4 right-4 p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* Header */}
+            <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-950/80 border border-cyan-500/40 text-cyan-300 text-xs font-black uppercase mb-3">
+              <Smartphone className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Room Phone Sync</span>
+            </div>
+
+            <h2 className="text-xl md:text-2xl font-black text-white uppercase tracking-wide">
+              Scan to Add Bets &amp; Players
+            </h2>
+            <p className="text-xs text-slate-400 mt-1 mb-5 max-w-xs leading-relaxed">
+              Point your phone camera here to open this tracker on mobile, add your parlays, or connect fantasy teams to this TV in real-time.
+            </p>
+
+            {/* High-Contrast QR Code Card */}
+            <div className="p-4 bg-white rounded-2xl shadow-2xl border-4 border-cyan-400/80 mb-5 flex items-center justify-center">
+              <img
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(
+                  typeof window !== 'undefined' ? window.location.origin : ''
+                )}`}
+                alt="Room QR Code"
+                className="w-48 h-48 md:w-56 md:h-56 object-contain"
+              />
+            </div>
+
+            {/* Room URL & Copy Button */}
+            <div className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs">
+              <span className="text-slate-400 font-mono truncate text-[11px]">
+                {typeof window !== 'undefined' ? window.location.origin : ''}
+              </span>
+              <button
+                onClick={() => {
+                  if (typeof window !== 'undefined') {
+                    navigator.clipboard?.writeText(window.location.origin);
+                    setCopiedLink(true);
+                    setTimeout(() => setCopiedLink(false), 2000);
+                  }
+                }}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-black text-[10px] uppercase transition-all shrink-0"
+              >
+                {copiedLink ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                <span>{copiedLink ? 'Copied!' : 'Copy'}</span>
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2 mt-4 text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span>Live Multi-Device Room Sync Active</span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 8. FULL-SCREEN BROADCAST TOUCHDOWN ALERT BANNER OVERLAY */}
       {activeTdAlert && (
