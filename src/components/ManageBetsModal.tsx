@@ -383,7 +383,7 @@ export default function ManageBetsModal({
             </div>
             <div>
               <h2 className="text-base font-black text-white uppercase tracking-wider">
-                💰 Parlay &amp; Bet Tracker
+                Parlay &amp; Bet Tracker
               </h2>
               <p className="text-xs text-slate-400 font-medium">
                 Track live player props, spreads, totals, and anytime TDs across all games

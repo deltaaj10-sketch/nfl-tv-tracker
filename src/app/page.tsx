@@ -47,19 +47,54 @@ import {
 import ManageLeaguesModal from '@/components/ManageLeaguesModal';
 import ManageBetsModal from '@/components/ManageBetsModal';
 
+const NFL_TEAM_COLORS: Record<string, string> = {
+  ARI: '#97233F',
+  ATL: '#A71930',
+  BAL: '#241773',
+  BUF: '#00338D',
+  CAR: '#0085CA',
+  CHI: '#0B162A',
+  CIN: '#FB4F14',
+  CLE: '#311D00',
+  DAL: '#003594',
+  DEN: '#FB4F14',
+  DET: '#0076B6',
+  GB:  '#203731',
+  HOU: '#03202F',
+  IND: '#002C5F',
+  JAX: '#006778',
+  KC:  '#E31837',
+  LAC: '#0080C6',
+  LAR: '#003594',
+  LV:  '#000000',
+  MIA: '#008E97',
+  MIN: '#4F2683',
+  NE:  '#002244',
+  NO:  '#D3BC8D',
+  NYG: '#0B2265',
+  NYJ: '#125740',
+  PHI: '#004C54',
+  PIT: '#FFB612',
+  SEA: '#002244',
+  SF:  '#AA0000',
+  TB:  '#D50A0A',
+  TEN: '#0C2340',
+  WAS: '#5A1414',
+};
+
 type MainTab = 'live' | FantasyPosition | 'room' | 'bets';
 
 // Compact TV Tab Labels that stretch 100% across the screen without horizontal scrolling
-const TABS: { id: MainTab; label: string; icon: string }[] = [
-  { id: 'live', label: 'LIVE', icon: '⚡' },
-  { id: 'QB', label: 'QB', icon: '🎯' },
-  { id: 'RB', label: 'RB', icon: '🏃' },
-  { id: 'WR', label: 'WR', icon: '🙌' },
-  { id: 'TE', label: 'TE', icon: '🛡️' },
-  { id: 'DEF', label: 'DEF', icon: '🔒' },
-  { id: 'K', label: 'K', icon: '🦵' },
-  { id: 'room', label: 'LEAGUES', icon: '🏆' },
-  { id: 'bets', label: 'BETS & PARLAYS', icon: '💰' },
+const TABS: { id: MainTab; label: string }[] = [
+  { id: 'live', label: 'LIVE' },
+  { id: 'QB', label: 'QB' },
+  { id: 'RB', label: 'RB' },
+  { id: 'WR', label: 'WR' },
+  { id: 'TE', label: 'TE' },
+  { id: 'DEF', label: 'DEF' },
+  { id: 'K', label: 'K' },
+  { id: 'room', label: 'LEAGUES' },
+  { id: 'bets', label: 'SPORTSBOOK' },
 ];
 
 interface PointBurstAlert {
@@ -146,7 +181,7 @@ function gradeBetLeg(
       if (currentVal >= target) {
         return {
           status: 'cashed',
-          statusText: '✅ CASHED',
+          statusText: 'CASHED',
           badgeStyle: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-[0_0_10px_rgba(16,185,129,0.4)]',
           progressText: `${currentVal} / ${target} (${progressPct}%)`,
           progressPct: 100,
@@ -157,7 +192,7 @@ function gradeBetLeg(
       if (isPost) {
         return {
           status: 'chalked',
-          statusText: '❌ CHALKED',
+          statusText: 'CHALKED',
           badgeStyle: 'bg-rose-950/80 text-rose-300 border-rose-500/50',
           progressText: `${currentVal} / ${target} (${progressPct}%)`,
           progressPct,
@@ -169,7 +204,7 @@ function gradeBetLeg(
         const isCovering = progressPct >= 65;
         return {
           status: isCovering ? 'covering' : 'sweating',
-          statusText: isCovering ? '🟢 ON PACE' : '🟡 SWEATING',
+          statusText: isCovering ? 'ON PACE' : 'SWEATING',
           badgeStyle: isCovering
             ? 'bg-cyan-950/80 text-cyan-300 border-cyan-500/50'
             : 'bg-amber-950/80 text-amber-300 border-amber-500/50 animate-pulse',
@@ -181,7 +216,7 @@ function gradeBetLeg(
       }
       return {
         status: 'upcoming',
-        statusText: '⏳ UPCOMING',
+        statusText: 'UPCOMING',
         badgeStyle: 'bg-slate-900 text-slate-400 border-slate-800',
         progressText: `0 / ${target} (0%)`,
         progressPct: 0,
@@ -193,7 +228,7 @@ function gradeBetLeg(
       if (currentVal > target) {
         return {
           status: 'chalked',
-          statusText: '❌ CHALKED',
+          statusText: 'CHALKED',
           badgeStyle: 'bg-rose-950/80 text-rose-300 border-rose-500/50',
           progressText: `${currentVal} / ${target} (Exceeded)`,
           progressPct: 100,
@@ -204,7 +239,7 @@ function gradeBetLeg(
       if (isPost) {
         return {
           status: 'cashed',
-          statusText: '✅ CASHED',
+          statusText: 'CASHED',
           badgeStyle: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-[0_0_10px_rgba(16,185,129,0.4)]',
           progressText: `${currentVal} / ${target} (Stayed Under)`,
           progressPct: 100,
@@ -216,7 +251,7 @@ function gradeBetLeg(
         const isSafe = progressPct <= 60;
         return {
           status: isSafe ? 'covering' : 'sweating',
-          statusText: isSafe ? '🟢 UNDER PACE' : '🟡 SWEATING',
+          statusText: isSafe ? 'UNDER PACE' : 'SWEATING',
           badgeStyle: isSafe
             ? 'bg-cyan-950/80 text-cyan-300 border-cyan-500/50'
             : 'bg-amber-950/80 text-amber-300 border-amber-500/50 animate-pulse',
@@ -228,7 +263,7 @@ function gradeBetLeg(
       }
       return {
         status: 'upcoming',
-        statusText: '⏳ UPCOMING',
+        statusText: 'UPCOMING',
         badgeStyle: 'bg-slate-900 text-slate-400 border-slate-800',
         progressText: `Target: < ${target}`,
         progressPct: 0,
@@ -260,7 +295,7 @@ function gradeBetLeg(
     if (tdCount > 0) {
       return {
         status: 'cashed',
-        statusText: '✅ CASHED (TD!)',
+        statusText: 'CASHED (TD)',
         badgeStyle: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-[0_0_10px_rgba(16,185,129,0.4)]',
         progressText: `${tdCount} TD Scored`,
         progressPct: 100,
@@ -271,7 +306,7 @@ function gradeBetLeg(
     if (isPost) {
       return {
         status: 'chalked',
-        statusText: '❌ CHALKED',
+        statusText: 'CHALKED',
         badgeStyle: 'bg-rose-950/80 text-rose-300 border-rose-500/50',
         progressText: '0 TDs (Game Final)',
         progressPct: 0,
@@ -282,7 +317,7 @@ function gradeBetLeg(
     if (isLive) {
       return {
         status: 'sweating',
-        statusText: '🟡 HUNTING TD',
+        statusText: 'HUNTING TD',
         badgeStyle: 'bg-amber-950/80 text-amber-300 border-amber-500/50 animate-pulse',
         progressText: '0 TDs so far',
         progressPct: 35,
@@ -292,7 +327,7 @@ function gradeBetLeg(
     }
     return {
       status: 'upcoming',
-      statusText: '⏳ UPCOMING',
+      statusText: 'UPCOMING',
       badgeStyle: 'bg-slate-900 text-slate-400 border-slate-800',
       progressText: 'Awaiting Kickoff',
       progressPct: 0,
@@ -313,7 +348,7 @@ function gradeBetLeg(
     if (!game) {
       return {
         status: 'upcoming',
-        statusText: '⏳ PENDING',
+        statusText: 'PENDING',
         badgeStyle: 'bg-slate-900 text-slate-400 border-slate-800',
         progressText: 'Game Not Found',
         progressPct: 0,
@@ -333,7 +368,7 @@ function gradeBetLeg(
       if (diff > 0) {
         return {
           status: 'cashed',
-          statusText: '✅ CASHED',
+          statusText: 'CASHED',
           badgeStyle: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-[0_0_10px_rgba(16,185,129,0.4)]',
           progressText: `Covered by +${diff.toFixed(1)} pts`,
           progressPct: 100,
@@ -342,7 +377,7 @@ function gradeBetLeg(
       } else if (diff === 0) {
         return {
           status: 'cashed',
-          statusText: '🤝 PUSH',
+          statusText: 'PUSH',
           badgeStyle: 'bg-blue-500/20 text-blue-300 border-blue-500/50',
           progressText: 'Push',
           progressPct: 100,
@@ -351,7 +386,7 @@ function gradeBetLeg(
       } else {
         return {
           status: 'chalked',
-          statusText: '❌ CHALKED',
+          statusText: 'CHALKED',
           badgeStyle: 'bg-rose-950/80 text-rose-300 border-rose-500/50',
           progressText: `Missed by ${Math.abs(diff).toFixed(1)} pts`,
           progressPct: 0,
@@ -364,7 +399,7 @@ function gradeBetLeg(
       const isCovering = diff > 0;
       return {
         status: isCovering ? 'covering' : 'sweating',
-        statusText: isCovering ? '🟢 COVERING' : '🟡 TRAILING SPREAD',
+        statusText: isCovering ? 'COVERING' : 'TRAILING SPREAD',
         badgeStyle: isCovering
           ? 'bg-cyan-950/80 text-cyan-300 border-cyan-500/50'
           : 'bg-amber-950/80 text-amber-300 border-amber-500/50 animate-pulse',
@@ -376,7 +411,7 @@ function gradeBetLeg(
 
     return {
       status: 'upcoming',
-      statusText: '⏳ UPCOMING',
+      statusText: 'UPCOMING',
       badgeStyle: 'bg-slate-900 text-slate-400 border-slate-800',
       progressText: `${leg.teamAbbr} ${spread > 0 ? `+${spread}` : spread}`,
       progressPct: 0,
@@ -396,7 +431,7 @@ function gradeBetLeg(
     if (!game) {
       return {
         status: 'upcoming',
-        statusText: '⏳ PENDING',
+        statusText: 'PENDING',
         badgeStyle: 'bg-slate-900 text-slate-400 border-slate-800',
         progressText: 'Game Not Found',
         progressPct: 0,
@@ -414,7 +449,7 @@ function gradeBetLeg(
       if (teamScore > oppScore) {
         return {
           status: 'cashed',
-          statusText: '✅ CASHED',
+          statusText: 'CASHED',
           badgeStyle: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-[0_0_10px_rgba(16,185,129,0.4)]',
           progressText: `Won by ${teamScore - oppScore} pts`,
           progressPct: 100,
@@ -423,7 +458,7 @@ function gradeBetLeg(
       } else {
         return {
           status: 'chalked',
-          statusText: '❌ CHALKED',
+          statusText: 'CHALKED',
           badgeStyle: 'bg-rose-950/80 text-rose-300 border-rose-500/50',
           progressText: 'Lost Game',
           progressPct: 0,
@@ -436,7 +471,7 @@ function gradeBetLeg(
       const winning = teamScore > oppScore;
       return {
         status: winning ? 'covering' : 'sweating',
-        statusText: winning ? '🟢 LEADING' : '🟡 TRAILING',
+        statusText: winning ? 'LEADING' : 'TRAILING',
         badgeStyle: winning
           ? 'bg-cyan-950/80 text-cyan-300 border-cyan-500/50'
           : 'bg-amber-950/80 text-amber-300 border-amber-500/50 animate-pulse',
@@ -448,7 +483,7 @@ function gradeBetLeg(
 
     return {
       status: 'upcoming',
-      statusText: '⏳ UPCOMING',
+      statusText: 'UPCOMING',
       badgeStyle: 'bg-slate-900 text-slate-400 border-slate-800',
       progressText: `${leg.teamAbbr} Moneyline`,
       progressPct: 0,
@@ -461,7 +496,7 @@ function gradeBetLeg(
     if (!game) {
       return {
         status: 'upcoming',
-        statusText: '⏳ PENDING',
+        statusText: 'PENDING',
         badgeStyle: 'bg-slate-900 text-slate-400 border-slate-800',
         progressText: 'Game Not Found',
         progressPct: 0,
@@ -480,7 +515,7 @@ function gradeBetLeg(
       if (totalCurrent > target) {
         return {
           status: 'cashed',
-          statusText: '✅ CASHED',
+          statusText: 'CASHED',
           badgeStyle: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-[0_0_10px_rgba(16,185,129,0.4)]',
           progressText: `${totalCurrent} / ${target} pts`,
           progressPct: 100,
@@ -490,7 +525,7 @@ function gradeBetLeg(
       if (isPost) {
         return {
           status: 'chalked',
-          statusText: '❌ CHALKED',
+          statusText: 'CHALKED',
           badgeStyle: 'bg-rose-950/80 text-rose-300 border-rose-500/50',
           progressText: `${totalCurrent} / ${target} pts`,
           progressPct,
@@ -501,7 +536,7 @@ function gradeBetLeg(
         const isCovering = progressPct >= 65;
         return {
           status: isCovering ? 'covering' : 'sweating',
-          statusText: isCovering ? '🟢 ON PACE' : '🟡 SWEATING',
+          statusText: isCovering ? 'ON PACE' : 'SWEATING',
           badgeStyle: isCovering
             ? 'bg-cyan-950/80 text-cyan-300 border-cyan-500/50'
             : 'bg-amber-950/80 text-amber-300 border-amber-500/50 animate-pulse',
@@ -512,7 +547,7 @@ function gradeBetLeg(
       }
       return {
         status: 'upcoming',
-        statusText: '⏳ UPCOMING',
+        statusText: 'UPCOMING',
         badgeStyle: 'bg-slate-900 text-slate-400 border-slate-800',
         progressText: `Target: > ${target} pts`,
         progressPct: 0,
@@ -523,7 +558,7 @@ function gradeBetLeg(
       if (totalCurrent > target) {
         return {
           status: 'chalked',
-          statusText: '❌ CHALKED',
+          statusText: 'CHALKED',
           badgeStyle: 'bg-rose-950/80 text-rose-300 border-rose-500/50',
           progressText: `${totalCurrent} / ${target} pts (Exceeded)`,
           progressPct: 100,
@@ -533,7 +568,7 @@ function gradeBetLeg(
       if (isPost) {
         return {
           status: 'cashed',
-          statusText: '✅ CASHED',
+          statusText: 'CASHED',
           badgeStyle: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-[0_0_10px_rgba(16,185,129,0.4)]',
           progressText: `${totalCurrent} / ${target} pts (Stayed Under)`,
           progressPct: 100,
@@ -544,7 +579,7 @@ function gradeBetLeg(
         const isSafe = progressPct <= 60;
         return {
           status: isSafe ? 'covering' : 'sweating',
-          statusText: isSafe ? '🟢 UNDER PACE' : '🟡 SWEATING',
+          statusText: isSafe ? 'UNDER PACE' : 'SWEATING',
           badgeStyle: isSafe
             ? 'bg-cyan-950/80 text-cyan-300 border-cyan-500/50'
             : 'bg-amber-950/80 text-amber-300 border-amber-500/50 animate-pulse',
@@ -555,7 +590,7 @@ function gradeBetLeg(
       }
       return {
         status: 'upcoming',
-        statusText: '⏳ UPCOMING',
+        statusText: 'UPCOMING',
         badgeStyle: 'bg-slate-900 text-slate-400 border-slate-800',
         progressText: `Target: < ${target} pts`,
         progressPct: 0,
@@ -566,7 +601,7 @@ function gradeBetLeg(
 
   return {
     status: 'upcoming',
-    statusText: '⏳ PENDING',
+    statusText: 'PENDING',
     badgeStyle: 'bg-slate-900 text-slate-400 border-slate-800',
     progressText: '',
     progressPct: 0,
@@ -585,19 +620,19 @@ function getSlipSummary(slip: BetSlip, allPlayers: FantasyPlayer[], games: LiveG
   const coveringCount = gradedLegs.filter((g) => g.result.status === 'covering').length;
 
   let overallStatus: 'cashed' | 'chalked' | 'live' = 'live';
-  let badgeLabel = `🔥 ${cashedCount}/${total} LEGS HIT`;
+  let badgeLabel = `${cashedCount}/${total} LEGS HIT`;
   let badgeStyle = 'bg-amber-500/20 text-amber-300 border-amber-500/50';
 
   if (cashedCount === total && total > 0) {
     overallStatus = 'cashed';
-    badgeLabel = `🏆 ALL ${total} LEGS CASHED!`;
+    badgeLabel = `ALL ${total} LEGS CASHED`;
     badgeStyle = 'bg-emerald-500 text-slate-950 border-emerald-400 font-black shadow-[0_0_15px_rgba(16,185,129,0.8)]';
   } else if (chalkedCount > 0) {
     overallStatus = 'chalked';
-    badgeLabel = `❌ BUSTED (${cashedCount}/${total} Hit)`;
+    badgeLabel = `BUSTED (${cashedCount}/${total} Hit)`;
     badgeStyle = 'bg-rose-950/80 text-rose-300 border-rose-500/50';
   } else if (coveringCount > 0) {
-    badgeLabel = `🟢 ${cashedCount + coveringCount}/${total} ON TRACK`;
+    badgeLabel = `${cashedCount + coveringCount}/${total} ON TRACK`;
     badgeStyle = 'bg-cyan-950/80 text-cyan-300 border-cyan-500/50';
   }
 
@@ -669,7 +704,7 @@ function getPlayerPropsSummary(player: FantasyPlayer) {
         current: currentPassYds,
         unit: 'YDS',
         pct: Math.min(100, Math.round((currentPassYds / passYdsTarget) * 100)),
-        statusText: currentPassYds >= passYdsTarget ? '✅ COVERED' : `${currentPassYds} / ${passYdsTarget} YDS`,
+        statusText: currentPassYds >= passYdsTarget ? 'COVERED' : `${currentPassYds} / ${passYdsTarget} YDS`,
         isCashed: currentPassYds >= passYdsTarget,
       },
       {
@@ -679,7 +714,7 @@ function getPlayerPropsSummary(player: FantasyPlayer) {
         current: currentPassTds,
         unit: 'TD',
         pct: Math.min(100, Math.round((currentPassTds / passTdsTarget) * 100)),
-        statusText: currentPassTds >= passTdsTarget ? '✅ COVERED' : `${currentPassTds} / ${passTdsTarget} TD`,
+        statusText: currentPassTds >= passTdsTarget ? 'COVERED' : `${currentPassTds} / ${passTdsTarget} TD`,
         isCashed: currentPassTds >= passTdsTarget,
       },
     ];
@@ -697,7 +732,7 @@ function getPlayerPropsSummary(player: FantasyPlayer) {
         current: currentRushYds,
         unit: 'YDS',
         pct: Math.min(100, Math.round((currentRushYds / rushYdsTarget) * 100)),
-        statusText: currentRushYds >= rushYdsTarget ? '✅ COVERED' : `${currentRushYds} / ${rushYdsTarget} YDS`,
+        statusText: currentRushYds >= rushYdsTarget ? 'COVERED' : `${currentRushYds} / ${rushYdsTarget} YDS`,
         isCashed: currentRushYds >= rushYdsTarget,
       },
       {
@@ -707,7 +742,7 @@ function getPlayerPropsSummary(player: FantasyPlayer) {
         current: rushTds,
         unit: 'TD',
         pct: rushTds > 0 ? 100 : 35,
-        statusText: rushTds > 0 ? '✅ TD CASHED' : '🟡 HUNTING TD',
+        statusText: rushTds > 0 ? 'TD CASHED' : 'HUNTING TD',
         isCashed: rushTds > 0,
       },
     ];
@@ -727,7 +762,7 @@ function getPlayerPropsSummary(player: FantasyPlayer) {
         current: currentRecYds,
         unit: 'YDS',
         pct: Math.min(100, Math.round((currentRecYds / recYdsTarget) * 100)),
-        statusText: currentRecYds >= recYdsTarget ? '✅ COVERED' : `${currentRecYds} / ${recYdsTarget} YDS`,
+        statusText: currentRecYds >= recYdsTarget ? 'COVERED' : `${currentRecYds} / ${recYdsTarget} YDS`,
         isCashed: currentRecYds >= recYdsTarget,
       },
       {
@@ -737,7 +772,7 @@ function getPlayerPropsSummary(player: FantasyPlayer) {
         current: currentRec,
         unit: 'REC',
         pct: Math.min(100, Math.round((currentRec / recTarget) * 100)),
-        statusText: currentRec >= recTarget ? '✅ COVERED' : `${currentRec} / ${recTarget} REC`,
+        statusText: currentRec >= recTarget ? 'COVERED' : `${currentRec} / ${recTarget} REC`,
         isCashed: currentRec >= recTarget,
       },
       {
@@ -747,7 +782,7 @@ function getPlayerPropsSummary(player: FantasyPlayer) {
         current: tds,
         unit: 'TD',
         pct: tds > 0 ? 100 : 35,
-        statusText: tds > 0 ? '✅ TD CASHED' : '🟡 HUNTING TD',
+        statusText: tds > 0 ? 'TD CASHED' : 'HUNTING TD',
         isCashed: tds > 0,
       },
     ];
@@ -764,7 +799,7 @@ function getPlayerPropsSummary(player: FantasyPlayer) {
         current: currentFg,
         unit: 'FG',
         pct: Math.min(100, Math.round((currentFg / fgTarget) * 100)),
-        statusText: currentFg >= fgTarget ? '✅ COVERED' : `${currentFg} / ${fgTarget} FG`,
+        statusText: currentFg >= fgTarget ? 'COVERED' : `${currentFg} / ${fgTarget} FG`,
         isCashed: currentFg >= fgTarget,
       },
     ];
@@ -2034,7 +2069,9 @@ export default function TVCommandCenter() {
             >
               {game.awayTeam.abbreviation}
             </span>
-            {hasPossessionAway && <span className="text-[9px]">🏈</span>}
+            {hasPossessionAway && (
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 shadow-[0_0_6px_#fbbf24]" />
+            )}
           </div>
           <span className="text-sm font-black tv-tabular text-white leading-none">
             {game.awayTeam.score}
@@ -2092,7 +2129,9 @@ export default function TVCommandCenter() {
             >
               {game.homeTeam.abbreviation}
             </span>
-            {hasPossessionHome && <span className="text-[9px]">🏈</span>}
+            {hasPossessionHome && (
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 shadow-[0_0_6px_#fbbf24]" />
+            )}
           </div>
           <span className="text-sm font-black tv-tabular text-white leading-none">
             {game.homeTeam.score}
@@ -2103,136 +2142,78 @@ export default function TVCommandCenter() {
   }, []);
 
   return (
-    <div className="flex flex-col h-screen max-h-screen w-screen bg-[#090D16] text-slate-100 select-none overflow-hidden font-sans justify-between pb-14">
+    <div className="flex flex-col h-screen max-h-screen w-screen bg-[#07080C] text-slate-100 select-none overflow-hidden font-condensed justify-between pb-14">
       {/* 1. AUTO-CYCLE PROGRESS BAR (Visual bar at the top of the TV) */}
-      <div className="w-full h-1 bg-slate-900/90 relative overflow-hidden shrink-0">
+      <div className="w-full h-1 bg-[#0E1017] relative overflow-hidden shrink-0">
         {autoCycle && (
           <div
-            className="h-full bg-gradient-to-r from-emerald-500 via-cyan-400 to-amber-400 transition-all duration-200 ease-linear shadow-[0_0_10px_rgba(52,211,153,0.8)]"
+            className="h-full bg-gradient-to-r from-[#00E676] via-cyan-400 to-amber-400 transition-all duration-200 ease-linear shadow-[0_0_10px_rgba(0,230,118,0.8)]"
             style={{ width: `${cycleProgress}%` }}
           />
         )}
       </div>
 
-      {/* 2. COMPACT TOP BROADCAST HEADER BAR */}
-      <header className="px-3 py-1 bg-slate-950/90 border-b border-slate-800/80 flex items-center justify-between gap-1.5 flex-wrap shrink-0 backdrop-blur-md">
-        {/* Left: Branding, Manage Leagues, Room Sync & Sound Toggle */}
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-red-950/70 border border-red-500/40 text-red-400 shadow-[0_0_10px_rgba(239,68,68,0.3)]">
+      {/* 2. UNIFIED 48PX BROADCAST HEADER BAR */}
+      <header className="h-12 bg-[#0B0D13] border-b border-white/10 px-4 flex items-center justify-between shrink-0 gap-3">
+        {/* Left Controls: LIVE REDZONE bug + segmented LIVE / ALL + PPR / HALF / STD */}
+        <div className="flex items-center gap-2.5">
+          {/* LIVE REDZONE bug */}
+          <div className="flex items-center gap-1.5 px-2.5 py-1 bg-red-950/80 border border-red-500/50 rounded-[4px] text-red-400 shadow-sm">
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
             </span>
-            <span className="text-[11px] font-black tracking-wider uppercase text-red-200">
-              Live RedZone
+            <span className="text-[11px] font-condensed font-black tracking-wider uppercase text-red-200">
+              LIVE REDZONE
             </span>
           </div>
 
-          {/* Manage Leagues & Guests Button */}
-          <button
-            onClick={() => setIsManageModalOpen(true)}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-[11px] font-black uppercase text-amber-300 border border-amber-500/50 shadow-sm transition-all"
-          >
-            <Settings className="w-3 h-3 text-amber-400" />
-            <span>⚙️ Leagues &amp; Guests</span>
-            {(syncedLeagues.length > 0 || guestTags.length > 0) && (
-              <span className="px-1.5 py-0.2 rounded-full bg-amber-500/30 text-amber-200 text-[9px] font-black">
-                {syncedLeagues.length + guestTags.length}
-              </span>
-            )}
-          </button>
-
-          {/* Phone Sync QR Button */}
-          <button
-            onClick={() => setIsQrModalOpen(true)}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-[11px] font-black uppercase text-cyan-400 border border-cyan-500/50 shadow-sm transition-all"
-            title="Scan QR Code with phone to join and add bets"
-          >
-            <Smartphone className="w-3 h-3 text-cyan-400" />
-            <span>📱 Room Sync</span>
-          </button>
-
-          {/* Sound Toggle Button */}
-          <button
-            onClick={handleToggleSound}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-black uppercase transition-all border ${
-              isSoundEnabled
-                ? 'bg-emerald-950/80 border-emerald-500/60 text-emerald-300 shadow-[0_0_10px_rgba(16,185,129,0.25)]'
-                : 'bg-slate-900/80 border-slate-800 text-slate-400 hover:text-slate-200'
-            }`}
-            title={isSoundEnabled ? 'Sound is ON (stadium horns and cashed chimes)' : 'Sound is MUTED'}
-          >
-            {isSoundEnabled ? (
-              <Volume2 className="w-3 h-3 text-emerald-400" />
-            ) : (
-              <VolumeX className="w-3 h-3 text-slate-500" />
-            )}
-            <span>{isSoundEnabled ? 'SOUND: ON' : 'MUTE'}</span>
-          </button>
-        </div>
-
-        {/* Center: Live Polling Countdown & Refresh (Isolated 60fps Memo Component) */}
-        <SyncCountdown onSync={handleSync} />
-
-        {/* Right: Game Filter Toggle, Scoring Format Toggle & TV Auto-Cycle Mode Toggle */}
-        <div className="flex items-center gap-1.5 flex-wrap">
-          {/* Game Filter Mode Toggle: 🔴 LIVE NOW vs 📅 ALL GAMES */}
-          <div className="flex items-center bg-slate-900/90 p-0.5 rounded-lg border border-slate-800 shadow-inner">
+          {/* Segmented LIVE / ALL */}
+          <div className="flex items-center bg-[#141722] p-0.5 rounded-[4px] border border-white/10">
             <button
               onClick={() => handleSelectFilterMode('live')}
-              className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] md:text-[11px] font-black uppercase transition-all ${
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-[2px] text-xs font-condensed font-bold uppercase transition-all ${
                 gameFilterMode === 'live'
-                  ? 'bg-red-600 text-white shadow-[0_0_10px_rgba(239,68,68,0.7)]'
+                  ? 'bg-red-600 text-white shadow-sm'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              <span className="relative flex h-1.5 w-1.5">
-                {liveGamesCount > 0 && gameFilterMode === 'live' && (
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-                )}
-                <span
-                  className={`relative inline-flex rounded-full h-1.5 w-1.5 ${
-                    gameFilterMode === 'live' ? 'bg-white' : 'bg-red-500'
-                  }`}
-                />
-              </span>
-              <span>LIVE NOW</span>
+              <span
+                className={`h-1.5 w-1.5 rounded-full ${
+                  gameFilterMode === 'live' ? 'bg-white' : 'bg-red-500'
+                }`}
+              />
+              <span>LIVE</span>
               {liveGamesCount > 0 && (
-                <span
-                  className={`text-[8px] px-1 py-0.2 rounded font-black ${
-                    gameFilterMode === 'live' ? 'bg-red-800 text-red-100' : 'bg-slate-800 text-slate-300'
-                  }`}
-                >
+                <span className="text-[10px] font-mono-score px-1 py-0.2 bg-black/40 rounded-[2px]">
                   {liveGamesCount}
                 </span>
               )}
             </button>
-
             <button
               onClick={() => handleSelectFilterMode('all')}
-              className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] md:text-[11px] font-black uppercase transition-all ${
+              className={`px-2.5 py-1 rounded-[2px] text-xs font-condensed font-bold uppercase transition-all ${
                 gameFilterMode === 'all'
-                  ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-sm'
+                  ? 'bg-white/15 text-white shadow-sm'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              <span>📅</span>
-              <span>ALL GAMES</span>
+              ALL
             </button>
           </div>
 
-          {/* Scoring Format Pill Toggle */}
-          <div className="flex items-center bg-slate-900/90 p-0.5 rounded-lg border border-slate-800">
+          {/* Segmented PPR / HALF / STD */}
+          <div className="flex items-center bg-[#141722] p-0.5 rounded-[4px] border border-white/10">
             {(['ppr', 'halfPpr', 'standard'] as ScoringFormat[]).map((fmt) => {
-              const label = fmt === 'ppr' ? 'PPR' : fmt === 'halfPpr' ? 'Half' : 'Std';
+              const label = fmt === 'ppr' ? 'PPR' : fmt === 'halfPpr' ? 'HALF' : 'STD';
               const active = scoringFormat === fmt;
               return (
                 <button
                   key={fmt}
                   onClick={() => setScoringFormat(fmt)}
-                  className={`px-2 py-0.5 rounded-md text-[10px] md:text-[11px] font-black uppercase transition-all ${
+                  className={`px-2.5 py-1 rounded-[2px] text-xs font-condensed font-bold uppercase transition-all ${
                     active
-                      ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-slate-950 shadow-sm'
+                      ? 'bg-[#00E676] text-black shadow-sm'
                       : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
@@ -2241,31 +2222,74 @@ export default function TVCommandCenter() {
               );
             })}
           </div>
+        </div>
+
+        {/* Right Controls: LEAGUES, ROOM QR, AUDIO, CYCLE, and <SyncCountdown /> */}
+        <div className="flex items-center gap-2">
+          {/* LEAGUES Button */}
+          <button
+            onClick={() => setIsManageModalOpen(true)}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-[4px] bg-[#141722] hover:bg-[#1E2330] text-xs font-condensed font-bold uppercase text-amber-300 border border-white/10 transition-colors"
+          >
+            <Settings className="w-3.5 h-3.5 text-amber-400" />
+            <span>LEAGUES</span>
+            {(syncedLeagues.length > 0 || guestTags.length > 0) && (
+              <span className="px-1.5 py-0.2 rounded-[2px] bg-amber-500/20 text-amber-300 text-[10px] font-mono-score font-bold">
+                {syncedLeagues.length + guestTags.length}
+              </span>
+            )}
+          </button>
+
+          {/* ROOM QR Button */}
+          <button
+            onClick={() => setIsQrModalOpen(true)}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-[4px] bg-[#141722] hover:bg-[#1E2330] text-xs font-condensed font-bold uppercase text-cyan-400 border border-white/10 transition-colors"
+            title="Scan QR Code with phone to join and add bets"
+          >
+            <QrCode className="w-3.5 h-3.5 text-cyan-400" />
+            <span>ROOM QR</span>
+          </button>
+
+          {/* Sound Toggle Button */}
+          <button
+            onClick={handleToggleSound}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-[4px] text-xs font-condensed font-bold uppercase transition-colors border ${
+              isSoundEnabled
+                ? 'bg-[#00E676]/15 border-[#00E676]/40 text-[#00E676]'
+                : 'bg-[#141722] border-white/10 text-slate-400 hover:text-slate-200'
+            }`}
+            title={isSoundEnabled ? 'Sound is ON' : 'Sound is MUTED'}
+          >
+            {isSoundEnabled ? (
+              <Volume2 className="w-3.5 h-3.5 text-[#00E676]" />
+            ) : (
+              <VolumeX className="w-3.5 h-3.5 text-slate-500" />
+            )}
+            <span>{isSoundEnabled ? 'AUDIO: ON' : 'MUTE'}</span>
+          </button>
 
           {/* TV Auto-Cycle Toggle */}
           <button
             onClick={() => setAutoCycle(!autoCycle)}
-            className={`flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] md:text-[11px] font-black uppercase transition-all border ${
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-[4px] text-xs font-condensed font-bold uppercase transition-colors border ${
               autoCycle
-                ? 'bg-cyan-950/80 border-cyan-500/60 text-cyan-300'
-                : 'bg-slate-900/80 border-slate-800 text-slate-400 hover:text-slate-200'
+                ? 'bg-cyan-500/15 border-cyan-500/40 text-cyan-300'
+                : 'bg-[#141722] border-white/10 text-slate-400 hover:text-slate-200'
             }`}
           >
-            <Tv className={`w-3 h-3 ${autoCycle ? 'text-cyan-400' : 'text-slate-500'}`} />
+            <Tv className={`w-3.5 h-3.5 ${autoCycle ? 'text-cyan-400' : 'text-slate-500'}`} />
             <span>CYCLE: {autoCycle ? 'ON' : 'PAUSED'}</span>
-            {autoCycle ? (
-              <Pause className="w-2.5 h-2.5 text-cyan-400" />
-            ) : (
-              <Play className="w-2.5 h-2.5 text-emerald-400" />
-            )}
           </button>
+
+          {/* Center/Right Sync Countdown */}
+          <SyncCountdown onSync={handleSync} />
         </div>
       </header>
 
       {/* 3. HORIZONTAL LIVE NFL SCOREBOARD STRIP (Pinned RedZone on Left + Slow Scrolling on Right) */}
       <section
         ref={scoreboardRef}
-        className="w-full bg-slate-950/90 border-b border-slate-800/80 px-2 py-1 overflow-hidden flex items-center shrink-0 relative"
+        className="w-full bg-[#0E1017] border-b border-white/10 px-2 py-1 overflow-hidden flex items-center shrink-0 relative"
       >
         <style>{`
           @keyframes scoreboardScroll {
@@ -2276,24 +2300,24 @@ export default function TVCommandCenter() {
 
         {loading && !data ? (
           <div className="flex items-center gap-2 text-xs text-slate-400 py-0.5 px-3">
-            <RefreshCw className="w-3.5 h-3.5 animate-spin text-emerald-400" />
+            <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#00E676]" />
             <span>Loading scoreboard...</span>
           </div>
         ) : (
           <div className="flex items-center w-full overflow-hidden">
             {/* Left Section — Pinned In-Progress Live Games */}
             {pinnedLiveGames.length > 0 && (
-              <div className="flex-shrink-0 z-20 flex items-center gap-2 pr-3 pl-1 border-r border-slate-700/80 bg-slate-950/95 shadow-[10px_0_20px_rgba(0,0,0,0.8)]">
+              <div className="flex-shrink-0 z-20 flex items-center gap-2 pr-3 pl-1 border-r border-white/10 bg-[#0E1017] shadow-[10px_0_20px_rgba(0,0,0,0.8)]">
                 <div
-                  className={`flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-white text-[10px] font-black uppercase tracking-wider whitespace-nowrap shadow-sm ${
+                  className={`flex items-center gap-1.5 px-2 py-0.5 rounded-[4px] text-white text-[10px] font-condensed font-bold uppercase tracking-wider whitespace-nowrap shadow-sm ${
                     hasActiveRedZone
                       ? 'bg-red-600 animate-pulse shadow-[0_0_12px_rgba(239,68,68,0.8)]'
                       : 'bg-emerald-600 border border-emerald-400/50 shadow-[0_0_10px_rgba(16,185,129,0.5)]'
                   }`}
                 >
-                  <span>{hasActiveRedZone ? '🚨' : '⚡'}</span>
+                  <Activity className="w-3 h-3 text-white shrink-0" />
                   <span>{hasActiveRedZone ? 'RED ZONE' : 'LIVE NOW'}</span>
-                  <span className="px-1.5 py-0.2 rounded-full bg-black/40 text-[9px] font-black">
+                  <span className="px-1.5 py-0.2 rounded-[2px] bg-black/40 text-[9px] font-mono-score font-bold">
                     {pinnedLiveGames.length}
                   </span>
                 </div>
@@ -2346,8 +2370,8 @@ export default function TVCommandCenter() {
         )}
       </section>
 
-      {/* 4. COMPACT 8 NAVIGATION TABS (Stretches 100% Full Width - No Horizontal Cutoff) */}
-      <nav className="flex items-center bg-slate-950 border-b border-slate-800/80 px-3 py-1 gap-1 shrink-0 w-full justify-between">
+      {/* 4. EDGE-TO-EDGE BROADCAST NAVIGATION TABS */}
+      <nav className="h-10 bg-[#0B0D13] border-b border-white/10 px-2 flex items-center shrink-0 w-full justify-between">
         {TABS.map((tab) => {
           const active = activeTab === tab.id;
           return (
@@ -2357,21 +2381,20 @@ export default function TVCommandCenter() {
                 setActiveTab(tab.id);
                 setAutoCycle(false);
               }}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-1 rounded-xl text-xs md:text-sm font-black tracking-wide uppercase transition-all ${
+              className={`flex-1 h-full flex items-center justify-center font-condensed text-xs md:text-sm tracking-wider uppercase transition-colors relative font-bold ${
                 active
-                  ? 'bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 text-slate-950 shadow-[0_0_15px_rgba(20,184,166,0.5)] font-black'
-                  : 'text-slate-400 hover:text-slate-100 hover:bg-slate-900/60'
+                  ? 'text-[#00E676] border-b-2 border-[#00E676] bg-white/[0.03]'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.02]'
               }`}
             >
-              <span className="text-sm">{tab.icon}</span>
               <span>{tab.label}</span>
               {tab.id === 'room' && (guestTags.length > 0 || syncedLeagues.length > 0) && (
-                <span className="hidden sm:inline-block ml-0.5 px-1 py-0.2 bg-amber-400/20 text-amber-300 rounded text-[9px] font-black">
+                <span className="ml-1.5 px-1.5 py-0.2 bg-amber-400/20 text-amber-300 rounded-[2px] text-[10px] font-mono-score font-bold">
                   {guestTags.length + syncedLeagues.length}
                 </span>
               )}
               {tab.id === 'bets' && savedBets.length > 0 && (
-                <span className="hidden sm:inline-block ml-0.5 px-1 py-0.2 bg-emerald-400/20 text-emerald-300 rounded text-[9px] font-black">
+                <span className="ml-1.5 px-1.5 py-0.2 bg-[#00E676]/20 text-[#00E676] rounded-[2px] text-[10px] font-mono-score font-bold">
                   {savedBets.length}
                 </span>
               )}
@@ -2396,25 +2419,25 @@ export default function TVCommandCenter() {
           /* TAB 1: 12-COLUMN BROADCAST GRID (8-COL STUDS + 4-COL VERTICAL PLAY FEED) */
           <div className="grid grid-cols-12 gap-3 h-full overflow-hidden min-h-0">
             {/* LEFT 8 COLUMNS: #1 OVERALL STUDS RIGHT NOW (2x3 Grid) */}
-            <div className="col-span-12 lg:col-span-8 flex flex-col h-full bg-slate-900/50 rounded-2xl border border-slate-800/80 p-3 overflow-hidden backdrop-blur-sm shadow-xl min-h-0">
-              <div className="flex items-center justify-between pb-2 border-b border-slate-800 shrink-0">
+            <div className="col-span-12 lg:col-span-8 flex flex-col h-full bg-[#0E1017] rounded-[4px] border border-white/10 p-3 overflow-hidden shadow-xl min-h-0">
+              <div className="flex items-center justify-between pb-2 border-b border-white/10 shrink-0">
                 <div className="flex items-center gap-2">
                   <Trophy className="w-4 h-4 text-amber-400" />
-                  <h2 className="text-xs md:text-sm font-black tracking-wide uppercase text-white">
+                  <h2 className="text-xs md:text-sm font-condensed font-bold tracking-wide uppercase text-white">
                     {gameFilterMode === 'live' ? '#1 OVERALL STUDS RIGHT NOW' : '#1 OVERALL STUDS (ALL GAMES)'}
                   </h2>
                   <span
-                    className={`text-[9px] font-extrabold uppercase px-1.5 py-0.2 rounded ${
+                    className={`text-[9px] font-condensed font-bold uppercase px-1.5 py-0.2 rounded-[2px] ${
                       gameFilterMode === 'live'
                         ? 'bg-red-950/80 text-red-300 border border-red-500/40'
-                        : 'bg-blue-950/80 text-blue-300 border border-blue-500/40'
+                        : 'bg-white/10 text-slate-300 border border-white/15'
                     }`}
                   >
-                    {gameFilterMode === 'live' ? '🔴 Live In-Progress' : '📅 All Games'}
+                    {gameFilterMode === 'live' ? 'LIVE IN-PROGRESS' : 'ALL GAMES'}
                   </span>
                 </div>
 
-                <span className="text-[11px] font-black text-emerald-400 uppercase tracking-wider">
+                <span className="text-[11px] font-condensed font-bold text-[#00E676] uppercase tracking-wider">
                   {scoringFormat.toUpperCase()} LEADERS
                 </span>
               </div>
@@ -2422,34 +2445,33 @@ export default function TVCommandCenter() {
               {/* 2 Columns x 3 Rows Grid */}
               <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-2.5 pt-2 overflow-y-auto pr-1 min-h-0">
                 {[
-                  { pos: 'QB' as FantasyPosition, label: 'TOP QB', icon: '🎯' },
-                  { pos: 'RB' as FantasyPosition, label: 'TOP RB', icon: '🏃' },
-                  { pos: 'WR' as FantasyPosition, label: 'TOP WR', icon: '🙌' },
-                  { pos: 'TE' as FantasyPosition, label: 'TOP TE', icon: '🛡️' },
-                  { pos: 'DEF' as FantasyPosition, label: 'TOP DEF', icon: '🔒' },
-                  { pos: 'K' as FantasyPosition, label: 'TOP K', icon: '🦵' },
-                ].map(({ pos, label, icon }) => {
+                  { pos: 'QB' as FantasyPosition, label: 'TOP QB' },
+                  { pos: 'RB' as FantasyPosition, label: 'TOP RB' },
+                  { pos: 'WR' as FantasyPosition, label: 'TOP WR' },
+                  { pos: 'TE' as FantasyPosition, label: 'TOP TE' },
+                  { pos: 'DEF' as FantasyPosition, label: 'TOP DEF' },
+                  { pos: 'K' as FantasyPosition, label: 'TOP K' },
+                ].map(({ pos, label }) => {
                   const player = sortedLeaderboards?.[pos]?.[0];
 
                   if (!player) {
                     return (
                       <div
                         key={pos}
-                        className="p-2.5 md:p-3 rounded-2xl border border-slate-800/80 bg-slate-950/60 flex flex-col justify-between"
+                        className="p-2.5 md:p-3 rounded-[4px] border border-white/10 bg-[#141722] flex flex-col justify-between"
                       >
                         <div className="flex items-center justify-between">
-                          <span className="text-[10px] font-black tracking-wider uppercase px-2 py-0.5 rounded bg-slate-800 text-slate-400">
+                          <span className="text-[10px] font-condensed font-bold tracking-wider uppercase px-2 py-0.5 rounded-[2px] bg-[#0E1017] text-slate-400 border border-white/10">
                             {label}
                           </span>
-                          <span className="text-sm">{icon}</span>
                         </div>
                         <div className="text-center py-2">
-                          <span className="text-xs font-bold text-slate-500 block">
+                          <span className="text-xs font-condensed font-bold text-slate-500 block uppercase">
                             {gameFilterMode === 'live' ? 'Awaiting Live Game Play' : 'No Data Available'}
                           </span>
                         </div>
-                        <div className="text-right border-t border-slate-800/60 pt-1.5">
-                          <span className="text-sm font-black text-slate-600">0.0 PTS</span>
+                        <div className="text-right border-t border-white/10 pt-1.5">
+                          <span className="text-sm font-mono-score font-bold text-slate-600">0.0 PTS</span>
                         </div>
                       </div>
                     );
@@ -2470,17 +2492,17 @@ export default function TVCommandCenter() {
                   return (
                     <div
                       key={player.id}
-                      className={`relative p-2.5 md:p-3 rounded-2xl border flex flex-col justify-between transition-all ${
+                      className={`relative p-2.5 md:p-3 rounded-[4px] border flex flex-col justify-between transition-all ${
                         isBoosted
-                          ? 'border-emerald-400 shadow-[0_0_20px_rgba(52,211,153,0.8)] bg-emerald-950/40 scale-[1.01]'
-                          : 'bg-slate-950/80 border-slate-800/90 hover:border-slate-700'
+                          ? 'border-[#00E676] shadow-[0_0_20px_rgba(0,230,118,0.8)] bg-[#00E676]/10 scale-[1.01]'
+                          : 'bg-[#141722] border-white/10 hover:border-white/20'
                       }`}
                     >
                       {/* Top Row: Position badge, larger headshot, Name, Clock, Matchup, and massive glowing Points */}
                       <div className="flex items-center justify-between gap-2.5">
                         <div className="flex items-center gap-3 min-w-0 flex-1">
                           {/* Larger Player Headshot */}
-                          <div className="relative w-14 h-14 md:w-16 md:h-16 rounded-full overflow-hidden bg-slate-900 border-2 border-amber-400/70 shadow-md shrink-0">
+                          <div className="relative w-14 h-14 md:w-16 md:h-16 rounded-[4px] overflow-hidden bg-[#07080C] border border-white/10 shadow-md shrink-0">
                             <img
                               src={player.headshot}
                               alt={player.name}
@@ -2494,27 +2516,28 @@ export default function TVCommandCenter() {
                           <div className="min-w-0 flex-1 flex flex-col justify-center gap-0.5">
                             {/* Meta badges: Position Badge + Matchup + Clock + Owner */}
                             <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="text-[10px] font-black tracking-wider uppercase px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 shrink-0">
+                              <span className="text-[10px] font-condensed font-bold tracking-wider uppercase px-1.5 py-0.5 rounded-[2px] bg-[#0E1017] text-amber-300 border border-amber-500/40 shrink-0">
                                 {label}
                               </span>
-                              <span className="text-xs font-bold text-slate-300 shrink-0">
+                              <span className="text-xs font-condensed font-bold text-slate-300 shrink-0">
                                 {player.team.abbreviation} vs {player.opponent.abbreviation}
                               </span>
-                              <span className={`text-[11px] font-bold shrink-0 ${player.isGameLive ? 'text-amber-400 flex items-center gap-1' : 'text-slate-400'}`}>
+                              <span className={`text-[11px] font-condensed font-bold shrink-0 ${player.isGameLive ? 'text-amber-400 flex items-center gap-1' : 'text-slate-400'}`}>
                                 {player.isGameLive && (
-                                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-ping inline-block" />
+                                  <span className="h-1.5 w-1.5 rounded-full bg-[#00E676] animate-ping inline-block" />
                                 )}
                                 {player.gameStatus.clock ? `${player.gameStatus.clock}${player.gameStatus.period ? ` - ${player.gameStatus.period === 1 ? '1st' : player.gameStatus.period === 2 ? '2nd' : player.gameStatus.period === 3 ? '3rd' : player.gameStatus.period === 4 ? '4th' : `OT`}` : ''}` : player.gameStatus.detail || (player.isGameLive ? 'Live' : 'Final')}
                               </span>
                               {owners.length > 0 && (
-                                <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[9px] font-black uppercase border border-amber-500/30 shrink-0">
-                                  🏈 {owners[0].ownerName}
+                                <span className="px-1.5 py-0.5 rounded-[2px] bg-amber-500/15 text-amber-300 text-[9px] font-condensed font-bold uppercase border border-amber-500/30 flex items-center gap-1 shrink-0">
+                                  <Users className="w-2.5 h-2.5 text-amber-400" />
+                                  <span>{owners[0].ownerName}</span>
                                 </span>
                               )}
                             </div>
 
                             {/* Player Name */}
-                            <h3 className="text-sm md:text-base font-black text-white truncate leading-tight">
+                            <h3 className="text-sm md:text-base font-condensed font-bold text-white truncate leading-tight uppercase">
                               {player.name}
                             </h3>
                           </div>
@@ -2522,17 +2545,17 @@ export default function TVCommandCenter() {
 
                         {/* Right: Massive Glowing Fantasy Points Readout */}
                         <div className="flex flex-col items-end shrink-0 pl-2">
-                          <span className="text-3xl md:text-4xl font-black text-emerald-400 tv-tabular leading-none drop-shadow-[0_0_15px_rgba(52,211,153,0.6)]">
+                          <span className="text-3xl md:text-4xl font-mono-score font-bold text-[#00E676] leading-none">
                             {formatPoints(pts)}
                           </span>
-                          <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest mt-1">
+                          <span className="text-[9px] font-condensed font-bold uppercase text-slate-400 tracking-widest mt-1">
                             {scoringFormat.toUpperCase()} PTS
                           </span>
                         </div>
                       </div>
 
                       {/* Bottom Stat Pills Area: Individual Crisp High-Contrast Pills (Never truncated!) */}
-                      <div className="flex flex-wrap gap-1.5 mt-2 pt-2 border-t border-slate-800/80">
+                      <div className="flex flex-wrap gap-1.5 mt-2 pt-2 border-t border-white/10">
                         {statPills.length > 0 ? (
                           statPills.map((pill, pIdx) => {
                             const isTD = pill.toUpperCase().includes('TD');
@@ -2540,12 +2563,12 @@ export default function TVCommandCenter() {
                             return (
                               <span
                                 key={`pill-${player.id}-${pIdx}`}
-                                className={`px-2 py-0.5 rounded-md text-[10px] md:text-[11px] font-black tracking-wide uppercase border ${
+                                className={`px-2 py-0.5 rounded-[2px] text-[10px] md:text-[11px] font-mono-score font-bold tracking-wide uppercase border ${
                                   isTD
-                                    ? 'bg-emerald-500/25 text-emerald-300 border-emerald-500/60 shadow-[0_0_10px_rgba(16,185,129,0.35)]'
+                                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50'
                                     : isTurnover
-                                    ? 'bg-rose-500/25 text-rose-300 border-rose-500/50'
-                                    : 'bg-slate-900/90 text-slate-200 border-slate-700/80 font-mono'
+                                    ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                                    : 'bg-[#0E1017] text-slate-200 border-white/10'
                                 }`}
                               >
                                 {pill}
@@ -2553,7 +2576,7 @@ export default function TVCommandCenter() {
                             );
                           })
                         ) : (
-                          <span className="text-[10px] font-bold text-slate-500 italic">
+                          <span className="text-[10px] font-condensed font-semibold text-slate-500 italic">
                             Stats updating live...
                           </span>
                         )}
@@ -2565,27 +2588,27 @@ export default function TVCommandCenter() {
             </div>
 
             {/* RIGHT 4 COLUMNS: VERTICAL LIVE SCORING & BIG PLAYS FEED */}
-            <div className="col-span-12 lg:col-span-4 flex flex-col h-full bg-slate-900/50 rounded-2xl border border-slate-800/80 p-3 overflow-hidden backdrop-blur-sm shadow-xl min-h-0">
-              <div className="flex items-center justify-between pb-2 border-b border-slate-800 shrink-0">
+            <div className="col-span-12 lg:col-span-4 flex flex-col h-full bg-[#0E1017] rounded-[4px] border border-white/10 p-3 overflow-hidden shadow-xl min-h-0">
+              <div className="flex items-center justify-between pb-2 border-b border-white/10 shrink-0">
                 <div className="flex items-center gap-2">
                   <Zap className="w-4 h-4 text-amber-400" />
-                  <h2 className="text-xs md:text-sm font-black tracking-wide uppercase text-white">
+                  <h2 className="text-xs md:text-sm font-condensed font-bold tracking-wide uppercase text-white">
                     LIVE SCORING &amp; BIG PLAYS FEED
                   </h2>
                   <span
-                    className={`text-[9px] font-extrabold uppercase px-1.5 py-0.2 rounded ${
+                    className={`text-[9px] font-condensed font-bold uppercase px-1.5 py-0.2 rounded-[2px] ${
                       gameFilterMode === 'live'
                         ? 'bg-red-950/80 text-red-300 border border-red-500/40'
-                        : 'bg-blue-950/80 text-blue-300 border border-blue-500/40'
+                        : 'bg-white/10 text-slate-300 border border-white/15'
                     }`}
                   >
-                    {gameFilterMode === 'live' ? '🔴 Live' : '📅 All'}
+                    {gameFilterMode === 'live' ? 'LIVE' : 'ALL'}
                   </span>
                 </div>
 
                 {/* Inline Fantasy Burst Alert */}
                 {burstAlerts.length > 0 && (
-                  <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-950/90 border border-emerald-500/50 text-emerald-300 text-[10px] font-black animate-pulse shadow-sm">
+                  <div className="flex items-center gap-1 px-2 py-0.5 rounded-[2px] bg-emerald-950/90 border border-emerald-500/50 text-emerald-300 text-[10px] font-mono-score font-bold animate-pulse shadow-sm">
                     <Flame className="w-3 h-3 text-emerald-400" />
                     <span>+{burstAlerts[0].delta.toFixed(1)}: {burstAlerts[0].playerName}</span>
                   </div>
@@ -2595,7 +2618,7 @@ export default function TVCommandCenter() {
               {/* Scrollable Vertical Plays List */}
               <div className="flex-1 flex flex-col gap-2 overflow-y-auto max-h-[calc(100vh-230px)] pr-1 pt-2">
                 {filteredLiveUpdates.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center text-slate-500 font-semibold text-xs py-8 gap-2 text-center">
+                  <div className="h-full flex flex-col items-center justify-center text-slate-500 font-condensed font-semibold text-xs py-8 gap-2 text-center">
                     <span>
                       {gameFilterMode === 'live'
                         ? liveGamesCount === 0
@@ -2606,9 +2629,9 @@ export default function TVCommandCenter() {
                     {gameFilterMode === 'live' && liveGamesCount === 0 && (
                       <button
                         onClick={() => handleSelectFilterMode('all')}
-                        className="px-2.5 py-1 rounded-lg bg-blue-600/80 hover:bg-blue-600 text-white text-[11px] font-bold uppercase transition-all"
+                        className="px-2.5 py-1 rounded-[4px] bg-blue-600/80 hover:bg-blue-600 text-white text-[11px] font-condensed font-bold uppercase transition-colors"
                       >
-                        Switch to 📅 ALL GAMES
+                        Switch to ALL GAMES
                       </button>
                     )}
                   </div>
@@ -2626,46 +2649,46 @@ export default function TVCommandCenter() {
                     return (
                       <div
                         key={`${upd.id}-${idx}`}
-                        className={`h-auto p-3 rounded-xl border transition-all flex flex-col gap-1.5 ${
+                        className={`h-auto p-3 rounded-[4px] border transition-all flex flex-col gap-1.5 ${
                           isTD
-                            ? 'bg-emerald-950/40 border-emerald-500/60 shadow-md'
+                            ? 'bg-emerald-950/30 border-emerald-500/40 shadow-sm'
                             : isTO
-                            ? 'bg-rose-950/40 border-rose-500/60 shadow-md'
+                            ? 'bg-rose-950/30 border-rose-500/40 shadow-sm'
                             : isFG
-                            ? 'bg-cyan-950/40 border-cyan-500/60'
+                            ? 'bg-cyan-950/30 border-cyan-500/40'
                             : isSafety
-                            ? 'bg-purple-950/40 border-purple-500/60'
-                            : 'bg-slate-950/80 border-slate-800'
+                            ? 'bg-purple-950/30 border-purple-500/40'
+                            : 'bg-[#141722] border-white/10'
                         }`}
                       >
                         {/* Play Header: Type Badge • Matchup • Clock • Score */}
                         <div className="flex items-center justify-between gap-1 flex-wrap">
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <span
-                              className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded tracking-wider ${
+                              className={`text-[9px] font-condensed font-bold uppercase px-1.5 py-0.5 rounded-[2px] tracking-wider ${
                                 isTD
-                                  ? 'bg-emerald-500 text-slate-950 font-black'
+                                  ? 'bg-[#00E676] text-black font-bold'
                                   : isTO
-                                  ? 'bg-rose-600 text-white font-black'
+                                  ? 'bg-rose-600 text-white font-bold'
                                   : isFG
-                                  ? 'bg-cyan-500 text-slate-950 font-black'
-                                  : 'bg-amber-500 text-slate-950 font-black'
+                                  ? 'bg-cyan-500 text-black font-bold'
+                                  : 'bg-amber-500 text-black font-bold'
                               }`}
                             >
                               {upd.headline}
                             </span>
-                            <span className="text-[11px] font-bold text-slate-300">
+                            <span className="text-[11px] font-condensed font-bold text-slate-300">
                               {upd.gameName} • {upd.gameClock}
                             </span>
                             {upd.downDistanceText && (
-                              <span className="text-[9px] font-black text-amber-300 bg-slate-950 px-1.5 py-0.2 rounded border border-slate-800 shrink-0">
-                                🏈 {upd.downDistanceText}
+                              <span className="text-[9px] font-condensed font-bold text-amber-300 bg-[#07080C] px-1.5 py-0.2 rounded-[2px] border border-white/10 shrink-0">
+                                {upd.downDistanceText}
                               </span>
                             )}
                           </div>
 
                           {upd.scoreSummary && (
-                            <span className="text-[11px] font-black text-slate-300 tv-tabular shrink-0">
+                            <span className="text-[11px] font-mono-score font-bold text-slate-300 shrink-0">
                               {upd.scoreSummary}
                             </span>
                           )}
@@ -2679,14 +2702,16 @@ export default function TVCommandCenter() {
                         {/* Fantasy Impact & Ownership Tagging */}
                         <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
                           {upd.fantasyImpact && (
-                            <span className="text-[10px] font-black text-emerald-300 bg-emerald-950/90 border border-emerald-500/40 px-2 py-0.5 rounded shadow-sm">
-                              ⚡ {upd.fantasyImpact}
+                            <span className="text-[10px] font-mono-score font-bold text-[#00E676] bg-emerald-950/80 border border-emerald-500/30 px-2 py-0.5 rounded-[2px] shadow-sm flex items-center gap-1">
+                              <Zap className="w-3 h-3 text-[#00E676]" />
+                              <span>{upd.fantasyImpact}</span>
                             </span>
                           )}
 
                           {matchingOwners.length > 0 && (
-                            <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/50 flex items-center gap-1 shadow-sm">
-                              🏈 {matchingOwners[0][1][0]?.ownerName.toUpperCase()}&apos;S PLAYER
+                            <span className="text-[9px] font-condensed font-bold uppercase px-2 py-0.5 rounded-[2px] bg-amber-500/15 text-amber-300 border border-amber-500/40 flex items-center gap-1 shadow-sm">
+                              <Users className="w-3 h-3 text-amber-400" />
+                              <span>{matchingOwners[0][1][0]?.ownerName.toUpperCase()}&apos;S PLAYER</span>
                             </span>
                           )}
                         </div>
@@ -2950,12 +2975,14 @@ export default function TVCommandCenter() {
                     return (
                       <>
                         {cashedSlips > 0 && (
-                          <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-black uppercase flex items-center gap-1 shadow-sm">
-                            🏆 {cashedSlips} Cashout!
+                          <span className="px-2 py-0.5 rounded-[2px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-condensed font-bold uppercase flex items-center gap-1 shadow-sm">
+                            <Trophy className="w-3 h-3 text-emerald-400" />
+                            <span>{cashedSlips} CASHOUT</span>
                           </span>
                         )}
-                        <span className="px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 text-[10px] font-black uppercase">
-                          ⚡ {liveSlips} In-Flight
+                        <span className="px-2 py-0.5 rounded-[2px] bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 text-[10px] font-condensed font-bold uppercase flex items-center gap-1">
+                          <Activity className="w-3 h-3 text-cyan-400" />
+                          <span>{liveSlips} IN-FLIGHT</span>
                         </span>
                       </>
                     );
@@ -3213,8 +3240,9 @@ export default function TVCommandCenter() {
                             </span>
                             <h3 className="text-sm font-black text-white truncate">{slip.title}</h3>
                             {slip.ownerName && (
-                              <span className="text-[10px] font-black text-amber-300 bg-amber-500/20 px-1.5 py-0.2 rounded border border-amber-500/40 shrink-0">
-                                🏈 {slip.ownerName}
+                              <span className="text-[10px] font-condensed font-bold text-amber-300 bg-amber-500/20 px-1.5 py-0.2 rounded-[2px] border border-amber-500/40 shrink-0 flex items-center gap-1">
+                                <Users className="w-2.5 h-2.5 text-amber-400" />
+                                <span>{slip.ownerName}</span>
                               </span>
                             )}
                           </div>
@@ -3329,33 +3357,32 @@ export default function TVCommandCenter() {
             <div className="flex items-center justify-between pb-1.5 shrink-0">
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-lg">{TABS.find((t) => t.id === activeTab)?.icon}</span>
-                  <h2 className="text-base font-black tracking-wide uppercase text-white">
+                  <h2 className="text-sm md:text-base font-condensed font-bold tracking-wide uppercase text-white">
                     TOP 10 {TABS.find((t) => t.id === activeTab)?.label}
                   </h2>
                   <span
-                    className={`text-[9px] font-extrabold uppercase px-1.5 py-0.2 rounded ${
+                    className={`text-[9px] font-condensed font-bold uppercase px-1.5 py-0.2 rounded-[2px] ${
                       gameFilterMode === 'live'
                         ? 'bg-red-950/80 text-red-300 border border-red-500/40'
-                        : 'bg-blue-950/80 text-blue-300 border border-blue-500/40'
+                        : 'bg-white/10 text-slate-300 border border-white/15'
                     }`}
                   >
-                    {gameFilterMode === 'live' ? '🔴 Live In-Progress' : '📅 All Games'}
+                    {gameFilterMode === 'live' ? 'LIVE IN-PROGRESS' : 'ALL GAMES'}
                   </span>
                 </div>
 
                 {/* Inline Burst Alert next to title to save vertical space */}
                 {burstAlerts.length > 0 && (
-                  <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-950/90 border border-emerald-500/50 text-emerald-300 text-[11px] font-black animate-pulse shadow-sm">
+                  <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-[2px] bg-emerald-950/90 border border-emerald-500/50 text-emerald-300 text-[10px] font-mono-score font-bold animate-pulse shadow-sm">
                     <Flame className="w-3 h-3 text-emerald-400" />
                     <span>BURST: {burstAlerts[0].playerName} +{burstAlerts[0].delta.toFixed(1)} PTS</span>
                   </div>
                 )}
               </div>
 
-              <div className="flex items-center gap-2 text-[11px] font-bold text-slate-400">
+              <div className="flex items-center gap-2 text-[11px] font-condensed font-bold text-slate-400">
                 <span>SCORING:</span>
-                <span className="text-emerald-400 font-black uppercase">
+                <span className="text-[#00E676] font-bold uppercase">
                   {scoringFormat.toUpperCase()}
                 </span>
               </div>
@@ -3364,11 +3391,11 @@ export default function TVCommandCenter() {
             {/* If 0 players found (e.g. in Live mode when no players are active in that position) */}
             {sortedLeaderboards?.[activeTab as FantasyPosition]?.length === 0 ? (
               <div className="flex-1 flex flex-col items-center justify-center gap-3 text-slate-400">
-                <div className="p-3 rounded-full bg-slate-900 border border-slate-800">
+                <div className="p-3 rounded-[4px] bg-[#0E1017] border border-white/10">
                   <Radio className="w-8 h-8 text-amber-400 animate-pulse" />
                 </div>
-                <div className="text-center">
-                  <p className="text-base font-black text-white uppercase">
+                <div className="text-center font-condensed">
+                  <p className="text-base font-bold text-white uppercase">
                     No {TABS.find((t) => t.id === activeTab)?.label}s Active In Live Games Right Now
                   </p>
                   <p className="text-xs text-slate-400 mt-1">
@@ -3379,9 +3406,9 @@ export default function TVCommandCenter() {
                 </div>
                 <button
                   onClick={() => handleSelectFilterMode('all')}
-                  className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-black text-xs uppercase shadow-md transition-all"
+                  className="px-3 py-1.5 rounded-[4px] bg-blue-600 hover:bg-blue-500 text-white font-condensed font-bold text-xs uppercase shadow-md transition-colors"
                 >
-                  Switch to 📅 ALL GAMES
+                  Switch to ALL GAMES
                 </button>
               </div>
             ) : (
@@ -3427,7 +3454,7 @@ export default function TVCommandCenter() {
       </main>
 
       {/* 6. CONTINUOUS NEWS-NETWORK SCROLLING MARQUEE TICKER (ESPN BottomLine Style) */}
-      <footer className="fixed bottom-0 left-0 right-0 z-40 h-14 bg-slate-950/95 border-t-2 border-emerald-500/40 overflow-hidden flex items-center backdrop-blur-md shadow-2xl">
+      <footer className="fixed bottom-0 left-0 right-0 z-40 h-14 bg-[#0B0D13] border-t-2 border-[#00E676]/40 overflow-hidden flex items-center shadow-2xl">
         <style>{`
           @keyframes tickerScroll {
             0% { transform: translate3d(0, 0, 0); }
@@ -3436,13 +3463,13 @@ export default function TVCommandCenter() {
         `}</style>
 
         {/* Fixed Left Label Badge (Anchored) */}
-        <div className="h-full px-3 md:px-4 bg-gradient-to-r from-emerald-950 via-slate-950 to-slate-950 border-r-2 border-emerald-500/50 flex items-center gap-2 z-20 shrink-0 shadow-lg">
-          <span className="text-emerald-400 font-black tracking-wider text-xs md:text-sm flex items-center gap-1.5 whitespace-nowrap">
-            <Trophy className="w-4 h-4 text-amber-400" />
-            <span>🏆 LIVE LEAGUE SCORES</span>
+        <div className="h-full px-3 md:px-4 bg-[#07080C] border-r border-white/10 flex items-center gap-2 z-20 shrink-0 shadow-lg">
+          <span className="text-[#00E676] font-condensed font-bold tracking-wider text-xs md:text-sm flex items-center gap-1.5 whitespace-nowrap uppercase">
+            <Trophy className="w-3.5 h-3.5 text-amber-400" />
+            <span>LIVE LEAGUE SCORES</span>
           </span>
           {displayMatchups.length > 0 && (
-            <span className="px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-black tv-tabular">
+            <span className="px-1.5 py-0.2 rounded-[2px] bg-[#00E676]/20 text-[#00E676] text-[10px] font-mono-score font-bold">
               {displayMatchups.length}
             </span>
           )}
@@ -3451,9 +3478,9 @@ export default function TVCommandCenter() {
         {/* Seamless Infinite Marquee Track - Relaxed 110s Pace for Effortless 10-Foot Reading */}
         <div className="flex-1 overflow-hidden relative h-full flex items-center">
           {displayMatchups.length === 0 ? (
-            <div className="px-4 text-xs font-semibold text-slate-400 flex items-center gap-2">
-              <Activity className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
-              <span>Tip: Click &quot;⚙️ Leagues &amp; Guests&quot; above to link your Sleeper/ESPN leagues or living room friends.</span>
+            <div className="px-4 text-xs font-condensed font-semibold text-slate-400 flex items-center gap-2">
+              <Activity className="w-3.5 h-3.5 text-[#00E676] animate-pulse" />
+              <span>Tip: Click &quot;LEAGUES&quot; in the top bar to link your Sleeper/ESPN leagues or living room friends.</span>
             </div>
           ) : (
             <div
@@ -3472,23 +3499,23 @@ export default function TVCommandCenter() {
               {tickerMatchups.map((m, idx) => (
                 <div
                   key={`m1-${m.id || idx}-${idx}`}
-                  className="flex items-center gap-3 px-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-800 shrink-0 whitespace-nowrap shadow-sm hover:border-slate-700 transition-all"
+                  className="flex items-center gap-3 px-3 py-1.5 rounded-[4px] bg-[#0E1017] border border-white/10 shrink-0 whitespace-nowrap shadow-sm hover:border-white/20 transition-colors"
                 >
-                  <span className="text-[10px] font-black uppercase text-cyan-400 bg-cyan-950/60 px-1.5 py-0.5 rounded border border-cyan-500/30">
+                  <span className="text-[10px] font-condensed font-bold uppercase text-cyan-400 bg-cyan-950/60 px-1.5 py-0.5 rounded-[2px] border border-cyan-500/30">
                     {m.leagueName}
                   </span>
-                  <div className="flex items-center gap-2 text-xs font-bold">
-                    <span className={m.team1.points > m.team2.points ? 'text-emerald-400 font-black' : 'text-slate-200'}>
+                  <div className="flex items-center gap-2 text-xs font-condensed font-bold">
+                    <span className={m.team1.points > m.team2.points ? 'text-[#00E676] font-bold' : 'text-slate-200'}>
                       {m.team1.ownerName}
                     </span>
-                    <span className="text-sm font-black tv-tabular text-white px-1.5 py-0.2 rounded bg-slate-950 border border-slate-800">
+                    <span className="text-sm font-mono-score font-bold text-white px-1.5 py-0.2 rounded-[2px] bg-[#07080C] border border-white/10">
                       {m.team1.points.toFixed(1)}
                     </span>
-                    <span className="text-slate-500 text-[10px] font-black">VS</span>
-                    <span className="text-sm font-black tv-tabular text-white px-1.5 py-0.2 rounded bg-slate-950 border border-slate-800">
+                    <span className="text-slate-500 text-[10px] font-bold">VS</span>
+                    <span className="text-sm font-mono-score font-bold text-white px-1.5 py-0.2 rounded-[2px] bg-[#07080C] border border-white/10">
                       {m.team2.points.toFixed(1)}
                     </span>
-                    <span className={m.team2.points > m.team1.points ? 'text-emerald-400 font-black' : 'text-slate-200'}>
+                    <span className={m.team2.points > m.team1.points ? 'text-[#00E676] font-bold' : 'text-slate-200'}>
                       {m.team2.ownerName}
                     </span>
                   </div>
@@ -3499,23 +3526,23 @@ export default function TVCommandCenter() {
               {tickerMatchups.map((m, idx) => (
                 <div
                   key={`m2-${m.id || idx}-${idx}`}
-                  className="flex items-center gap-3 px-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-800 shrink-0 whitespace-nowrap shadow-sm hover:border-slate-700 transition-all"
+                  className="flex items-center gap-3 px-3 py-1.5 rounded-[4px] bg-[#0E1017] border border-white/10 shrink-0 whitespace-nowrap shadow-sm hover:border-white/20 transition-colors"
                 >
-                  <span className="text-[10px] font-black uppercase text-cyan-400 bg-cyan-950/60 px-1.5 py-0.5 rounded border border-cyan-500/30">
+                  <span className="text-[10px] font-condensed font-bold uppercase text-cyan-400 bg-cyan-950/60 px-1.5 py-0.5 rounded-[2px] border border-cyan-500/30">
                     {m.leagueName}
                   </span>
-                  <div className="flex items-center gap-2 text-xs font-bold">
-                    <span className={m.team1.points > m.team2.points ? 'text-emerald-400 font-black' : 'text-slate-200'}>
+                  <div className="flex items-center gap-2 text-xs font-condensed font-bold">
+                    <span className={m.team1.points > m.team2.points ? 'text-[#00E676] font-bold' : 'text-slate-200'}>
                       {m.team1.ownerName}
                     </span>
-                    <span className="text-sm font-black tv-tabular text-white px-1.5 py-0.2 rounded bg-slate-950 border border-slate-800">
+                    <span className="text-sm font-mono-score font-bold text-white px-1.5 py-0.2 rounded-[2px] bg-[#07080C] border border-white/10">
                       {m.team1.points.toFixed(1)}
                     </span>
-                    <span className="text-slate-500 text-[10px] font-black">VS</span>
-                    <span className="text-sm font-black tv-tabular text-white px-1.5 py-0.2 rounded bg-slate-950 border border-slate-800">
+                    <span className="text-slate-500 text-[10px] font-bold">VS</span>
+                    <span className="text-sm font-mono-score font-bold text-white px-1.5 py-0.2 rounded-[2px] bg-[#07080C] border border-white/10">
                       {m.team2.points.toFixed(1)}
                     </span>
-                    <span className={m.team2.points > m.team1.points ? 'text-emerald-400 font-black' : 'text-slate-200'}>
+                    <span className={m.team2.points > m.team1.points ? 'text-[#00E676] font-bold' : 'text-slate-200'}>
                       {m.team2.ownerName}
                     </span>
                   </div>
@@ -3526,34 +3553,24 @@ export default function TVCommandCenter() {
         </div>
 
         {/* Fixed Right Sync Time & Screen WakeLock Status */}
-        <div className="h-full px-3 bg-slate-950/90 border-l border-slate-800/80 flex items-center gap-3 text-[10px] text-slate-500 shrink-0 z-20">
+        <div className="h-full px-3 bg-[#07080C] border-l border-white/10 flex items-center gap-3 text-[10px] text-slate-500 shrink-0 z-20 font-condensed">
           <div
             className="flex items-center gap-1.5 cursor-pointer hover:text-slate-300 transition-colors"
             onClick={requestWakeLock}
             title={isWakeLockActive ? "Screen WakeLock Active: TV display will stay awake" : "Click to activate Screen WakeLock"}
           >
-            <Tv className={`w-3.5 h-3.5 ${isWakeLockActive ? 'text-emerald-400' : 'text-slate-600'}`} />
+            <Tv className={`w-3.5 h-3.5 ${isWakeLockActive ? 'text-[#00E676]' : 'text-slate-600'}`} />
             <span className="hidden md:inline font-bold uppercase text-[9px]">
               {isWakeLockActive ? 'WAKELOCK' : 'SLEEP-DEFENSE'}
             </span>
           </div>
 
-          <div className="flex items-center gap-1.5">
-            <Activity className="w-3.5 h-3.5 text-emerald-400" />
+          <div className="flex items-center gap-1.5 font-mono-score">
+            <Activity className="w-3.5 h-3.5 text-[#00E676]" />
             <span suppressHydrationWarning>{mounted && data?.lastUpdated ? `SYNC: ${new Date(data.lastUpdated).toLocaleTimeString()}` : ''}</span>
           </div>
         </div>
       </footer>
-
-      {/* Floating Bottom-Right QR Code Pill */}
-      <button
-        onClick={() => setIsQrModalOpen(true)}
-        className="fixed bottom-12 right-4 z-40 flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900/90 hover:bg-slate-800 text-cyan-300 hover:text-white border border-cyan-500/40 shadow-[0_0_15px_rgba(6,182,212,0.35)] backdrop-blur-md transition-all text-xs font-black uppercase group"
-        title="Scan with phone to add bets & leagues"
-      >
-        <QrCode className="w-4 h-4 text-cyan-400 group-hover:scale-110 transition-transform" />
-        <span className="hidden sm:inline">📱 Scan to Add Bets</span>
-      </button>
 
       {/* 7. MANAGE LEAGUES & GUESTS MODAL */}
       <ManageLeaguesModal
@@ -3660,11 +3677,11 @@ export default function TVCommandCenter() {
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="relative max-w-4xl w-[94vw] md:w-[840px] p-6 md:p-8 rounded-3xl bg-gradient-to-b from-slate-900 via-slate-950 to-black border-4 border-amber-400 shadow-[0_0_80px_rgba(245,158,11,0.7)] animate-td-border flex flex-col items-center text-center overflow-hidden cursor-default"
+            className="relative max-w-4xl w-[94vw] md:w-[840px] p-6 md:p-8 rounded-[4px] bg-[#0E1017] border-2 border-amber-400 shadow-[0_0_80px_rgba(245,158,11,0.7)] animate-td-border flex flex-col items-center text-center overflow-hidden cursor-default"
           >
             {/* Top Close Button & RedZone Alert Header */}
-            <div className="w-full flex items-center justify-between pb-3 border-b border-slate-800/80">
-              <span className="text-xs font-black tracking-widest uppercase text-amber-400/80 flex items-center gap-1.5">
+            <div className="w-full flex items-center justify-between pb-3 border-b border-white/10">
+              <span className="text-xs font-condensed font-bold tracking-widest uppercase text-amber-400/80 flex items-center gap-1.5">
                 <span className="relative flex h-2 w-2">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
@@ -3673,18 +3690,19 @@ export default function TVCommandCenter() {
               </span>
               <button
                 onClick={() => setActiveTdAlert(null)}
-                className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-black uppercase transition-all border border-slate-700"
+                className="px-2.5 py-1 rounded-[2px] bg-[#141722] hover:bg-[#1E2330] text-slate-300 hover:text-white text-xs font-condensed font-bold uppercase transition-colors border border-white/10 flex items-center gap-1"
               >
-                ✕ Close (ESC)
+                <X className="w-3 h-3" />
+                <span>CLOSE</span>
               </button>
             </div>
 
             {/* Jumbotron Animated Header */}
             <div className="my-3">
-              <h1 className="text-4xl md:text-6xl font-black tracking-widest text-amber-300 animate-td-title drop-shadow-[0_0_35px_rgba(251,191,36,0.9)] uppercase">
-                🚨 TOUCHDOWN! 🚨
+              <h1 className="text-4xl md:text-6xl font-condensed font-bold tracking-widest text-amber-300 animate-td-title drop-shadow-[0_0_35px_rgba(251,191,36,0.9)] uppercase">
+                TOUCHDOWN!
               </h1>
-              <p className="text-sm md:text-base font-extrabold text-slate-300 uppercase tracking-wider mt-1">
+              <p className="text-sm md:text-base font-condensed font-bold text-slate-300 uppercase tracking-wider mt-1">
                 {activeTdAlert.gameName} • {activeTdAlert.gameClock} {activeTdAlert.scoreSummary ? `• (${activeTdAlert.scoreSummary})` : ''}
               </p>
             </div>
@@ -3692,7 +3710,7 @@ export default function TVCommandCenter() {
             {/* Player Headshot & Team Logo Showcase */}
             <div className="flex items-center justify-center gap-6 my-3">
               {activeTdAlert.teamLogo && (
-                <div className="w-20 h-20 md:w-24 md:h-24 rounded-2xl bg-slate-950/90 border border-slate-800 p-2 flex items-center justify-center shrink-0 shadow-lg">
+                <div className="w-20 h-20 md:w-24 md:h-24 rounded-[4px] bg-[#07080C] border border-white/10 p-2 flex items-center justify-center shrink-0 shadow-lg">
                   <img
                     src={activeTdAlert.teamLogo}
                     alt={activeTdAlert.teamAbbr}
@@ -3702,7 +3720,7 @@ export default function TVCommandCenter() {
               )}
 
               {activeTdAlert.playerHeadshot && (
-                <div className="relative w-28 h-28 md:w-36 md:h-36 rounded-full overflow-hidden bg-slate-950 border-4 border-amber-400 shadow-[0_0_30px_rgba(251,191,36,0.8)] shrink-0">
+                <div className="relative w-28 h-28 md:w-36 md:h-36 rounded-[4px] overflow-hidden bg-[#07080C] border-2 border-amber-400 shadow-[0_0_30px_rgba(251,191,36,0.8)] shrink-0">
                   <img
                     src={activeTdAlert.playerHeadshot}
                     alt={activeTdAlert.playerName}
@@ -3714,14 +3732,14 @@ export default function TVCommandCenter() {
 
             {/* Player Name & Position */}
             <div className="mb-2">
-              <h2 className="text-3xl md:text-5xl font-black text-white leading-tight tracking-tight">
+              <h2 className="text-3xl md:text-5xl font-condensed font-bold text-white leading-tight tracking-tight uppercase">
                 {activeTdAlert.playerName}
               </h2>
-              <div className="flex items-center justify-center gap-2 text-xs md:text-sm font-bold text-slate-400 mt-1 uppercase">
-                <span className="text-amber-400 font-black">{activeTdAlert.teamAbbr}</span>
+              <div className="flex items-center justify-center gap-2 text-xs md:text-sm font-condensed font-bold text-slate-400 mt-1 uppercase">
+                <span className="text-amber-400 font-bold">{activeTdAlert.teamAbbr}</span>
                 {activeTdAlert.position && <span>• {activeTdAlert.position}</span>}
                 {activeTdAlert.totalPoints !== undefined && (
-                  <span className="text-emerald-400 font-black ml-1">
+                  <span className="text-[#00E676] font-mono-score font-bold ml-1">
                     • Total: {activeTdAlert.totalPoints.toFixed(1)} {scoringFormat.toUpperCase()} PTS
                   </span>
                 )}
@@ -3729,35 +3747,36 @@ export default function TVCommandCenter() {
             </div>
 
             {/* Full Play Description */}
-            <div className="my-2 px-4 py-2.5 rounded-2xl bg-slate-900/90 border border-slate-800 max-w-2xl w-full shadow-inner">
-              <p className="text-sm md:text-lg font-bold text-slate-100 italic leading-snug">
+            <div className="my-2 px-4 py-2.5 rounded-[4px] bg-[#141722] border border-white/10 max-w-2xl w-full shadow-inner">
+              <p className="text-sm md:text-lg font-condensed font-semibold text-slate-100 italic leading-snug">
                 &ldquo;{activeTdAlert.description}&rdquo;
               </p>
               {activeTdAlert.fantasyImpact && (
-                <div className="mt-1 text-xs md:text-sm font-black text-emerald-400">
-                  ⚡ {activeTdAlert.fantasyImpact}
+                <div className="mt-1 text-xs md:text-sm font-mono-score font-bold text-[#00E676] flex items-center justify-center gap-1">
+                  <Zap className="w-3.5 h-3.5 text-[#00E676]" />
+                  <span>{activeTdAlert.fantasyImpact}</span>
                 </div>
               )}
             </div>
 
             {/* Living Room Owner Callout Badge */}
             {activeTdAlert.owners.length > 0 ? (
-              <div className="mt-3 px-5 py-2.5 rounded-2xl bg-gradient-to-r from-amber-500/20 via-rose-500/20 to-amber-500/20 border-2 border-amber-400/80 shadow-[0_0_25px_rgba(245,158,11,0.5)] animate-pulse max-w-xl w-full">
-                <div className="text-[11px] font-black uppercase text-amber-300 tracking-wider">
-                  🔥 LIVING ROOM ROSTER SHOWDOWN ALERT 🔥
+              <div className="mt-3 px-5 py-2.5 rounded-[4px] bg-gradient-to-r from-amber-500/15 via-rose-500/15 to-amber-500/15 border border-amber-400/80 shadow-[0_0_25px_rgba(245,158,11,0.5)] animate-pulse max-w-xl w-full">
+                <div className="text-[11px] font-condensed font-bold uppercase text-amber-300 tracking-wider">
+                  LIVING ROOM ROSTER SHOWDOWN ALERT
                 </div>
-                <div className="text-lg md:text-2xl font-black text-white mt-0.5">
+                <div className="text-lg md:text-2xl font-condensed font-bold text-white mt-0.5">
                   Rostered by <span className="text-amber-300 underline">{activeTdAlert.owners[0].ownerName}</span> ({activeTdAlert.owners[0].teamName})
                 </div>
                 {activeTdAlert.owners.length > 1 && (
-                  <div className="text-[10px] font-extrabold text-rose-300 uppercase mt-0.5">
+                  <div className="text-[10px] font-condensed font-bold text-rose-300 uppercase mt-0.5">
                     + Rostered in {activeTdAlert.owners.length - 1} other synced league(s)!
                   </div>
                 )}
               </div>
             ) : (
-              <div className="mt-2 text-xs font-semibold text-slate-500">
-                🏈 Free Agent / Unowned in synced leagues
+              <div className="mt-2 text-xs font-condensed font-semibold text-slate-500">
+                Free Agent / Unowned in synced leagues
               </div>
             )}
 
@@ -3794,32 +3813,38 @@ function renderLeaderboardCard(
   const isBoosted = Boolean(boosted && Date.now() - boosted.timestamp < 6000);
   const owners = ownershipTags || [];
 
-  // Rank Styling: Gold (1), Silver (2), Bronze (3), Slate (4-10)
-  let rankBadgeStyle = 'bg-slate-800 text-slate-300 border-slate-700';
+  // Rank Accent Color: Gold (1), Silver (2), Bronze (3), or NFL Team Primary Color (4-10)
+  const accentColor =
+    rank === 1
+      ? '#FFD700'
+      : rank === 2
+      ? '#C0C0C0'
+      : rank === 3
+      ? '#CD7F32'
+      : NFL_TEAM_COLORS[player.team.abbreviation] || '#38BDF8';
 
+  let rankBadgeStyle = 'bg-[#141722] text-slate-300 border border-white/10';
   if (rank === 1) {
-    rankBadgeStyle =
-      'bg-gradient-to-br from-amber-300 via-amber-400 to-amber-500 text-slate-950 font-black shadow-[0_0_12px_rgba(251,191,36,0.6)] border-amber-300';
+    rankBadgeStyle = 'bg-[#FFD700] text-black font-black border border-[#FFD700] shadow-[0_0_12px_rgba(255,215,0,0.6)]';
   } else if (rank === 2) {
-    rankBadgeStyle =
-      'bg-gradient-to-br from-slate-200 to-slate-300 text-slate-950 font-black shadow-[0_0_10px_rgba(226,232,240,0.5)] border-slate-200';
+    rankBadgeStyle = 'bg-[#C0C0C0] text-black font-black border border-[#C0C0C0] shadow-[0_0_10px_rgba(192,192,192,0.5)]';
   } else if (rank === 3) {
-    rankBadgeStyle =
-      'bg-gradient-to-br from-amber-700 to-amber-800 text-amber-100 font-black shadow-[0_0_8px_rgba(180,83,9,0.5)] border-amber-600';
+    rankBadgeStyle = 'bg-[#CD7F32] text-white font-black border border-[#CD7F32] shadow-[0_0_8px_rgba(205,127,50,0.5)]';
   }
 
   return (
     <div
       key={`${player.id}-${rank}`}
-      className={`relative flex items-center justify-between px-3 py-1.5 rounded-xl border transition-all flex-1 min-h-0 ${
+      style={{ borderLeftColor: accentColor }}
+      className={`relative flex items-center justify-between px-3 py-1.5 rounded-[4px] border-l-[3px] border-y border-r border-white/10 transition-all flex-1 min-h-0 ${
         isBoosted
-          ? 'bg-emerald-950/50 border-emerald-400 shadow-[0_0_20px_rgba(52,211,153,0.9)] animate-burst'
-          : 'bg-slate-900/80 border-slate-800/80 hover:border-slate-700'
+          ? 'bg-[#00E676]/10 border-r-[#00E676] border-y-[#00E676] shadow-[0_0_20px_rgba(0,230,118,0.7)] animate-burst'
+          : 'bg-[#0E1017] hover:bg-[#141722] hover:border-white/20'
       }`}
     >
       {/* Floating Delta Badge when points increase */}
       {isBoosted && (
-        <div className="absolute -top-2 right-4 px-2 py-0.2 rounded-full bg-emerald-500 text-slate-950 text-[10px] font-black tracking-wider shadow-[0_0_10px_rgba(16,185,129,0.9)] animate-bounce z-10">
+        <div className="absolute -top-2 right-4 px-2 py-0.2 rounded-[2px] bg-[#00E676] text-black text-[10px] font-mono-score font-bold tracking-wider shadow-[0_0_10px_rgba(0,230,118,0.9)] animate-bounce z-10">
           +{boosted?.delta.toFixed(1)} PTS!
         </div>
       )}
@@ -3828,13 +3853,13 @@ function renderLeaderboardCard(
       <div className="flex items-center gap-2.5 min-w-0 flex-1 mr-2">
         {/* Rank Number */}
         <div
-          className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-black border shrink-0 ${rankBadgeStyle}`}
+          className={`w-7 h-7 rounded-[2px] flex items-center justify-center text-xs font-mono-score font-bold shrink-0 ${rankBadgeStyle}`}
         >
           <span>{rank}</span>
         </div>
 
         {/* Headshot / Team Logo */}
-        <div className="relative w-10 h-10 rounded-full overflow-hidden bg-slate-950 border border-slate-700 shrink-0">
+        <div className="relative w-10 h-10 rounded-[2px] overflow-hidden bg-[#07080C] border border-white/10 shrink-0">
           <img
             src={player.headshot}
             alt={player.name}
@@ -3844,7 +3869,7 @@ function renderLeaderboardCard(
             }}
           />
           {/* Miniature Team Logo in Corner */}
-          <div className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-slate-950 p-0.5 border border-slate-800">
+          <div className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-[2px] bg-[#07080C] p-0.5 border border-white/10">
             <img
               src={player.team.logo}
               alt={player.team.abbreviation}
@@ -3854,15 +3879,15 @@ function renderLeaderboardCard(
         </div>
 
         {/* Name, Team vs Opponent, Live Clock, Owner Badges, and FULL UNTRUNCATED STAT LINE */}
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 font-condensed">
           <div className="flex items-center gap-1.5 flex-wrap">
-            <h3 className="text-xs md:text-sm font-black text-white truncate leading-tight tracking-tight">
+            <h3 className="text-xs md:text-sm font-bold text-white truncate leading-tight tracking-tight uppercase">
               {player.name}
             </h3>
 
             {/* Red Zone Badge */}
             {player.gameStatus.isRedZone && (
-              <span className="px-1 py-0.2 bg-red-600/90 text-white text-[8px] font-black rounded uppercase animate-pulse shrink-0">
+              <span className="px-1 py-0.2 bg-red-600 text-white text-[8px] font-bold rounded-[2px] uppercase animate-pulse shrink-0">
                 RZ
               </span>
             )}
@@ -3871,12 +3896,14 @@ function renderLeaderboardCard(
             {owners.length > 0 && (
               <div className="inline-flex items-center gap-1">
                 {owners.length === 1 ? (
-                  <span className="px-1.5 py-0.2 rounded-full bg-amber-500/20 border border-amber-400/60 text-amber-300 text-[9px] font-black uppercase tracking-wider flex items-center gap-1">
-                    🏈 {owners[0].ownerName}
+                  <span className="px-1.5 py-0.2 rounded-[2px] bg-amber-500/15 border border-amber-400/40 text-amber-300 text-[9px] font-bold uppercase tracking-wider flex items-center gap-1">
+                    <Users className="w-2.5 h-2.5 text-amber-400" />
+                    <span>{owners[0].ownerName}</span>
                   </span>
                 ) : (
-                  <span className="px-1.5 py-0.2 rounded-full bg-rose-500/20 border border-rose-400/60 text-rose-300 text-[9px] font-black uppercase tracking-wider flex items-center gap-1">
-                    🔥 {owners.length} LEAGUES
+                  <span className="px-1.5 py-0.2 rounded-[2px] bg-rose-500/15 border border-rose-400/40 text-rose-300 text-[9px] font-bold uppercase tracking-wider flex items-center gap-1">
+                    <Users className="w-2.5 h-2.5 text-rose-400" />
+                    <span>{owners.length} LEAGUES</span>
                   </span>
                 )}
               </div>
@@ -3890,12 +3917,12 @@ function renderLeaderboardCard(
             <span
               className={
                 player.isGameLive || player.gameStatus.state === 'in'
-                  ? 'text-amber-400 font-black inline-flex items-center gap-1'
+                  ? 'text-amber-400 font-bold inline-flex items-center gap-1'
                   : ''
               }
             >
               {(player.isGameLive || player.gameStatus.state === 'in') && (
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-ping inline-block" />
+                <span className="h-1.5 w-1.5 rounded-full bg-[#00E676] animate-ping inline-block" />
               )}
               {player.gameStatus.detail || (player.isGameLive ? 'Live' : 'Final')}
             </span>
@@ -3903,7 +3930,7 @@ function renderLeaderboardCard(
 
           {/* Crisp Badge of Real-World Stats - FULLY VISIBLE WITH NO TRUNCATION */}
           <div className="mt-0.5">
-            <span className="inline-block px-1.5 py-0.2 rounded bg-slate-950/80 border border-slate-800 text-[10px] md:text-[11px] font-bold text-slate-200 whitespace-nowrap">
+            <span className="inline-block px-1.5 py-0.2 rounded-[2px] bg-[#141722] border border-white/10 text-[10px] md:text-[11px] font-mono-score font-bold text-slate-200 whitespace-nowrap">
               {player.rawStatLine}
             </span>
           </div>
@@ -3911,11 +3938,11 @@ function renderLeaderboardCard(
       </div>
 
       {/* Right: Huge High-Contrast Fantasy Points Display */}
-      <div className="flex flex-col items-end justify-center shrink-0 pl-2 border-l border-slate-800/80 min-w-[70px]">
-        <div className="text-xl lg:text-2xl font-black tv-tabular text-emerald-400 leading-none">
+      <div className="flex flex-col items-end justify-center shrink-0 pl-2 border-l border-white/10 min-w-[70px]">
+        <div className="text-xl lg:text-2xl font-mono-score font-bold text-[#00E676] leading-none">
           {Number.isInteger(pts) ? pts.toFixed(1) : pts.toFixed(1)}
         </div>
-        <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-0.5">
+        <div className="text-[9px] font-condensed font-bold text-slate-400 uppercase tracking-widest mt-0.5">
           {scoringFormat.toUpperCase()} PTS
         </div>
       </div>

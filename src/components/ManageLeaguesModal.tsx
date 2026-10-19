@@ -240,7 +240,7 @@ export default function ManageLeaguesModal({
                 : 'border-transparent text-slate-400 hover:text-slate-200'
             }`}
           >
-            ⚡ Sleeper Leagues ({syncedLeagues.filter((l) => l.type === 'sleeper').length})
+            Sleeper Leagues ({syncedLeagues.filter((l) => l.type === 'sleeper').length})
           </button>
 
           <button
@@ -251,7 +251,7 @@ export default function ManageLeaguesModal({
                 : 'border-transparent text-slate-400 hover:text-slate-200'
             }`}
           >
-            🏈 ESPN Fantasy ({syncedLeagues.filter((l) => l.type === 'espn').length})
+            ESPN Fantasy ({syncedLeagues.filter((l) => l.type === 'espn').length})
           </button>
 
           <button
@@ -262,7 +262,7 @@ export default function ManageLeaguesModal({
                 : 'border-transparent text-slate-400 hover:text-slate-200'
             }`}
           >
-            👥 Living Room Friends ({guestTags.length})
+            Living Room Friends ({guestTags.length})
           </button>
         </div>
 
