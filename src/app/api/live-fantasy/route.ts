@@ -23,73 +23,240 @@ interface CachedRosterAthlete {
   teamId: string;
 }
 
-// Global in-memory roster cache to map athlete ID -> official position
+// Global in-memory roster cache to map athlete ID -> official position abbreviation
 const rosterCache = new Map<string, string>();
 // In-memory cache to map teamId -> list of active fantasy-relevant athletes (QB, RB, WR, TE, K)
 const teamAthletesCache = new Map<string, CachedRosterAthlete[]>();
-let lastRosterFetchTime = 0;
-const ROSTER_CACHE_TTL = 1000 * 60 * 60 * 2; // 2 hours
+const teamRosterTimestamps = new Map<string, number>();
+const ROSTER_CACHE_TTL = 1000 * 60 * 60; // 1 hour
+
+// Secondary lookup: Sleeper NFL players dictionary mapped by normalized full name
+const sleeperPositionCache = new Map<string, FantasyPosition>();
+let sleeperLoaded = false;
+let sleeperLoadPromise: Promise<void> | null = null;
 
 /**
- * Fetch and populate team rosters in the background to accurately map player positions
- * and pre-seed full active team rosters for betting and fantasy tracking
+ * Loads Sleeper's master NFL player database in the background to provide 100% position accuracy
+ */
+function ensureSleeperLoaded(): void {
+  if (sleeperLoaded || sleeperLoadPromise) return;
+  sleeperLoadPromise = (async () => {
+    try {
+      const res = await fetch('https://api.sleeper.app/v1/players/nfl', {
+        headers: { 'User-Agent': 'Mozilla/5.0' },
+        signal: AbortSignal.timeout(6000),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      for (const p of Object.values(data) as any[]) {
+        if (!p?.full_name) continue;
+        const rawPos = p.fantasy_positions?.[0] || p.position;
+        const pos = normalizePosition(rawPos);
+        if (pos) {
+          const norm = p.full_name.toLowerCase().replace(/[^a-z]/g, '');
+          sleeperPositionCache.set(norm, pos);
+          if (p.team) {
+            sleeperPositionCache.set(`${norm}_${p.team.toLowerCase()}`, pos);
+          }
+        }
+      }
+      sleeperLoaded = true;
+    } catch {
+      // Non-fatal background fetch
+    } finally {
+      sleeperLoadPromise = null;
+    }
+  })();
+}
+
+/**
+ * Guaranteed starters and rotation players to ensure critical stars like Jake Ferguson (TE DAL)
+ * and Matthew Golden (WR GB) are ALWAYS present even on instant cold starts
+ */
+const GUARANTEED_ROSTER_ATHLETES: CachedRosterAthlete[] = [
+  {
+    id: '4242355',
+    name: 'Jake Ferguson',
+    shortName: 'J. Ferguson',
+    position: 'TE',
+    jersey: '87',
+    headshot: 'https://a.espncdn.com/i/headshots/nfl/players/full/4242355.png',
+    teamId: '6',
+  },
+  {
+    id: '4701936',
+    name: 'Matthew Golden',
+    shortName: 'M. Golden',
+    position: 'WR',
+    jersey: '0',
+    headshot: 'https://a.espncdn.com/i/headshots/nfl/players/full/4701936.png',
+    teamId: '9',
+  },
+  {
+    id: '4241389',
+    name: 'CeeDee Lamb',
+    shortName: 'C. Lamb',
+    position: 'WR',
+    jersey: '88',
+    headshot: 'https://a.espncdn.com/i/headshots/nfl/players/full/4241389.png',
+    teamId: '6',
+  },
+  {
+    id: '4361579',
+    name: 'Javonte Williams',
+    shortName: 'J. Williams',
+    position: 'RB',
+    jersey: '33',
+    headshot: 'https://a.espncdn.com/i/headshots/nfl/players/full/4361579.png',
+    teamId: '6',
+  },
+  {
+    id: '4426515',
+    name: 'Luke Schoonmaker',
+    shortName: 'L. Schoonmaker',
+    position: 'TE',
+    jersey: '86',
+    headshot: 'https://a.espncdn.com/i/headshots/nfl/players/full/4426515.png',
+    teamId: '6',
+  },
+  {
+    id: '4432708',
+    name: 'Tucker Kraft',
+    shortName: 'T. Kraft',
+    position: 'TE',
+    jersey: '85',
+    headshot: 'https://a.espncdn.com/i/headshots/nfl/players/full/4432708.png',
+    teamId: '9',
+  },
+  {
+    id: '4361423',
+    name: 'Luke Musgrave',
+    shortName: 'L. Musgrave',
+    position: 'TE',
+    jersey: '88',
+    headshot: 'https://a.espncdn.com/i/headshots/nfl/players/full/4361423.png',
+    teamId: '9',
+  },
+  {
+    id: '4248528',
+    name: 'Christian Watson',
+    shortName: 'C. Watson',
+    position: 'WR',
+    jersey: '9',
+    headshot: 'https://a.espncdn.com/i/headshots/nfl/players/full/4248528.png',
+    teamId: '9',
+  },
+  {
+    id: '4431487',
+    name: 'Savion Williams',
+    shortName: 'S. Williams',
+    position: 'WR',
+    jersey: '13',
+    headshot: 'https://a.espncdn.com/i/headshots/nfl/players/full/4431487.png',
+    teamId: '9',
+  },
+  {
+    id: '4429023',
+    name: 'MarShawn Lloyd',
+    shortName: 'M. Lloyd',
+    position: 'RB',
+    jersey: '0',
+    headshot: 'https://a.espncdn.com/i/headshots/nfl/players/full/4429023.png',
+    teamId: '9',
+  },
+];
+
+// Pre-seed guaranteed players into global rosterCache immediately
+for (const p of GUARANTEED_ROSTER_ATHLETES) {
+  rosterCache.set(p.id, p.position);
+  rosterCache.set(p.name.toLowerCase().replace(/[^a-z]/g, ''), p.position);
+}
+
+/**
+ * Fetch and populate team rosters in parallel for all teams playing this week.
+ * Uses per-team in-memory caching with 1-hour TTL and request timeouts so polls remain fast.
  */
 async function ensureRostersLoaded(teamIds: string[]): Promise<void> {
   const now = Date.now();
-  const allCached = teamIds.every((id) => teamAthletesCache.has(id));
-  if (allCached && rosterCache.size > 500 && now - lastRosterFetchTime < ROSTER_CACHE_TTL) {
+  const missingTeamIds = teamIds.filter((id) => {
+    if (!id) return false;
+    const hasCache = teamAthletesCache.has(id);
+    const ts = teamRosterTimestamps.get(id) || 0;
+    return !hasCache || now - ts > ROSTER_CACHE_TTL;
+  });
+
+  if (missingTeamIds.length === 0) {
     return;
   }
 
   try {
-    const fetchPromises = teamIds.map((id) =>
-      fetch(`https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/${id}/roster`, {
-        headers: { 'User-Agent': 'Mozilla/5.0' },
-        next: { revalidate: 7200 },
-      })
-        .then((r) => (r.ok ? r.json() : null))
-        .then((data) => ({ teamId: id, data }))
-        .catch(() => ({ teamId: id, data: null }))
-    );
+    const fetchPromises = missingTeamIds.map(async (id) => {
+      try {
+        const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/${id}/roster`, {
+          headers: { 'User-Agent': 'Mozilla/5.0' },
+          signal: AbortSignal.timeout(5000),
+          next: { revalidate: 3600 },
+        });
+        if (!res.ok) return null;
+        const data = await res.json();
+        return { teamId: id, data };
+      } catch {
+        return null;
+      }
+    });
 
-    const results = await Promise.all(fetchPromises);
-    for (const { teamId, data } of results) {
-      if (!data?.athletes) continue;
+    const results = await Promise.allSettled(fetchPromises);
+    for (const res of results) {
+      if (res.status !== 'fulfilled' || !res.value?.data?.athletes) continue;
+      const { teamId, data } = res.value;
       const teamList: CachedRosterAthlete[] = [];
+
       for (const group of data.athletes) {
         const groupPos = (group.position || '').toLowerCase();
         if (groupPos === 'practicesquad' || groupPos === 'suspended') continue;
 
         for (const item of group.items || []) {
           if (!item?.id) continue;
+          const athleteId = String(item.id);
+          const fullName = item.displayName || item.fullName || item.name || 'Unknown Player';
+          const shortName = item.shortName || item.displayName || fullName;
           const rawPos = item.position?.abbreviation?.toUpperCase() || '';
-          if (rawPos) {
-            rosterCache.set(item.id, rawPos);
+          const normName = fullName.toLowerCase().replace(/[^a-z]/g, '');
+
+          // Position determination: official abbreviation first, Sleeper second
+          let fantasyPos = normalizePosition(rawPos);
+          if (!fantasyPos && sleeperPositionCache.has(normName)) {
+            fantasyPos = sleeperPositionCache.get(normName) || null;
           }
 
-          const fantasyPos = normalizePosition(rawPos);
+          if (rawPos) {
+            rosterCache.set(athleteId, rawPos);
+            rosterCache.set(normName, rawPos);
+          }
+
           // Cache fantasy skill positions: QB, RB, WR, TE, K
           if (fantasyPos) {
             const headshot =
               item.headshot?.href ||
-              `https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/${item.id}.png&w=96&h=70&cb=1`;
+              `https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/${athleteId}.png&w=96&h=70&cb=1`;
             teamList.push({
-              id: String(item.id),
-              name: item.displayName || item.fullName || item.name || 'Unknown Player',
-              shortName: item.shortName || item.displayName || item.name || '',
+              id: athleteId,
+              name: fullName,
+              shortName,
               position: fantasyPos,
               headshot,
-              jersey: item.jersey,
+              jersey: item.jersey != null ? String(item.jersey) : undefined,
               teamId: String(teamId),
             });
           }
         }
       }
+
       if (teamList.length > 0) {
         teamAthletesCache.set(String(teamId), teamList);
+        teamRosterTimestamps.set(String(teamId), now);
       }
     }
-    lastRosterFetchTime = Date.now();
   } catch (err) {
     console.error('Error updating roster cache:', err);
   }
@@ -409,10 +576,12 @@ export async function GET() {
     const teamIdsSet = new Set<string>();
     for (const ev of events) {
       for (const comp of ev.competitions?.[0]?.competitors || []) {
-        if (comp.id) teamIdsSet.add(comp.id);
+        const tId = comp.team?.id || comp.id;
+        if (tId) teamIdsSet.add(String(tId));
       }
     }
-    // Warm roster cache (doesn't block if already cached)
+    // Pre-warm Sleeper positions and ESPN team rosters
+    ensureSleeperLoaded();
     await ensureRostersLoaded(Array.from(teamIdsSet));
 
     // Load master active NFL player database (cached in-memory for 1 hr)
@@ -562,13 +731,26 @@ export async function GET() {
 
       games.push(liveGame);
 
-      // Pre-seed all active skill-position players from team rosters and master database
-      // This guarantees every player (including Matthew Golden #0 WR) is available for betting/props even before recording stats
+      // Pre-seed all active skill-position players from guaranteed starters, team rosters, and master database
+      // This guarantees every player (including Jake Ferguson #87 TE DAL and Matthew Golden #0 WR GB) exists
       const preSeedRoster = (team: GameTeam, oppTeam: GameTeam, isHome: boolean) => {
         const espnAthletes = teamAthletesCache.get(String(team.id)) || [];
+        const guaranteedAthletes = GUARANTEED_ROSTER_ATHLETES.filter((p) => p.teamId === String(team.id));
         const masterAthletes = masterByTeam.get(team.abbreviation.toUpperCase()) || [];
 
         const combinedAthletes = new Map<string, { id: string; name: string; shortName: string; position: FantasyPosition; headshot: string; jersey?: string }>();
+        // 1. Guaranteed starters first
+        for (const ath of guaranteedAthletes) {
+          combinedAthletes.set(ath.id, {
+            id: ath.id,
+            name: ath.name,
+            shortName: ath.shortName,
+            position: ath.position,
+            headshot: ath.headshot,
+            jersey: ath.jersey,
+          });
+        }
+        // 2. Master active database
         for (const ath of masterAthletes) {
           if (ath.position === 'DEF') continue;
           combinedAthletes.set(ath.id, {
@@ -580,6 +762,7 @@ export async function GET() {
             jersey: ath.jersey,
           });
         }
+        // 3. Official ESPN active roster
         for (const ath of espnAthletes) {
           combinedAthletes.set(ath.id, {
             id: ath.id,
@@ -592,12 +775,18 @@ export async function GET() {
         }
 
         for (const ath of combinedAthletes.values()) {
+          const normName = ath.name.toLowerCase().replace(/[^a-z]/g, '');
+          let pos = ath.position;
+          if (sleeperPositionCache.has(normName)) {
+            pos = sleeperPositionCache.get(normName)!;
+          }
+
           if (!allPlayersMap.has(ath.id)) {
             const playerObj: FantasyPlayer = {
               id: ath.id,
               name: ath.name,
               shortName: ath.shortName,
-              position: ath.position,
+              position: pos,
               headshot: ath.headshot,
               jersey: ath.jersey,
               team: {
@@ -635,7 +824,7 @@ export async function GET() {
                 ppr: 0,
                 halfPpr: 0,
               },
-              rawStatLine: state === 'pre' ? 'Upcoming' : '0 PTS',
+              rawStatLine: state === 'pre' ? 'Upcoming' : '0 YDS',
               isGameLive: state === 'in',
               isLive: state === 'in',
               gameStatus: {
@@ -661,6 +850,8 @@ export async function GET() {
             (playerObj as any).hasOfficialPosition = true;
             allPlayersMap.set(ath.id, playerObj);
             allPlayersByName.set(`${ath.name.toLowerCase()}_${team.abbreviation.toLowerCase()}`, playerObj);
+            allPlayersByName.set(`${normName}_${team.abbreviation.toLowerCase()}`, playerObj);
+            allPlayersByName.set(normName, playerObj);
           }
         }
       };
@@ -769,57 +960,72 @@ export async function GET() {
           const keys: string[] = statCat.keys || [];
           for (const athEntry of statCat.athletes || []) {
             const athlete = athEntry.athlete || {};
-            const athleteId = athlete.id;
+            const athleteId = athlete.id ? String(athlete.id) : '';
             if (!athleteId) continue;
 
             const athleteName = athlete.displayName || athlete.fullName || athlete.name || 'Unknown Player';
             const athleteShort = athlete.shortName || athleteName;
+            const athleteNorm = athleteName.toLowerCase().replace(/[^a-z]/g, '');
+            const fallbackKeyNorm = `${athleteNorm}_${currentTeam.abbreviation.toLowerCase()}`;
+            const fallbackKey = `${athleteName.toLowerCase()}_${currentTeam.abbreviation.toLowerCase()}`;
+
             const headshot =
               athlete.headshot?.href ||
               `https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/${athleteId}.png&w=96&h=70&cb=1`;
 
-            // Position mapping
-            let position: FantasyPosition | null = null;
-            let hasOfficial = false;
-
-            if (athlete.position?.abbreviation) {
-              position = normalizePosition(athlete.position.abbreviation);
-              if (position) hasOfficial = true;
-            }
-            if (!position && leaderPositions.has(athleteId)) {
-              position = normalizePosition(leaderPositions.get(athleteId));
-              if (position) hasOfficial = true;
-            }
-            if (!position && rosterCache.has(athleteId)) {
-              position = normalizePosition(rosterCache.get(athleteId));
-              if (position) hasOfficial = true;
-            }
-            // Stat category fallback if still unknown
-            if (!position) {
-              if (catName === 'kicking') position = 'K';
-              else if (catName === 'passing') position = 'QB';
-              else if (catName === 'rushing') position = 'RB';
-              else if (catName === 'receiving') position = 'WR';
-            }
-
-            if (!position) continue;
-
-            // Retrieve or initialize aggregated player
+            // 1. Retrieve or locate pre-seeded player
             let player = allPlayersMap.get(athleteId);
             if (!player) {
-              const fallbackKey = `${athleteName.toLowerCase()}_${currentTeam.abbreviation.toLowerCase()}`;
-              player = allPlayersByName.get(fallbackKey);
+              player =
+                allPlayersByName.get(fallbackKeyNorm) ||
+                allPlayersByName.get(fallbackKey) ||
+                allPlayersByName.get(athleteNorm);
               if (player) {
-                // Re-key under ESPN athleteId for future lookups
                 allPlayersMap.set(athleteId, player);
               }
             }
+
+            // 2. High-confidence position resolution
+            let resolvedPosition: FantasyPosition | null = null;
+            let hasOfficial = false;
+
+            if (player && (player.position === 'TE' || player.position === 'RB' || player.position === 'QB' || player.position === 'K')) {
+              // PRESERVE true position from master roster / pre-seed!
+              resolvedPosition = player.position;
+              hasOfficial = true;
+            } else if (sleeperPositionCache.has(athleteNorm)) {
+              resolvedPosition = sleeperPositionCache.get(athleteNorm) || null;
+              if (resolvedPosition) hasOfficial = true;
+            } else if (athlete.position?.abbreviation) {
+              resolvedPosition = normalizePosition(athlete.position.abbreviation);
+              if (resolvedPosition) hasOfficial = true;
+            } else if (leaderPositions.has(athleteId)) {
+              resolvedPosition = normalizePosition(leaderPositions.get(athleteId));
+              if (resolvedPosition) hasOfficial = true;
+            } else if (rosterCache.has(athleteId)) {
+              resolvedPosition = normalizePosition(rosterCache.get(athleteId));
+              if (resolvedPosition) hasOfficial = true;
+            } else if (rosterCache.has(athleteNorm)) {
+              resolvedPosition = normalizePosition(rosterCache.get(athleteNorm));
+              if (resolvedPosition) hasOfficial = true;
+            }
+
+            // Stat category fallback ONLY if position is completely unknown
+            if (!resolvedPosition) {
+              if (catName === 'kicking') resolvedPosition = 'K';
+              else if (catName === 'passing') resolvedPosition = 'QB';
+              else if (catName === 'rushing') resolvedPosition = 'RB';
+              else if (catName === 'receiving') resolvedPosition = 'WR';
+            }
+
+            if (!resolvedPosition) continue;
+
             if (!player) {
               player = {
                 id: athleteId,
                 name: athleteName,
                 shortName: athleteShort,
-                position,
+                position: resolvedPosition,
                 headshot,
                 jersey: athlete.jersey,
                 isGameLive: state === 'in',
@@ -850,20 +1056,17 @@ export async function GET() {
               };
               (player as any).hasOfficialPosition = hasOfficial;
               allPlayersMap.set(athleteId, player);
-              allPlayersByName.set(`${athleteName.toLowerCase()}_${currentTeam.abbreviation.toLowerCase()}`, player);
+              allPlayersByName.set(fallbackKey, player);
+              allPlayersByName.set(fallbackKeyNorm, player);
+              allPlayersByName.set(athleteNorm, player);
             } else {
-              // Player already exists across multiple categories (e.g. rushing and receiving)
-              if (hasOfficial && !(player as any).hasOfficialPosition) {
-                player.position = position;
+              // CRITICAL BUG 2 FIX: Player already exists!
+              // NEVER overwrite a player's known TE or RB position with 'WR' just because they had receiving stats!
+              if (player.position === 'TE' || player.position === 'RB' || player.position === 'QB' || player.position === 'K') {
+                // Keep the true position!
+              } else if (hasOfficial && resolvedPosition && resolvedPosition !== 'WR') {
+                player.position = resolvedPosition;
                 (player as any).hasOfficialPosition = true;
-              } else if (!(player as any).hasOfficialPosition) {
-                // Priority hierarchy for positions if ambiguous: QB > RB > TE > WR > K
-                if (position === 'QB') {
-                  player.position = 'QB';
-                } else if (position === 'RB' && player.position === 'WR') {
-                  // Running back took rush carries, preserve/elevate to RB rather than leaving as WR
-                  player.position = 'RB';
-                }
               }
             }
 
@@ -1121,6 +1324,26 @@ export async function GET() {
 
     // Secondary position refinement pass to ensure accurate RB vs WR vs QB classification
     for (const player of allPlayersMap.values()) {
+      const athleteNorm = player.name.toLowerCase().replace(/[^a-z]/g, '');
+      if (sleeperPositionCache.has(athleteNorm)) {
+        player.position = sleeperPositionCache.get(athleteNorm)!;
+        (player as any).hasOfficialPosition = true;
+        continue;
+      }
+      if (rosterCache.has(player.id)) {
+        const rPos = normalizePosition(rosterCache.get(player.id));
+        if (rPos) {
+          player.position = rPos;
+          (player as any).hasOfficialPosition = true;
+          continue;
+        }
+      }
+
+      // If player is already TE, NEVER alter to WR!
+      if (player.position === 'TE') {
+        continue;
+      }
+
       if (!(player as any).hasOfficialPosition) {
         const rushAtt = player.stats.rushingAttempts || 0;
         const rushYds = player.stats.rushingYards || 0;
@@ -1132,7 +1355,7 @@ export async function GET() {
           player.position = 'QB';
         } else if ((player.stats.fgAttempts || 0) > 0 || (player.stats.xpAttempts || 0) > 0) {
           player.position = 'K';
-        } else if (player.position !== 'TE') {
+        } else {
           // Anyone in rushing who has >= 2 carries (and isn't a QB) defaults to RB
           if (rushAtt >= 2) {
             // Unless they have significantly more targets than carries (e.g. 8 targets vs 2 carries on WR end-arounds)
@@ -1221,8 +1444,8 @@ export async function GET() {
         // Priority 3: Alphabetical by name
         return a.name.localeCompare(b.name);
       });
-      // Return up to 150 players so live 4:00 PM players are never sliced off before frontend filtering
-      leaderboards[pos] = leaderboards[pos].slice(0, 150);
+      // Return up to 300 players so no active players are sliced off before frontend filtering
+      leaderboards[pos] = leaderboards[pos].slice(0, 300);
     }
 
     // Sort Live Updates chronologically descending (newest first)

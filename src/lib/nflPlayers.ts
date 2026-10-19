@@ -82,6 +82,19 @@ export function normalizeFantasyPosition(rawPos?: string): FantasyPosition | nul
  */
 const KNOWN_ACTIVE_PLAYERS: MasterPlayer[] = [
   {
+    id: '4242355',
+    name: 'Jake Ferguson',
+    shortName: 'J. Ferguson',
+    position: 'TE',
+    teamAbbr: 'DAL',
+    teamId: '6',
+    teamName: 'Dallas Cowboys',
+    teamLogo: 'https://a.espncdn.com/i/teamlogos/nfl/500/scoreboard/dal.png',
+    jersey: '87',
+    headshot: 'https://a.espncdn.com/i/headshots/nfl/players/full/4242355.png',
+    depthChartOrder: 1,
+  },
+  {
     id: '4701936',
     name: 'Matthew Golden',
     shortName: 'M. Golden',
@@ -94,6 +107,58 @@ const KNOWN_ACTIVE_PLAYERS: MasterPlayer[] = [
     headshot: 'https://a.espncdn.com/i/headshots/nfl/players/full/4701936.png',
     depthChartOrder: 2,
   },
+  {
+    id: '4241389',
+    name: 'CeeDee Lamb',
+    shortName: 'C. Lamb',
+    position: 'WR',
+    teamAbbr: 'DAL',
+    teamId: '6',
+    teamName: 'Dallas Cowboys',
+    teamLogo: 'https://a.espncdn.com/i/teamlogos/nfl/500/scoreboard/dal.png',
+    jersey: '88',
+    headshot: 'https://a.espncdn.com/i/headshots/nfl/players/full/4241389.png',
+    depthChartOrder: 1,
+  },
+  {
+    id: '4361579',
+    name: 'Javonte Williams',
+    shortName: 'J. Williams',
+    position: 'RB',
+    teamAbbr: 'DAL',
+    teamId: '6',
+    teamName: 'Dallas Cowboys',
+    teamLogo: 'https://a.espncdn.com/i/teamlogos/nfl/500/scoreboard/dal.png',
+    jersey: '33',
+    headshot: 'https://a.espncdn.com/i/headshots/nfl/players/full/4361579.png',
+    depthChartOrder: 1,
+  },
+  {
+    id: '4432708',
+    name: 'Tucker Kraft',
+    shortName: 'T. Kraft',
+    position: 'TE',
+    teamAbbr: 'GB',
+    teamId: '9',
+    teamName: 'Green Bay Packers',
+    teamLogo: 'https://a.espncdn.com/i/teamlogos/nfl/500/scoreboard/gb.png',
+    jersey: '85',
+    headshot: 'https://a.espncdn.com/i/headshots/nfl/players/full/4432708.png',
+    depthChartOrder: 1,
+  },
+  {
+    id: '4361423',
+    name: 'Luke Musgrave',
+    shortName: 'L. Musgrave',
+    position: 'TE',
+    teamAbbr: 'GB',
+    teamId: '9',
+    teamName: 'Green Bay Packers',
+    teamLogo: 'https://a.espncdn.com/i/teamlogos/nfl/500/scoreboard/gb.png',
+    jersey: '88',
+    headshot: 'https://a.espncdn.com/i/headshots/nfl/players/full/4361423.png',
+    depthChartOrder: 2,
+  },
 ];
 
 /**
@@ -102,7 +167,7 @@ const KNOWN_ACTIVE_PLAYERS: MasterPlayer[] = [
  */
 export async function getMasterNflPlayers(forceRefresh = false): Promise<MasterPlayer[]> {
   const now = Date.now();
-  if (!forceRefresh && masterCache && masterCache.length > 500 && now - lastMasterFetchTime < CACHE_TTL_MS) {
+  if (!forceRefresh && masterCache && masterCache.length > 300 && now - lastMasterFetchTime < CACHE_TTL_MS) {
     return masterCache;
   }
 
@@ -111,15 +176,17 @@ export async function getMasterNflPlayers(forceRefresh = false): Promise<MasterP
   // 1. Pre-seed known key players
   for (const kp of KNOWN_ACTIVE_PLAYERS) {
     playerMap.set(kp.id, kp);
+    playerMap.set(`${kp.name.toLowerCase().replace(/[^a-z]/g, '')}_${kp.teamAbbr.toLowerCase()}`, kp);
     playerMap.set(`${kp.name.toLowerCase()}_${kp.teamAbbr.toLowerCase()}`, kp);
   }
 
-  // 2. Fetch all 32 team rosters from ESPN in parallel with batching
+  // 2. Fetch all 32 team rosters from ESPN in parallel with batching and timeout
   try {
     const fetchPromises = NFL_TEAMS.map(async (team) => {
       try {
         const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/${team.id}/roster`, {
           headers: { 'User-Agent': 'Mozilla/5.0' },
+          signal: AbortSignal.timeout(5000),
           next: { revalidate: 3600 },
         });
         if (!res.ok) return null;

@@ -1416,12 +1416,32 @@ export default function TVCommandCenter() {
           (query.includes('eagle') && p.team.abbreviation === 'PHI') ||
           (query.includes('bear') && p.team.abbreviation === 'CHI') ||
           (query.includes('falcon') && p.team.abbreviation === 'ATL') ||
-          (query.includes('texan') && p.team.abbreviation === 'HOU');
+          (query.includes('texan') && p.team.abbreviation === 'HOU') ||
+          (query.includes('jag') && p.team.abbreviation === 'JAX') ||
+          (query.includes('titan') && p.team.abbreviation === 'TEN') ||
+          (query.includes('colt') && p.team.abbreviation === 'IND') ||
+          (query.includes('jet') && p.team.abbreviation === 'NYJ') ||
+          (query.includes('patriot') && p.team.abbreviation === 'NE') ||
+          (query.includes('saint') && p.team.abbreviation === 'NO') ||
+          (query.includes('giant') && p.team.abbreviation === 'NYG') ||
+          (query.includes('panther') && p.team.abbreviation === 'CAR') ||
+          (query.includes('steeler') && p.team.abbreviation === 'PIT') ||
+          (query.includes('bucs') && p.team.abbreviation === 'TB') ||
+          (query.includes('buccaneer') && p.team.abbreviation === 'TB') ||
+          (query.includes('cardinal') && p.team.abbreviation === 'ARI') ||
+          (query.includes('ram') && p.team.abbreviation === 'LAR') ||
+          (query.includes('charger') && p.team.abbreviation === 'LAC') ||
+          (query.includes('bill') && p.team.abbreviation === 'BUF') ||
+          (query.includes('raider') && p.team.abbreviation === 'LV') ||
+          (query.includes('seahawk') && p.team.abbreviation === 'SEA') ||
+          (query.includes('bronco') && p.team.abbreviation === 'DEN') ||
+          (query.includes('49er') && p.team.abbreviation === 'SF') ||
+          (query.includes('commander') && p.team.abbreviation === 'WSH');
         return nameMatch || abbrMatch || teamMatch || posMatch || jerseyMatch || nicknameMatch;
       });
     }
 
-    return list.slice(0, 48);
+    return list.slice(0, 100);
   }, [allActivePlayers, data?.games, bettingSearch, bettingGameFilter, bettingPosFilter]);
 
   // Sort leaderboards by active scoring format and filter by game state
