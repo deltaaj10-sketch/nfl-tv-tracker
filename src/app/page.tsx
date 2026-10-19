@@ -815,10 +815,10 @@ const SyncCountdown = React.memo(function SyncCountdown({ onSync, intervalSec = 
   };
 
   return (
-    <div className="flex items-center gap-1.5 bg-slate-900/90 px-2 py-0.5 rounded-lg border border-slate-800 shadow-inner shrink-0">
+    <div className="flex items-center gap-1.5 bg-slate-900/90 px-2.5 py-1 rounded-lg border border-slate-800 shadow-inner shrink-0 text-xs whitespace-nowrap">
       <Clock className="w-3 h-3 text-cyan-400 shrink-0" />
-      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">SYNC:</span>
-      <span className="tv-tabular text-cyan-300 font-black w-4 text-center text-[11px]">
+      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">NEXT SYNC:</span>
+      <span className="tv-tabular text-cyan-300 font-black w-4 text-center text-xs">
         {countdown}s
       </span>
 
@@ -1920,31 +1920,21 @@ export default function TVCommandCenter() {
     return { pinnedLiveGames: live, scrollingGames: nonLive, hasActiveRedZone: rzFound };
   }, [data?.games]);
 
-  // Ensure scrolling games track has enough items for a continuous, seamless loop across 1080p/4K TVs
+  // Clean seamless 2x track of scrolling games
   const scrollingGamesList = useMemo(() => {
-    if (scrollingGames.length === 0) return [];
-    let list = [...scrollingGames];
-    while (list.length < 6) {
-      list = [...list, ...scrollingGames];
-    }
-    return list;
+    return scrollingGames;
   }, [scrollingGames]);
 
   // Bottom Ticker: Clean 2x track of matchups for locked 60fps GPU scrolling
   const tickerMatchups = useMemo(() => {
-    if (displayMatchups.length === 0) return [];
-    let list = [...displayMatchups];
-    while (list.length < 5) {
-      list = [...list, ...displayMatchups];
-    }
-    return list;
+    return displayMatchups;
   }, [displayMatchups]);
 
   // Helper to render individual scoreboard game card (used for both pinned RedZone & continuous scrolling)
   const renderScoreboardGameCard = useCallback((game: LiveGame, isRedZonePinned?: boolean) => {
-    const isLive = game.status.state === 'in';
+    const isLive = game.status?.state === 'in' || (game as unknown as { status: string }).status === 'in' || Boolean((game as unknown as { isLive: boolean }).isLive);
     const isRedZone = isLive && Boolean(game.isRedZone || game.situation?.isRedZone);
-    const isPost = game.status.state === 'post';
+    const isPost = game.status?.state === 'post';
     const possessionAbbr = game.possessionTeamAbbr || game.situation?.possessionTeamAbbr;
     const hasPossessionAway = isLive && possessionAbbr === game.awayTeam.abbreviation;
     const hasPossessionHome = isLive && possessionAbbr === game.homeTeam.abbreviation;
@@ -1992,7 +1982,7 @@ export default function TVCommandCenter() {
           isRedZone
             ? 'border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.7)] animate-redzone bg-gradient-to-r from-red-950/40 to-slate-900'
             : isLive
-            ? 'border-emerald-500/50'
+            ? 'border-emerald-500/60 shadow-[0_0_12px_rgba(16,185,129,0.35)] bg-gradient-to-r from-emerald-950/30 via-slate-900 to-amber-950/20'
             : 'border-slate-800/80'
         }`}
       >
@@ -2331,6 +2321,9 @@ export default function TVCommandCenter() {
                     width: 'max-content',
                     animation: 'scoreboardScroll 95s linear infinite',
                     willChange: 'transform',
+                    transform: 'translate3d(0, 0, 0)',
+                    backfaceVisibility: 'hidden',
+                    WebkitBackfaceVisibility: 'hidden',
                   }}
                 >
                   {/* Set 1 of Scrolling Games */}
@@ -2388,7 +2381,7 @@ export default function TVCommandCenter() {
       </nav>
 
       {/* 5. MAIN CONTENT AREA (Fills 100% of the Available Viewport Without Scrolling) */}
-      <main className="flex-1 p-3 md:p-4 overflow-hidden flex flex-col min-h-0">
+      <main className={`flex-1 overflow-hidden flex flex-col min-h-0 ${activeTab === 'live' ? 'px-4 py-2' : 'p-3 md:p-4'}`}>
         {loading && !data ? (
           <div className="flex-1 flex flex-col items-center justify-center gap-2">
             <RefreshCw className="w-8 h-8 animate-spin text-emerald-400" />
@@ -2427,7 +2420,7 @@ export default function TVCommandCenter() {
               </div>
 
               {/* 2 Columns x 3 Rows Grid */}
-              <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-2.5 pt-2.5 overflow-y-auto pr-1 min-h-0">
+              <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-2.5 pt-2 overflow-y-auto pr-1 min-h-0">
                 {[
                   { pos: 'QB' as FantasyPosition, label: 'TOP QB', icon: '🎯' },
                   { pos: 'RB' as FantasyPosition, label: 'TOP RB', icon: '🏃' },
@@ -2442,7 +2435,7 @@ export default function TVCommandCenter() {
                     return (
                       <div
                         key={pos}
-                        className="p-3 rounded-2xl border border-slate-800/80 bg-slate-950/60 flex flex-col justify-between min-h-[110px]"
+                        className="p-2.5 md:p-3 rounded-2xl border border-slate-800/80 bg-slate-950/60 flex flex-col justify-between"
                       >
                         <div className="flex items-center justify-between">
                           <span className="text-[10px] font-black tracking-wider uppercase px-2 py-0.5 rounded bg-slate-800 text-slate-400">
@@ -2477,17 +2470,17 @@ export default function TVCommandCenter() {
                   return (
                     <div
                       key={player.id}
-                      className={`relative p-3 rounded-2xl border flex flex-col justify-between transition-all min-h-[110px] ${
+                      className={`relative p-2.5 md:p-3 rounded-2xl border flex flex-col justify-between transition-all ${
                         isBoosted
                           ? 'border-emerald-400 shadow-[0_0_20px_rgba(52,211,153,0.8)] bg-emerald-950/40 scale-[1.01]'
                           : 'bg-slate-950/80 border-slate-800/90 hover:border-slate-700'
                       }`}
                     >
-                      {/* Top Row: Headshot + Info on Left, Big Points on Right */}
-                      <div className="flex items-start justify-between gap-2">
-                        {/* Left: Player Headshot + Name + Game Status */}
+                      {/* Top Row: Position badge, larger headshot, Name, Clock, Matchup, and massive glowing Points */}
+                      <div className="flex items-center justify-between gap-2.5">
                         <div className="flex items-center gap-3 min-w-0 flex-1">
-                          <div className="relative w-12 h-12 md:w-14 md:h-14 rounded-full overflow-hidden bg-slate-900 border-2 border-amber-400/60 shadow-md shrink-0">
+                          {/* Larger Player Headshot */}
+                          <div className="relative w-14 h-14 md:w-16 md:h-16 rounded-full overflow-hidden bg-slate-900 border-2 border-amber-400/70 shadow-md shrink-0">
                             <img
                               src={player.headshot}
                               alt={player.name}
@@ -2498,44 +2491,38 @@ export default function TVCommandCenter() {
                             />
                           </div>
 
-                          <div className="min-w-0 flex-1">
+                          <div className="min-w-0 flex-1 flex flex-col justify-center gap-0.5">
+                            {/* Meta badges: Position Badge + Matchup + Clock + Owner */}
                             <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="text-[9px] font-black tracking-wider uppercase px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                              <span className="text-[10px] font-black tracking-wider uppercase px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 shrink-0">
                                 {label}
                               </span>
-                              <span className="text-[11px] font-bold text-slate-300">
+                              <span className="text-xs font-bold text-slate-300 shrink-0">
                                 {player.team.abbreviation} vs {player.opponent.abbreviation}
                               </span>
-                              {player.jersey && (
-                                <span className="text-[10px] font-bold text-slate-500">
-                                  #{player.jersey}
-                                </span>
-                              )}
-                            </div>
-
-                            <h3 className="text-sm md:text-base font-black text-white truncate leading-tight mt-0.5">
-                              {player.name}
-                            </h3>
-
-                            <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-semibold mt-0.5">
-                              <span className={player.isGameLive ? 'text-amber-400 font-bold flex items-center gap-1' : ''}>
+                              <span className={`text-[11px] font-bold shrink-0 ${player.isGameLive ? 'text-amber-400 flex items-center gap-1' : 'text-slate-400'}`}>
                                 {player.isGameLive && (
                                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-ping inline-block" />
                                 )}
-                                {player.gameStatus.detail || (player.isGameLive ? 'Live' : 'Final')}
+                                {player.gameStatus.clock ? `${player.gameStatus.clock}${player.gameStatus.period ? ` - ${player.gameStatus.period === 1 ? '1st' : player.gameStatus.period === 2 ? '2nd' : player.gameStatus.period === 3 ? '3rd' : player.gameStatus.period === 4 ? '4th' : `OT`}` : ''}` : player.gameStatus.detail || (player.isGameLive ? 'Live' : 'Final')}
                               </span>
                               {owners.length > 0 && (
-                                <span className="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 text-[9px] font-black uppercase border border-amber-500/30">
+                                <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[9px] font-black uppercase border border-amber-500/30 shrink-0">
                                   🏈 {owners[0].ownerName}
                                 </span>
                               )}
                             </div>
+
+                            {/* Player Name */}
+                            <h3 className="text-sm md:text-base font-black text-white truncate leading-tight">
+                              {player.name}
+                            </h3>
                           </div>
                         </div>
 
-                        {/* Right: Massive Glowing Fantasy Points */}
+                        {/* Right: Massive Glowing Fantasy Points Readout */}
                         <div className="flex flex-col items-end shrink-0 pl-2">
-                          <span className="text-2xl md:text-3xl font-black text-emerald-400 tv-tabular leading-none drop-shadow-[0_0_12px_rgba(52,211,153,0.5)]">
+                          <span className="text-3xl md:text-4xl font-black text-emerald-400 tv-tabular leading-none drop-shadow-[0_0_15px_rgba(52,211,153,0.6)]">
                             {formatPoints(pts)}
                           </span>
                           <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest mt-1">
@@ -2544,8 +2531,8 @@ export default function TVCommandCenter() {
                         </div>
                       </div>
 
-                      {/* Bottom Stat Pills Area: Individual Crisp Pills (Never truncated!) */}
-                      <div className="flex flex-wrap gap-1.5 mt-2.5 pt-2 border-t border-slate-800/80">
+                      {/* Bottom Stat Pills Area: Individual Crisp High-Contrast Pills (Never truncated!) */}
+                      <div className="flex flex-wrap gap-1.5 mt-2 pt-2 border-t border-slate-800/80">
                         {statPills.length > 0 ? (
                           statPills.map((pill, pIdx) => {
                             const isTD = pill.toUpperCase().includes('TD');
@@ -2555,10 +2542,10 @@ export default function TVCommandCenter() {
                                 key={`pill-${player.id}-${pIdx}`}
                                 className={`px-2 py-0.5 rounded-md text-[10px] md:text-[11px] font-black tracking-wide uppercase border ${
                                   isTD
-                                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-[0_0_8px_rgba(16,185,129,0.3)]'
+                                    ? 'bg-emerald-500/25 text-emerald-300 border-emerald-500/60 shadow-[0_0_10px_rgba(16,185,129,0.35)]'
                                     : isTurnover
-                                    ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
-                                    : 'bg-slate-900/90 text-slate-200 border-slate-800'
+                                    ? 'bg-rose-500/25 text-rose-300 border-rose-500/50'
+                                    : 'bg-slate-900/90 text-slate-200 border-slate-700/80 font-mono'
                                 }`}
                               >
                                 {pill}
@@ -2583,7 +2570,7 @@ export default function TVCommandCenter() {
                 <div className="flex items-center gap-2">
                   <Zap className="w-4 h-4 text-amber-400" />
                   <h2 className="text-xs md:text-sm font-black tracking-wide uppercase text-white">
-                    Live Plays Feed
+                    LIVE SCORING &amp; BIG PLAYS FEED
                   </h2>
                   <span
                     className={`text-[9px] font-extrabold uppercase px-1.5 py-0.2 rounded ${
@@ -2698,8 +2685,8 @@ export default function TVCommandCenter() {
                           )}
 
                           {matchingOwners.length > 0 && (
-                            <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/50 flex items-center gap-1">
-                              🏈 {matchingOwners[0][1][0]?.ownerName}&apos;S PLAYER
+                            <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/50 flex items-center gap-1 shadow-sm">
+                              🏈 {matchingOwners[0][1][0]?.ownerName.toUpperCase()}&apos;S PLAYER
                             </span>
                           )}
                         </div>
@@ -3476,6 +3463,9 @@ export default function TVCommandCenter() {
                 width: 'max-content',
                 animation: 'tickerScroll 110s linear infinite',
                 willChange: 'transform',
+                transform: 'translate3d(0, 0, 0)',
+                backfaceVisibility: 'hidden',
+                WebkitBackfaceVisibility: 'hidden',
               }}
             >
               {/* Set 1 of Matchups */}
