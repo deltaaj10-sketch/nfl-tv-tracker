@@ -84,6 +84,9 @@ body {
   width: max-content;
   animation: tickerScroll 110s linear infinite;
   will-change: transform;
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 
 /* Continuous Top Scoreboard Ticker */
@@ -101,6 +104,9 @@ body {
   width: max-content;
   animation: scoreboardScroll 95s linear infinite;
   will-change: transform;
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 
 @keyframes marquee-scroll {
@@ -116,6 +122,9 @@ body {
   display: flex;
   width: max-content;
   will-change: transform;
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
   animation: marquee-scroll 110s linear infinite;
 }
 

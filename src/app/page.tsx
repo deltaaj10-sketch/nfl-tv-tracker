@@ -779,6 +779,60 @@ interface WakeLockSentinelLike {
   addEventListener: (type: 'release', listener: () => void) => void;
 }
 
+interface SyncCountdownProps {
+  onSync: () => void;
+  intervalSec?: number;
+}
+
+/**
+ * Pure 60fps Optimization: Memoized 1-second countdown clock.
+ * Prevents the entire parent dashboard from re-rendering every 1,000ms.
+ */
+const SyncCountdown = React.memo(function SyncCountdown({ onSync, intervalSec = 15 }: SyncCountdownProps) {
+  const [countdown, setCountdown] = useState(intervalSec);
+  const [isSpinning, setIsSpinning] = useState(false);
+  const onSyncRef = useRef(onSync);
+  onSyncRef.current = onSync;
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          onSyncRef.current();
+          return intervalSec;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [intervalSec]);
+
+  const handleManualRefresh = () => {
+    setIsSpinning(true);
+    setCountdown(intervalSec);
+    onSyncRef.current();
+    setTimeout(() => setIsSpinning(false), 900);
+  };
+
+  return (
+    <div className="flex items-center gap-1.5 bg-slate-900/90 px-2 py-0.5 rounded-lg border border-slate-800 shadow-inner shrink-0">
+      <Clock className="w-3 h-3 text-cyan-400 shrink-0" />
+      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">SYNC:</span>
+      <span className="tv-tabular text-cyan-300 font-black w-4 text-center text-[11px]">
+        {countdown}s
+      </span>
+
+      <button
+        onClick={handleManualRefresh}
+        title="Force Refresh Data"
+        className="p-0.5 rounded hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
+      >
+        <RefreshCw className={`w-3 h-3 ${isSpinning ? 'animate-spin text-emerald-400' : ''}`} />
+      </button>
+    </div>
+  );
+});
+
 export default function TVCommandCenter() {
   const [data, setData] = useState<LiveFantasyResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -820,7 +874,6 @@ export default function TVCommandCenter() {
   const [bettingPosFilter, setBettingPosFilter] = useState<'ALL' | 'QB' | 'RB' | 'WR' | 'TE' | 'K'>('ALL');
 
   // Timers & Cycling
-  const [pollCountdown, setPollCountdown] = useState(15);
   const [cycleProgress, setCycleProgress] = useState(0); // 0 to 100%
   const CYCLE_DURATION_SEC = 18;
 
@@ -1469,23 +1522,18 @@ export default function TVCommandCenter() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Initial Fetch & 1-second countdown clock for 15s poll
+  // Initial Fetch on Mount
   useEffect(() => {
     fetchData();
-
-    const pollInterval = setInterval(() => {
-      setPollCountdown((prev) => {
-        if (prev <= 1) {
-          fetchData();
-          syncLeaguesData();
-          return 15;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(pollInterval);
+    syncLeaguesData();
   }, [fetchData, syncLeaguesData]);
+
+  // Combined Sync Handler passed to memoized <SyncCountdown />
+  const handleSync = useCallback(() => {
+    fetchData();
+    syncLeaguesData();
+    fetchRoomState();
+  }, [fetchData, syncLeaguesData, fetchRoomState]);
 
   // Clean up old boost highlights (older than 6s)
   useEffect(() => {
@@ -1842,39 +1890,51 @@ export default function TVCommandCenter() {
     return Number.isInteger(pts) ? pts.toFixed(1) : pts.toFixed(1);
   };
 
-  // Split live NFL games: Pinned RedZone games on Left + Slow Scrolling ticker on Right
-  const { redZoneGames, scrollingGames } = useMemo(() => {
+  // Split NFL games: Pin ALL active in-progress games on the Left + Scroll FINAL & PRE games on the Right
+  const { pinnedLiveGames, scrollingGames, hasActiveRedZone } = useMemo(() => {
     const allGames = data?.games || [];
-    const rz: LiveGame[] = [];
-    const scroll: LiveGame[] = [];
+    const live: LiveGame[] = [];
+    const nonLive: LiveGame[] = [];
+    let rzFound = false;
 
     for (const g of allGames) {
       const isLive = g.status.state === 'in';
-      const isRz = isLive && Boolean(g.isRedZone || g.situation?.isRedZone);
-      if (isRz) {
-        rz.push(g);
+      if (isLive) {
+        const isRz = Boolean(g.isRedZone || g.situation?.isRedZone);
+        if (isRz) rzFound = true;
+        live.push(g);
       } else {
-        scroll.push(g);
+        nonLive.push(g);
       }
     }
-    return { redZoneGames: rz, scrollingGames: scroll };
+
+    // Sort live games so any in the RedZone appear first
+    live.sort((a, b) => {
+      const aRz = Boolean(a.isRedZone || a.situation?.isRedZone);
+      const bRz = Boolean(b.isRedZone || b.situation?.isRedZone);
+      if (aRz && !bRz) return -1;
+      if (!aRz && bRz) return 1;
+      return 0;
+    });
+
+    return { pinnedLiveGames: live, scrollingGames: nonLive, hasActiveRedZone: rzFound };
   }, [data?.games]);
 
-  // Ensure scrolling games track has at least 8 items for a continuous, seamless loop across 1080p/4K TVs
+  // Ensure scrolling games track has enough items for a continuous, seamless loop across 1080p/4K TVs
   const scrollingGamesList = useMemo(() => {
     if (scrollingGames.length === 0) return [];
     let list = [...scrollingGames];
-    while (list.length < 8) {
+    while (list.length < 6) {
       list = [...list, ...scrollingGames];
     }
     return list;
   }, [scrollingGames]);
 
-  // Ensure Set 1 has at least 8 items for a full 2500px+ span across 1080p/4K TVs for seamless infinite loop
-  const tickerItems = useMemo(() => {
+  // Bottom Ticker: Clean 2x track of matchups for locked 60fps GPU scrolling
+  const tickerMatchups = useMemo(() => {
     if (displayMatchups.length === 0) return [];
     let list = [...displayMatchups];
-    while (list.length < 8) {
+    while (list.length < 5) {
       list = [...list, ...displayMatchups];
     }
     return list;
@@ -2065,15 +2125,15 @@ export default function TVCommandCenter() {
       </div>
 
       {/* 2. COMPACT TOP BROADCAST HEADER BAR */}
-      <header className="px-4 py-1.5 bg-slate-950/90 border-b border-slate-800/80 flex items-center justify-between gap-3 shrink-0 backdrop-blur-md">
-        {/* Left: Branding, Manage Leagues & Test TD Alert Button */}
-        <div className="flex items-center gap-2.5">
-          <div className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-red-950/70 border border-red-500/40 text-red-400 shadow-[0_0_12px_rgba(239,68,68,0.35)]">
-            <span className="relative flex h-2.5 w-2.5">
+      <header className="px-3 py-1 bg-slate-950/90 border-b border-slate-800/80 flex items-center justify-between gap-1.5 flex-wrap shrink-0 backdrop-blur-md">
+        {/* Left: Branding, Manage Leagues, Room Sync & Sound Toggle */}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-red-950/70 border border-red-500/40 text-red-400 shadow-[0_0_10px_rgba(239,68,68,0.3)]">
+            <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
             </span>
-            <span className="text-xs font-black tracking-wider uppercase text-red-200">
+            <span className="text-[11px] font-black tracking-wider uppercase text-red-200">
               Live RedZone
             </span>
           </div>
@@ -2088,20 +2148,6 @@ export default function TVCommandCenter() {
             {(syncedLeagues.length > 0 || guestTags.length > 0) && (
               <span className="px-1.5 py-0.2 rounded-full bg-amber-500/30 text-amber-200 text-[9px] font-black">
                 {syncedLeagues.length + guestTags.length}
-              </span>
-            )}
-          </button>
-
-          {/* Manage Bets & Parlays Button */}
-          <button
-            onClick={() => setIsBetsModalOpen(true)}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-[11px] font-black uppercase text-emerald-400 border border-emerald-500/50 shadow-sm transition-all"
-          >
-            <DollarSign className="w-3 h-3 text-emerald-400" />
-            <span>💰 Bets &amp; Parlays</span>
-            {savedBets.length > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full bg-emerald-500/30 text-emerald-200 text-[9px] font-black">
-                {savedBets.length}
               </span>
             )}
           </button>
@@ -2135,46 +2181,27 @@ export default function TVCommandCenter() {
           </button>
         </div>
 
-        {/* Center: Live Polling Countdown & Refresh */}
-        <div className="flex items-center gap-2.5 bg-slate-900/90 px-3 py-1 rounded-lg border border-slate-800 shadow-inner">
-          <Clock className="w-3.5 h-3.5 text-cyan-400" />
-          <span className="text-[11px] text-slate-400 font-bold uppercase">NEXT SYNC:</span>
-          <span className="tv-tabular text-cyan-300 font-black w-5 text-center text-xs">
-            {pollCountdown}s
-          </span>
-
-          <button
-            onClick={() => {
-              setPollCountdown(15);
-              fetchData();
-              syncLeaguesData();
-              fetchRoomState();
-            }}
-            title="Force Refresh Data"
-            className="p-0.5 rounded hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
-          >
-            <RefreshCw className={`w-3 h-3 ${pollCountdown === 15 ? 'animate-spin text-emerald-400' : ''}`} />
-          </button>
-        </div>
+        {/* Center: Live Polling Countdown & Refresh (Isolated 60fps Memo Component) */}
+        <SyncCountdown onSync={handleSync} />
 
         {/* Right: Game Filter Toggle, Scoring Format Toggle & TV Auto-Cycle Mode Toggle */}
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-1.5 flex-wrap">
           {/* Game Filter Mode Toggle: 🔴 LIVE NOW vs 📅 ALL GAMES */}
           <div className="flex items-center bg-slate-900/90 p-0.5 rounded-lg border border-slate-800 shadow-inner">
             <button
               onClick={() => handleSelectFilterMode('live')}
-              className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-black uppercase transition-all ${
+              className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] md:text-[11px] font-black uppercase transition-all ${
                 gameFilterMode === 'live'
-                  ? 'bg-red-600 text-white shadow-[0_0_12px_rgba(239,68,68,0.7)]'
+                  ? 'bg-red-600 text-white shadow-[0_0_10px_rgba(239,68,68,0.7)]'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              <span className="relative flex h-2 w-2">
+              <span className="relative flex h-1.5 w-1.5">
                 {liveGamesCount > 0 && gameFilterMode === 'live' && (
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
                 )}
                 <span
-                  className={`relative inline-flex rounded-full h-2 w-2 ${
+                  className={`relative inline-flex rounded-full h-1.5 w-1.5 ${
                     gameFilterMode === 'live' ? 'bg-white' : 'bg-red-500'
                   }`}
                 />
@@ -2182,7 +2209,7 @@ export default function TVCommandCenter() {
               <span>LIVE NOW</span>
               {liveGamesCount > 0 && (
                 <span
-                  className={`text-[9px] px-1 py-0.2 rounded font-black ${
+                  className={`text-[8px] px-1 py-0.2 rounded font-black ${
                     gameFilterMode === 'live' ? 'bg-red-800 text-red-100' : 'bg-slate-800 text-slate-300'
                   }`}
                 >
@@ -2193,7 +2220,7 @@ export default function TVCommandCenter() {
 
             <button
               onClick={() => handleSelectFilterMode('all')}
-              className={`flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-black uppercase transition-all ${
+              className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] md:text-[11px] font-black uppercase transition-all ${
                 gameFilterMode === 'all'
                   ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-sm'
                   : 'text-slate-400 hover:text-slate-200'
@@ -2213,7 +2240,7 @@ export default function TVCommandCenter() {
                 <button
                   key={fmt}
                   onClick={() => setScoringFormat(fmt)}
-                  className={`px-2.5 py-0.5 rounded-md text-[11px] font-black uppercase transition-all ${
+                  className={`px-2 py-0.5 rounded-md text-[10px] md:text-[11px] font-black uppercase transition-all ${
                     active
                       ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-slate-950 shadow-sm'
                       : 'text-slate-400 hover:text-slate-200'
@@ -2228,18 +2255,18 @@ export default function TVCommandCenter() {
           {/* TV Auto-Cycle Toggle */}
           <button
             onClick={() => setAutoCycle(!autoCycle)}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-black uppercase transition-all border ${
+            className={`flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] md:text-[11px] font-black uppercase transition-all border ${
               autoCycle
                 ? 'bg-cyan-950/80 border-cyan-500/60 text-cyan-300'
                 : 'bg-slate-900/80 border-slate-800 text-slate-400 hover:text-slate-200'
             }`}
           >
             <Tv className={`w-3 h-3 ${autoCycle ? 'text-cyan-400' : 'text-slate-500'}`} />
-            <span>CYCLE: {autoCycle ? 'ON (18s)' : 'PAUSED'}</span>
+            <span>CYCLE: {autoCycle ? 'ON' : 'PAUSED'}</span>
             {autoCycle ? (
-              <Pause className="w-2.5 h-2.5 text-cyan-400 ml-0.5" />
+              <Pause className="w-2.5 h-2.5 text-cyan-400" />
             ) : (
-              <Play className="w-2.5 h-2.5 text-emerald-400 ml-0.5" />
+              <Play className="w-2.5 h-2.5 text-emerald-400" />
             )}
           </button>
         </div>
@@ -2264,19 +2291,25 @@ export default function TVCommandCenter() {
           </div>
         ) : (
           <div className="flex items-center w-full overflow-hidden">
-            {/* Left Section — Pinned RedZone Alert Zone */}
-            {redZoneGames.length > 0 && (
-              <div className="flex-shrink-0 z-20 flex items-center gap-2.5 pr-4 pl-1 border-r-2 border-red-500/60 bg-slate-950/95 shadow-[10px_0_20px_rgba(0,0,0,0.8)]">
-                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-red-600 text-white text-[11px] font-black uppercase tracking-wider animate-pulse shadow-[0_0_12px_rgba(239,68,68,0.8)] whitespace-nowrap">
-                  <span>🚨</span>
-                  <span>RED ZONE</span>
-                  <span className="px-1.5 py-0.2 rounded-full bg-black/40 text-[9px]">
-                    {redZoneGames.length}
+            {/* Left Section — Pinned In-Progress Live Games */}
+            {pinnedLiveGames.length > 0 && (
+              <div className="flex-shrink-0 z-20 flex items-center gap-2 pr-3 pl-1 border-r border-slate-700/80 bg-slate-950/95 shadow-[10px_0_20px_rgba(0,0,0,0.8)]">
+                <div
+                  className={`flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-white text-[10px] font-black uppercase tracking-wider whitespace-nowrap shadow-sm ${
+                    hasActiveRedZone
+                      ? 'bg-red-600 animate-pulse shadow-[0_0_12px_rgba(239,68,68,0.8)]'
+                      : 'bg-emerald-600 border border-emerald-400/50 shadow-[0_0_10px_rgba(16,185,129,0.5)]'
+                  }`}
+                >
+                  <span>{hasActiveRedZone ? '🚨' : '⚡'}</span>
+                  <span>{hasActiveRedZone ? 'RED ZONE' : 'LIVE NOW'}</span>
+                  <span className="px-1.5 py-0.2 rounded-full bg-black/40 text-[9px] font-black">
+                    {pinnedLiveGames.length}
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
-                  {redZoneGames.map((game, idx) => (
-                    <div key={`rz-pinned-${game.id}-${idx}`}>
+                  {pinnedLiveGames.map((game, idx) => (
+                    <div key={`live-pinned-${game.id}-${idx}`}>
                       {renderScoreboardGameCard(game, true)}
                     </div>
                   ))}
@@ -2284,11 +2317,11 @@ export default function TVCommandCenter() {
               </div>
             )}
 
-            {/* Right Section — Slow Continuous Scrolling Game Ticker */}
+            {/* Right Section — Slow Continuous Scrolling Game Ticker (FINAL & PRE Games) */}
             <div className="overflow-hidden flex-1 relative flex items-center">
               {scrollingGames.length === 0 ? (
                 <div className="px-4 text-xs font-semibold text-slate-500 italic">
-                  All active games currently in the Red Zone!
+                  All NFL games currently LIVE!
                 </div>
               ) : (
                 <div
@@ -2367,15 +2400,15 @@ export default function TVCommandCenter() {
             <p className="text-sm text-slate-400">{error}</p>
           </div>
         ) : activeTab === 'live' ? (
-          /* TAB 1: LIVE UPDATES FEED + STUDS SHOWCASE */
-          <div className="flex flex-col h-full gap-2.5 overflow-hidden">
-            {/* TOP: Compact Real-Time Play Feed (Scrollable, takes flexible space) */}
-            <div className="flex-1 flex flex-col min-h-0 bg-slate-900/50 rounded-2xl border border-slate-800/80 p-2.5 overflow-hidden backdrop-blur-sm shadow-xl">
-              <div className="flex items-center justify-between pb-1.5 border-b border-slate-800 shrink-0">
+          /* TAB 1: 12-COLUMN BROADCAST GRID (8-COL STUDS + 4-COL VERTICAL PLAY FEED) */
+          <div className="grid grid-cols-12 gap-3 h-full overflow-hidden min-h-0">
+            {/* LEFT 8 COLUMNS: #1 OVERALL STUDS RIGHT NOW (2x3 Grid) */}
+            <div className="col-span-12 lg:col-span-8 flex flex-col h-full bg-slate-900/50 rounded-2xl border border-slate-800/80 p-3 overflow-hidden backdrop-blur-sm shadow-xl min-h-0">
+              <div className="flex items-center justify-between pb-2 border-b border-slate-800 shrink-0">
                 <div className="flex items-center gap-2">
-                  <Zap className="w-4 h-4 text-amber-400" />
+                  <Trophy className="w-4 h-4 text-amber-400" />
                   <h2 className="text-xs md:text-sm font-black tracking-wide uppercase text-white">
-                    Live Scoring &amp; Big Plays Feed
+                    {gameFilterMode === 'live' ? '#1 OVERALL STUDS RIGHT NOW' : '#1 OVERALL STUDS (ALL GAMES)'}
                   </h2>
                   <span
                     className={`text-[9px] font-extrabold uppercase px-1.5 py-0.2 rounded ${
@@ -2384,22 +2417,198 @@ export default function TVCommandCenter() {
                         : 'bg-blue-950/80 text-blue-300 border border-blue-500/40'
                     }`}
                   >
-                    {gameFilterMode === 'live' ? '🔴 Live Games' : '📅 All Games'}
+                    {gameFilterMode === 'live' ? '🔴 Live In-Progress' : '📅 All Games'}
+                  </span>
+                </div>
+
+                <span className="text-[11px] font-black text-emerald-400 uppercase tracking-wider">
+                  {scoringFormat.toUpperCase()} LEADERS
+                </span>
+              </div>
+
+              {/* 2 Columns x 3 Rows Grid */}
+              <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-2.5 pt-2.5 overflow-y-auto pr-1 min-h-0">
+                {[
+                  { pos: 'QB' as FantasyPosition, label: 'TOP QB', icon: '🎯' },
+                  { pos: 'RB' as FantasyPosition, label: 'TOP RB', icon: '🏃' },
+                  { pos: 'WR' as FantasyPosition, label: 'TOP WR', icon: '🙌' },
+                  { pos: 'TE' as FantasyPosition, label: 'TOP TE', icon: '🛡️' },
+                  { pos: 'DEF' as FantasyPosition, label: 'TOP DEF', icon: '🔒' },
+                  { pos: 'K' as FantasyPosition, label: 'TOP K', icon: '🦵' },
+                ].map(({ pos, label, icon }) => {
+                  const player = sortedLeaderboards?.[pos]?.[0];
+
+                  if (!player) {
+                    return (
+                      <div
+                        key={pos}
+                        className="p-3 rounded-2xl border border-slate-800/80 bg-slate-950/60 flex flex-col justify-between min-h-[110px]"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-black tracking-wider uppercase px-2 py-0.5 rounded bg-slate-800 text-slate-400">
+                            {label}
+                          </span>
+                          <span className="text-sm">{icon}</span>
+                        </div>
+                        <div className="text-center py-2">
+                          <span className="text-xs font-bold text-slate-500 block">
+                            {gameFilterMode === 'live' ? 'Awaiting Live Game Play' : 'No Data Available'}
+                          </span>
+                        </div>
+                        <div className="text-right border-t border-slate-800/60 pt-1.5">
+                          <span className="text-sm font-black text-slate-600">0.0 PTS</span>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  const pts = player.points[scoringFormat] ?? 0;
+                  const isBoosted = boostedPlayers[player.id];
+                  const owners = getOwnershipTags(player);
+
+                  // Split raw stat line by • or , into individual crisp pills
+                  const statPills = player.rawStatLine
+                    ? player.rawStatLine
+                        .split(/[•,]/)
+                        .map((s) => s.trim())
+                        .filter((s) => s.length > 0)
+                    : [];
+
+                  return (
+                    <div
+                      key={player.id}
+                      className={`relative p-3 rounded-2xl border flex flex-col justify-between transition-all min-h-[110px] ${
+                        isBoosted
+                          ? 'border-emerald-400 shadow-[0_0_20px_rgba(52,211,153,0.8)] bg-emerald-950/40 scale-[1.01]'
+                          : 'bg-slate-950/80 border-slate-800/90 hover:border-slate-700'
+                      }`}
+                    >
+                      {/* Top Row: Headshot + Info on Left, Big Points on Right */}
+                      <div className="flex items-start justify-between gap-2">
+                        {/* Left: Player Headshot + Name + Game Status */}
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                          <div className="relative w-12 h-12 md:w-14 md:h-14 rounded-full overflow-hidden bg-slate-900 border-2 border-amber-400/60 shadow-md shrink-0">
+                            <img
+                              src={player.headshot}
+                              alt={player.name}
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                (e.currentTarget as HTMLImageElement).src = player.team.logo;
+                              }}
+                            />
+                          </div>
+
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-[9px] font-black tracking-wider uppercase px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                                {label}
+                              </span>
+                              <span className="text-[11px] font-bold text-slate-300">
+                                {player.team.abbreviation} vs {player.opponent.abbreviation}
+                              </span>
+                              {player.jersey && (
+                                <span className="text-[10px] font-bold text-slate-500">
+                                  #{player.jersey}
+                                </span>
+                              )}
+                            </div>
+
+                            <h3 className="text-sm md:text-base font-black text-white truncate leading-tight mt-0.5">
+                              {player.name}
+                            </h3>
+
+                            <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-semibold mt-0.5">
+                              <span className={player.isGameLive ? 'text-amber-400 font-bold flex items-center gap-1' : ''}>
+                                {player.isGameLive && (
+                                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-ping inline-block" />
+                                )}
+                                {player.gameStatus.detail || (player.isGameLive ? 'Live' : 'Final')}
+                              </span>
+                              {owners.length > 0 && (
+                                <span className="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 text-[9px] font-black uppercase border border-amber-500/30">
+                                  🏈 {owners[0].ownerName}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Right: Massive Glowing Fantasy Points */}
+                        <div className="flex flex-col items-end shrink-0 pl-2">
+                          <span className="text-2xl md:text-3xl font-black text-emerald-400 tv-tabular leading-none drop-shadow-[0_0_12px_rgba(52,211,153,0.5)]">
+                            {formatPoints(pts)}
+                          </span>
+                          <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest mt-1">
+                            {scoringFormat.toUpperCase()} PTS
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Bottom Stat Pills Area: Individual Crisp Pills (Never truncated!) */}
+                      <div className="flex flex-wrap gap-1.5 mt-2.5 pt-2 border-t border-slate-800/80">
+                        {statPills.length > 0 ? (
+                          statPills.map((pill, pIdx) => {
+                            const isTD = pill.toUpperCase().includes('TD');
+                            const isTurnover = pill.toUpperCase().includes('INT') || pill.toUpperCase().includes('FUM');
+                            return (
+                              <span
+                                key={`pill-${player.id}-${pIdx}`}
+                                className={`px-2 py-0.5 rounded-md text-[10px] md:text-[11px] font-black tracking-wide uppercase border ${
+                                  isTD
+                                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-[0_0_8px_rgba(16,185,129,0.3)]'
+                                    : isTurnover
+                                    ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                                    : 'bg-slate-900/90 text-slate-200 border-slate-800'
+                                }`}
+                              >
+                                {pill}
+                              </span>
+                            );
+                          })
+                        ) : (
+                          <span className="text-[10px] font-bold text-slate-500 italic">
+                            Stats updating live...
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* RIGHT 4 COLUMNS: VERTICAL LIVE SCORING & BIG PLAYS FEED */}
+            <div className="col-span-12 lg:col-span-4 flex flex-col h-full bg-slate-900/50 rounded-2xl border border-slate-800/80 p-3 overflow-hidden backdrop-blur-sm shadow-xl min-h-0">
+              <div className="flex items-center justify-between pb-2 border-b border-slate-800 shrink-0">
+                <div className="flex items-center gap-2">
+                  <Zap className="w-4 h-4 text-amber-400" />
+                  <h2 className="text-xs md:text-sm font-black tracking-wide uppercase text-white">
+                    Live Plays Feed
+                  </h2>
+                  <span
+                    className={`text-[9px] font-extrabold uppercase px-1.5 py-0.2 rounded ${
+                      gameFilterMode === 'live'
+                        ? 'bg-red-950/80 text-red-300 border border-red-500/40'
+                        : 'bg-blue-950/80 text-blue-300 border border-blue-500/40'
+                    }`}
+                  >
+                    {gameFilterMode === 'live' ? '🔴 Live' : '📅 All'}
                   </span>
                 </div>
 
                 {/* Inline Fantasy Burst Alert */}
                 {burstAlerts.length > 0 && (
-                  <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-950/90 border border-emerald-500/50 text-emerald-300 text-[11px] font-black animate-pulse shadow-sm">
+                  <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-950/90 border border-emerald-500/50 text-emerald-300 text-[10px] font-black animate-pulse shadow-sm">
                     <Flame className="w-3 h-3 text-emerald-400" />
-                    <span>+{burstAlerts[0].delta.toFixed(1)} PTS: {burstAlerts[0].playerName}</span>
+                    <span>+{burstAlerts[0].delta.toFixed(1)}: {burstAlerts[0].playerName}</span>
                   </div>
                 )}
               </div>
 
-              <div className="flex-1 overflow-y-auto pr-1 pt-2">
+              {/* Scrollable Vertical Plays List */}
+              <div className="flex-1 flex flex-col gap-2 overflow-y-auto max-h-[calc(100vh-230px)] pr-1 pt-2">
                 {filteredLiveUpdates.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center text-slate-500 font-semibold text-xs py-4 gap-2">
+                  <div className="h-full flex flex-col items-center justify-center text-slate-500 font-semibold text-xs py-8 gap-2 text-center">
                     <span>
                       {gameFilterMode === 'live'
                         ? liveGamesCount === 0
@@ -2417,239 +2626,87 @@ export default function TVCommandCenter() {
                     )}
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    {filteredLiveUpdates.map((upd, idx) => {
-                      const isTD = upd.type === 'touchdown';
-                      const isFG = upd.type === 'field-goal';
-                      const isTO = upd.type === 'turnover';
-                      const isSafety = upd.type === 'safety';
+                  filteredLiveUpdates.map((upd, idx) => {
+                    const isTD = upd.type === 'touchdown';
+                    const isFG = upd.type === 'field-goal';
+                    const isTO = upd.type === 'turnover';
+                    const isSafety = upd.type === 'safety';
 
-                      // Check if any owned player is mentioned in this play description
-                      const matchingOwners = Array.from(playerOwnershipMap.entries()).filter(([key]) =>
-                        upd.description.toLowerCase().includes(key)
-                      );
+                    const matchingOwners = Array.from(playerOwnershipMap.entries()).filter(([key]) =>
+                      upd.description.toLowerCase().includes(key)
+                    );
 
-                      return (
-                        <div
-                          key={`${upd.id}-${idx}`}
-                          className={`p-2 rounded-xl border transition-all flex items-start gap-2.5 ${
-                            isTD
-                              ? 'bg-emerald-950/30 border-emerald-500/50 shadow-sm'
-                              : isTO
-                              ? 'bg-rose-950/30 border-rose-500/50 shadow-sm'
-                              : isFG
-                              ? 'bg-cyan-950/30 border-cyan-500/50'
-                              : isSafety
-                              ? 'bg-purple-950/30 border-purple-500/50'
-                              : 'bg-slate-900/80 border-slate-800'
-                          }`}
-                        >
-                          {/* Team Logo */}
-                          <div className="flex flex-col items-center justify-center w-8 h-8 rounded-lg bg-slate-950 border border-slate-800 shrink-0 overflow-hidden">
-                            {upd.team?.logo ? (
-                              <img
-                                src={upd.team.logo}
-                                alt={upd.team.abbreviation}
-                                className="w-6 h-6 object-contain"
-                                onError={(e) => {
-                                  (e.currentTarget as HTMLElement).style.display = 'none';
-                                }}
-                              />
-                            ) : (
-                              <Zap className="w-3.5 h-3.5 text-amber-400" />
+                    return (
+                      <div
+                        key={`${upd.id}-${idx}`}
+                        className={`h-auto p-3 rounded-xl border transition-all flex flex-col gap-1.5 ${
+                          isTD
+                            ? 'bg-emerald-950/40 border-emerald-500/60 shadow-md'
+                            : isTO
+                            ? 'bg-rose-950/40 border-rose-500/60 shadow-md'
+                            : isFG
+                            ? 'bg-cyan-950/40 border-cyan-500/60'
+                            : isSafety
+                            ? 'bg-purple-950/40 border-purple-500/60'
+                            : 'bg-slate-950/80 border-slate-800'
+                        }`}
+                      >
+                        {/* Play Header: Type Badge • Matchup • Clock • Score */}
+                        <div className="flex items-center justify-between gap-1 flex-wrap">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span
+                              className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded tracking-wider ${
+                                isTD
+                                  ? 'bg-emerald-500 text-slate-950 font-black'
+                                  : isTO
+                                  ? 'bg-rose-600 text-white font-black'
+                                  : isFG
+                                  ? 'bg-cyan-500 text-slate-950 font-black'
+                                  : 'bg-amber-500 text-slate-950 font-black'
+                              }`}
+                            >
+                              {upd.headline}
+                            </span>
+                            <span className="text-[11px] font-bold text-slate-300">
+                              {upd.gameName} • {upd.gameClock}
+                            </span>
+                            {upd.downDistanceText && (
+                              <span className="text-[9px] font-black text-amber-300 bg-slate-950 px-1.5 py-0.2 rounded border border-slate-800 shrink-0">
+                                🏈 {upd.downDistanceText}
+                              </span>
                             )}
                           </div>
 
-                          {/* Event Details */}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between gap-1 mb-0.5">
-                              <div className="flex items-center gap-1.5 truncate">
-                                <span
-                                  className={`text-[8px] font-black uppercase px-1 py-0.2 rounded tracking-wider ${
-                                    isTD
-                                      ? 'bg-emerald-500 text-slate-950'
-                                      : isTO
-                                      ? 'bg-rose-600 text-white'
-                                      : isFG
-                                      ? 'bg-cyan-500 text-slate-950'
-                                      : 'bg-amber-500 text-slate-950'
-                                  }`}
-                                >
-                                  {upd.headline}
-                                </span>
-                                <span className="text-[10px] font-bold text-slate-400 truncate">
-                                  {upd.gameName} • {upd.gameClock}
-                                </span>
-                                {upd.downDistanceText && (
-                                  <span className="text-[9px] font-black text-amber-300 bg-slate-950 px-1 py-0.2 rounded border border-slate-800 shrink-0">
-                                    🏈 {upd.downDistanceText}
-                                  </span>
-                                )}
-                              </div>
-
-                              {upd.scoreSummary && (
-                                <span className="text-[10px] font-black text-slate-300 tv-tabular shrink-0">
-                                  {upd.scoreSummary}
-                                </span>
-                              )}
-                            </div>
-
-                            <p className="text-[11px] font-semibold text-slate-100 leading-snug line-clamp-2">
-                              {upd.description}
-                            </p>
-
-                            {/* Fantasy Impact & Ownership Tagging */}
-                            <div className="mt-1 flex flex-wrap items-center gap-1">
-                              {upd.fantasyImpact && (
-                                <span className="text-[9px] font-extrabold text-emerald-400 bg-emerald-950/80 border border-emerald-500/40 px-1 py-0.2 rounded shadow-sm">
-                                  ⚡ {upd.fantasyImpact}
-                                </span>
-                              )}
-
-                              {matchingOwners.length > 0 && (
-                                <span className="text-[8px] font-black uppercase px-1 py-0.2 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/50 flex items-center gap-1">
-                                  🏈 {matchingOwners[0][1][0]?.ownerName}&apos;s Player
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* BOTTOM: #1 OVERALL STUDS (ALL 6 POSITIONS: QB, RB, WR, TE, DEF, K) */}
-            <div className="shrink-0 bg-slate-900/50 rounded-2xl border border-slate-800/80 p-2.5 overflow-hidden backdrop-blur-sm shadow-xl flex flex-col justify-between">
-              <div className="flex items-center justify-between pb-1.5 border-b border-slate-800 shrink-0">
-                <div className="flex items-center gap-2">
-                  <Trophy className="w-4 h-4 text-amber-400" />
-                  <h2 className="text-xs md:text-sm font-black tracking-wide uppercase text-white">
-                    {gameFilterMode === 'live' ? '#1 OVERALL STUDS RIGHT NOW' : '#1 OVERALL STUDS (ALL GAMES)'}
-                  </h2>
-                  <span
-                    className={`text-[9px] font-extrabold uppercase px-1.5 py-0.2 rounded ${
-                      gameFilterMode === 'live'
-                        ? 'bg-red-950/80 text-red-300 border border-red-500/40'
-                        : 'bg-blue-950/80 text-blue-300 border border-blue-500/40'
-                    }`}
-                  >
-                    {gameFilterMode === 'live' ? '🔴 Live In-Progress' : '📅 All Games'}
-                  </span>
-                </div>
-
-                <span className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider">
-                  {scoringFormat.toUpperCase()} LEADERS
-                </span>
-              </div>
-
-              {/* 6-Position Compact Row (or 3x2 on tablet) */}
-              <div className="pt-2 grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2">
-                {[
-                  { pos: 'QB' as FantasyPosition, label: 'TOP QB', icon: '🎯' },
-                  { pos: 'RB' as FantasyPosition, label: 'TOP RB', icon: '🏃' },
-                  { pos: 'WR' as FantasyPosition, label: 'TOP WR', icon: '🙌' },
-                  { pos: 'TE' as FantasyPosition, label: 'TOP TE', icon: '🛡️' },
-                  { pos: 'DEF' as FantasyPosition, label: 'TOP DEF', icon: '🔒' },
-                  { pos: 'K' as FantasyPosition, label: 'TOP K', icon: '🦵' },
-                ].map(({ pos, label, icon }) => {
-                  const player = sortedLeaderboards?.[pos]?.[0];
-
-                  if (!player) {
-                    return (
-                      <div
-                        key={pos}
-                        className="p-2 rounded-xl border border-slate-800/80 bg-slate-950/60 flex flex-col justify-between min-h-[92px]"
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="text-[9px] font-black tracking-wider uppercase px-1.5 py-0.2 rounded bg-slate-800 text-slate-400">
-                            {label}
-                          </span>
-                          <span className="text-xs">{icon}</span>
-                        </div>
-                        <div className="text-center py-1">
-                          <span className="text-[11px] font-bold text-slate-500 block">
-                            {gameFilterMode === 'live' ? 'Awaiting Live Play' : 'No Data'}
-                          </span>
-                        </div>
-                        <div className="text-right border-t border-slate-800/60 pt-1">
-                          <span className="text-xs font-black text-slate-600">0.0 PTS</span>
-                        </div>
-                      </div>
-                    );
-                  }
-
-                  const pts = player.points[scoringFormat] ?? 0;
-                  const isBoosted = boostedPlayers[player.id];
-                  const owners = getOwnershipTags(player);
-
-                  return (
-                    <div
-                      key={player.id}
-                      className={`relative p-2 rounded-xl border flex flex-col justify-between transition-all min-h-[92px] ${
-                        isBoosted
-                          ? 'border-emerald-400 shadow-[0_0_15px_rgba(52,211,153,0.8)] bg-emerald-950/40 scale-[1.01]'
-                          : 'bg-slate-900/90 border-slate-800 hover:border-slate-700'
-                      }`}
-                    >
-                      {/* Label + Matchup */}
-                      <div className="flex items-center justify-between gap-1">
-                        <span className="text-[9px] font-black tracking-wider uppercase px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">
-                          {label}
-                        </span>
-                        <span className="text-[10px] font-bold text-slate-400 truncate">
-                          {player.team.abbreviation} vs {player.opponent.abbreviation}
-                        </span>
-                      </div>
-
-                      {/* Player Info Row */}
-                      <div className="flex items-center gap-2 my-1">
-                        <div className="relative w-8 h-8 rounded-full overflow-hidden bg-slate-950 border border-slate-700 shrink-0">
-                          <img
-                            src={player.headshot}
-                            alt={player.name}
-                            className="w-full h-full object-cover"
-                            onError={(e) => {
-                              (e.currentTarget as HTMLImageElement).src = player.team.logo;
-                            }}
-                          />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <h3 className="text-xs font-black text-white truncate leading-tight">
-                            {player.name}
-                          </h3>
-                          <div className="flex items-center gap-1 text-[9px] text-slate-400 font-medium truncate">
-                            <span className={player.isGameLive ? 'text-amber-400 font-bold flex items-center gap-0.5' : ''}>
-                              {player.isGameLive && (
-                                <span className="h-1 w-1 rounded-full bg-emerald-400 animate-ping inline-block" />
-                              )}
-                              {player.gameStatus.detail || (player.isGameLive ? 'Live' : 'Final')}
+                          {upd.scoreSummary && (
+                            <span className="text-[11px] font-black text-slate-300 tv-tabular shrink-0">
+                              {upd.scoreSummary}
                             </span>
-                          </div>
-                          {owners.length > 0 && (
-                            <div className="truncate mt-0.5">
-                              <span className="inline-block px-1 py-0.2 rounded bg-amber-500/20 text-amber-300 text-[8px] font-black uppercase truncate">
-                                {owners[0].ownerName}
-                              </span>
-                            </div>
+                          )}
+                        </div>
+
+                        {/* Full Play Description (Never clipped!) */}
+                        <p className="text-xs font-semibold text-slate-100 leading-snug">
+                          {upd.description}
+                        </p>
+
+                        {/* Fantasy Impact & Ownership Tagging */}
+                        <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+                          {upd.fantasyImpact && (
+                            <span className="text-[10px] font-black text-emerald-300 bg-emerald-950/90 border border-emerald-500/40 px-2 py-0.5 rounded shadow-sm">
+                              ⚡ {upd.fantasyImpact}
+                            </span>
+                          )}
+
+                          {matchingOwners.length > 0 && (
+                            <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/50 flex items-center gap-1">
+                              🏈 {matchingOwners[0][1][0]?.ownerName}&apos;S PLAYER
+                            </span>
                           )}
                         </div>
                       </div>
-
-                      {/* Stat Line & Fantasy Points */}
-                      <div className="pt-1 border-t border-slate-800/80 flex items-center justify-between gap-1">
-                        <span className="text-[9px] font-bold text-slate-300 truncate" title={player.rawStatLine}>
-                          {player.rawStatLine}
-                        </span>
-                        <span className="text-sm lg:text-base font-black text-emerald-400 tv-tabular shrink-0 pl-1">
-                          {formatPoints(pts)}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })
+                )}
               </div>
             </div>
           </div>
@@ -3422,7 +3479,7 @@ export default function TVCommandCenter() {
               }}
             >
               {/* Set 1 of Matchups */}
-              {tickerItems.map((m, idx) => (
+              {tickerMatchups.map((m, idx) => (
                 <div
                   key={`m1-${m.id || idx}-${idx}`}
                   className="flex items-center gap-3 px-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-800 shrink-0 whitespace-nowrap shadow-sm hover:border-slate-700 transition-all"
@@ -3449,7 +3506,7 @@ export default function TVCommandCenter() {
               ))}
 
               {/* Set 2 of Matchups for Seamless Infinite Loop */}
-              {tickerItems.map((m, idx) => (
+              {tickerMatchups.map((m, idx) => (
                 <div
                   key={`m2-${m.id || idx}-${idx}`}
                   className="flex items-center gap-3 px-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-800 shrink-0 whitespace-nowrap shadow-sm hover:border-slate-700 transition-all"
