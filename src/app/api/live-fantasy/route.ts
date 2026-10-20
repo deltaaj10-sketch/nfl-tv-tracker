@@ -10,6 +10,12 @@ import {
   GameSituation,
 } from '@/types/fantasy';
 import { getMasterNflPlayers, MasterPlayer } from '@/lib/nflPlayers';
+import {
+  fetchEspnProjections,
+  checkProjectionsWindow,
+  normalizePlayerName,
+  PlayerWeeklyProjection,
+} from '@/lib/espnProjections';
 
 export const dynamic = 'force-dynamic';
 
@@ -567,22 +573,30 @@ if (!(globalThis as any).__completedGamesCache) {
   (globalThis as any).__completedGamesCache = new Map<string, any>();
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const { searchParams } = new URL(request.url);
+    const forceCron = searchParams.get('cron') === 'wednesday_5am' || searchParams.get('cron') === 'tuesday_3am';
+    const forceRefresh = searchParams.get('refresh') === 'true' || forceCron;
+    const modeOverride = searchParams.get('mode'); // 'projections' | 'live'
+    const weekOverride = searchParams.get('week') ? parseInt(searchParams.get('week')!) : null;
+
     const now = Date.now();
     // 1. 10-Second in-memory response cache: returns in ~2ms and eliminates ESPN rate limits
-    const cachedResponse = (globalThis as any).__liveFantasyCache as LiveFantasyResponseCache | undefined;
-    if (cachedResponse && now - cachedResponse.timestamp < 10000) {
-      return NextResponse.json(cachedResponse.payload, {
-        headers: {
-          'X-Cache': 'HIT',
-          'Cache-Control': 'public, s-maxage=10, stale-while-revalidate=5',
-        },
-      });
+    if (!forceRefresh && !modeOverride && !weekOverride) {
+      const cachedResponse = (globalThis as any).__liveFantasyCache as LiveFantasyResponseCache | undefined;
+      if (cachedResponse && now - cachedResponse.timestamp < 10000) {
+        return NextResponse.json(cachedResponse.payload, {
+          headers: {
+            'X-Cache': 'HIT',
+            'Cache-Control': 'public, s-maxage=10, stale-while-revalidate=5',
+          },
+        });
+      }
     }
 
     // 2. Fetch current scoreboard with 4500ms timeout guard
-    const scoreboardRes = await fetch('https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard', {
+    let scoreboardRes = await fetch('https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard', {
       headers: { 'User-Agent': 'Mozilla/5.0' },
       signal: AbortSignal.timeout(4500),
       cache: 'no-store',
@@ -592,8 +606,52 @@ export async function GET() {
       throw new Error(`ESPN Scoreboard API failed with status ${scoreboardRes.status}`);
     }
 
-    const scoreboard = await scoreboardRes.json();
-    const events: any[] = scoreboard.events || [];
+    let scoreboard = await scoreboardRes.json();
+    let events: any[] = scoreboard.events || [];
+    const defaultWeek = scoreboard.week?.number || 7;
+    const year = scoreboard.season?.year || 2026;
+
+    // Check Weekly Projections window:
+    // - Every Wednesday morning at 5:00 AM Eastern, the week updates with official weekly projections
+    // - Once the game on Thursday starts, all projections go away in place of real-time live stats!
+    let windowStatus = checkProjectionsWindow(events, defaultWeek, new Date());
+    if (modeOverride === 'projections') {
+      windowStatus.isProjectionsMode = true;
+    } else if (modeOverride === 'live') {
+      windowStatus.isProjectionsMode = false;
+    }
+    if (weekOverride) {
+      windowStatus.targetWeek = weekOverride;
+    }
+
+    // If default week is completed and Wednesday 5:00 AM Eastern has passed, advance to upcoming week's scoreboard!
+    if (windowStatus.isProjectionsMode && windowStatus.shouldAdvanceWeek) {
+      try {
+        const nextScoreboardRes = await fetch(
+          `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?week=${windowStatus.targetWeek}`,
+          {
+            headers: { 'User-Agent': 'Mozilla/5.0' },
+            signal: AbortSignal.timeout(4500),
+            cache: 'no-store',
+          }
+        );
+        if (nextScoreboardRes.ok) {
+          const nextScoreboard = await nextScoreboardRes.json();
+          if (nextScoreboard.events && nextScoreboard.events.length > 0) {
+            scoreboard = nextScoreboard;
+            events = nextScoreboard.events;
+            windowStatus = checkProjectionsWindow(events, windowStatus.targetWeek, new Date());
+            if (modeOverride === 'projections') windowStatus.isProjectionsMode = true;
+          }
+        }
+      } catch (err) {
+        console.error('Failed to advance scoreboard to upcoming week:', err);
+      }
+    }
+
+    // Pre-load accurate projections and live injury statuses (cached 5 min for constant injury tracking)
+    const projectionsMap: Map<string, PlayerWeeklyProjection> =
+      await fetchEspnProjections(year, windowStatus.targetWeek, forceRefresh);
 
     // Extract team IDs to pre-warm roster cache if needed
     const teamIdsSet = new Set<string>();
@@ -1410,42 +1468,192 @@ export async function GET() {
       }
     }
 
-    // Finalize Fantasy Points & Raw Stat Line for all players
-    for (const player of allPlayersMap.values()) {
-      player.points = calculatePoints(player.stats, player.position);
-      player.rawStatLine = buildRawStatLine(player.stats, player.position);
-      const s = player.stats;
-      const passYds = s.passingYards || 0;
-      const passTD = s.passingTouchdowns || 0;
-      const rushYds = s.rushingYards || 0;
-      const rushTD = s.rushingTouchdowns || 0;
-      const rec = s.receptions || 0;
-      const recYds = s.receivingYards || 0;
-      const recTD = s.receivingTouchdowns || 0;
-      player.playerRawStats = {
-        passYds,
-        passTD,
-        rushYds,
-        rushTD,
-        rec,
-        recYds,
-        recTD,
-        anytimeTD: rushTD + recTD > 0,
-      };
+    // Seed any top projected fantasy players from projectionsMap that aren't yet in allPlayersMap
+    if (windowStatus.isProjectionsMode) {
+      for (const proj of projectionsMap.values()) {
+        if (!proj.athleteId || allPlayersMap.has(proj.athleteId)) continue;
+        if (proj.position === 'DEF') continue;
+        if ((proj.points?.ppr || 0) < 1.0) continue;
+        const teamAbbr = proj.teamAbbr || 'NFL';
+        const normName = normalizePlayerName(proj.fullName);
+        if (allPlayersByName.has(normName) || allPlayersByName.has(`${normName}_${teamAbbr.toLowerCase()}`)) {
+          continue;
+        }
+
+        const playerObj: FantasyPlayer = {
+          id: proj.athleteId,
+          name: proj.fullName,
+          shortName: proj.fullName,
+          position: proj.position,
+          headshot: `https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/${proj.athleteId}.png&w=96&h=70&cb=1`,
+          team: {
+            id: String(proj.proTeamId || ''),
+            abbreviation: teamAbbr,
+            displayName: teamAbbr,
+            logo: `https://a.espncdn.com/i/teamlogos/nfl/500/scoreboard/${teamAbbr.toLowerCase()}.png`,
+          },
+          opponent: {
+            abbreviation: 'OPP',
+            isHome: false,
+          },
+          gameStatus: {
+            state: 'pre',
+            clock: '',
+            period: 0,
+            detail: 'PROJ',
+            isRedZone: false,
+            isGameLive: false,
+            isLive: false,
+          },
+          stats: proj.stats,
+          points: proj.points,
+          rawStatLine: proj.statLine,
+          isProjection: true,
+          projectedPoints: proj.points,
+          projectedStats: proj.stats,
+          projectedStatLine: proj.statLine,
+          playerRawStats: {
+            passYds: proj.stats.passingYards || 0,
+            passTD: proj.stats.passingTouchdowns || 0,
+            rushYds: proj.stats.rushingYards || 0,
+            rushTD: proj.stats.rushingTouchdowns || 0,
+            rec: proj.stats.receptions || 0,
+            recYds: proj.stats.receivingYards || 0,
+            recTD: proj.stats.receivingTouchdowns || 0,
+            anytimeTD: ((proj.stats.rushingTouchdowns || 0) + (proj.stats.receivingTouchdowns || 0)) > 0,
+          },
+        };
+        allPlayersMap.set(proj.athleteId, playerObj);
+      }
     }
 
-    // Populate playerRawStats on defenses
-    for (const def of defPlayers) {
-      def.playerRawStats = {
-        passYds: 0,
-        passTD: 0,
-        rushYds: 0,
-        rushTD: 0,
-        rec: 0,
-        recYds: 0,
-        recTD: 0,
-        anytimeTD: (def.stats.defensiveTouchdowns || 0) > 0,
-      };
+    // In both Projections Mode and Live Stats Mode: attach live injury intelligence to all players
+    for (const player of allPlayersMap.values()) {
+      const normName = normalizePlayerName(player.name);
+      const proj =
+        projectionsMap.get(player.id) ||
+        projectionsMap.get(`${normName}_${player.team.abbreviation.toLowerCase()}`) ||
+        projectionsMap.get(normName);
+      if (proj) {
+        player.injuryStatus = proj.injuryStatus || null;
+        player.injuryNotes = proj.injuryNotes || null;
+        player.injuryBodyPart = proj.injuryBodyPart || null;
+        player.isInjured = proj.isInjured || false;
+      }
+    }
+
+    // Apply Weekly Projections vs Live Stats based on current schedule window:
+    // - From Wednesday 5:00 AM Eastern until Thursday kickoff: Weekly Projections are applied!
+    // - Once Thursday Night Football kicks off: All projections go away in place of real-time live stats!
+    if (windowStatus.isProjectionsMode) {
+      for (const player of allPlayersMap.values()) {
+        const normName = normalizePlayerName(player.name);
+        const proj =
+          projectionsMap.get(player.id) ||
+          projectionsMap.get(`${normName}_${player.team.abbreviation.toLowerCase()}`) ||
+          projectionsMap.get(normName);
+
+        const isOut = proj?.injuryStatus === 'Out' || proj?.injuryStatus === 'IR' || proj?.injuryStatus === 'PUP';
+
+        if (proj && !isOut && (proj.points.ppr > 0 || proj.points.standard > 0)) {
+          player.isProjection = true;
+          player.projectedPoints = proj.points;
+          player.projectedStats = proj.stats;
+          player.projectedStatLine = proj.statLine;
+          player.points = proj.points;
+          player.rawStatLine = proj.statLine;
+          player.stats = { ...player.stats, ...proj.stats };
+          player.gameStatus.detail = proj.injuryStatus ? proj.injuryStatus.toUpperCase() : 'PROJ';
+          const s = proj.stats;
+          player.playerRawStats = {
+            passYds: s.passingYards || 0,
+            passTD: s.passingTouchdowns || 0,
+            rushYds: s.rushingYards || 0,
+            rushTD: s.rushingTouchdowns || 0,
+            rec: s.receptions || 0,
+            recYds: s.receivingYards || 0,
+            recTD: s.receivingTouchdowns || 0,
+            anytimeTD: ((s.rushingTouchdowns || 0) + (s.receivingTouchdowns || 0)) > 0,
+          };
+        } else if (isOut) {
+          player.isProjection = true;
+          player.projectedPoints = { standard: 0, halfPpr: 0, ppr: 0 };
+          player.points = { standard: 0, halfPpr: 0, ppr: 0 };
+          player.rawStatLine = proj?.injuryNotes ? `OUT • ${proj.injuryNotes}` : 'OUT - NO PROJECTION';
+          player.gameStatus.detail = proj?.injuryStatus ? proj.injuryStatus.toUpperCase() : 'OUT';
+        } else {
+          player.isProjection = true;
+          player.projectedPoints = { standard: 0, halfPpr: 0, ppr: 0 };
+          player.points = { standard: 0, halfPpr: 0, ppr: 0 };
+          player.rawStatLine = '0.0 PROJ PTS';
+          player.gameStatus.detail = 'PROJ';
+        }
+      }
+
+      for (const def of defPlayers) {
+        const teamAbbr = def.team.abbreviation.toUpperCase();
+        const defProj =
+          projectionsMap.get(`DEF_${teamAbbr}`) ||
+          projectionsMap.get(`DEF_TEAMID_${def.team.id}`) ||
+          projectionsMap.get(normalizePlayerName(def.name));
+
+        if (defProj) {
+          def.isProjection = true;
+          def.projectedPoints = defProj.points;
+          def.projectedStats = defProj.stats;
+          def.projectedStatLine = defProj.statLine;
+          def.points = defProj.points;
+          def.rawStatLine = defProj.statLine;
+          def.stats = { ...def.stats, ...defProj.stats };
+          def.gameStatus.detail = 'PROJ';
+        } else {
+          def.isProjection = true;
+          def.projectedPoints = { standard: 0, halfPpr: 0, ppr: 0 };
+          def.points = { standard: 0, halfPpr: 0, ppr: 0 };
+          def.rawStatLine = '0.0 PROJ PTS';
+          def.gameStatus.detail = 'PROJ';
+        }
+      }
+    } else {
+      // Finalize Fantasy Points & Raw Stat Line for all live/upcoming players
+      for (const player of allPlayersMap.values()) {
+        player.isProjection = false;
+        player.points = calculatePoints(player.stats, player.position);
+        player.rawStatLine = buildRawStatLine(player.stats, player.position);
+        const s = player.stats;
+        const passYds = s.passingYards || 0;
+        const passTD = s.passingTouchdowns || 0;
+        const rushYds = s.rushingYards || 0;
+        const rushTD = s.rushingTouchdowns || 0;
+        const rec = s.receptions || 0;
+        const recYds = s.receivingYards || 0;
+        const recTD = s.receivingTouchdowns || 0;
+        player.playerRawStats = {
+          passYds,
+          passTD,
+          rushYds,
+          rushTD,
+          rec,
+          recYds,
+          recTD,
+          anytimeTD: rushTD + recTD > 0,
+        };
+      }
+
+      // Populate playerRawStats on defenses
+      for (const def of defPlayers) {
+        def.isProjection = false;
+        def.playerRawStats = {
+          passYds: 0,
+          passTD: 0,
+          rushYds: 0,
+          rushTD: 0,
+          rec: 0,
+          recYds: 0,
+          recTD: 0,
+          anytimeTD: (def.stats.defensiveTouchdowns || 0) > 0,
+        };
+      }
     }
 
     // Group players into Leaderboards by position
@@ -1515,8 +1723,8 @@ export async function GET() {
     const responsePayload: LiveFantasyResponse = {
       lastUpdated: new Date().toISOString(),
       season: {
-        year: scoreboard.season?.year || 2026,
-        week: scoreboard.week?.number || 7,
+        year: scoreboard.season?.year || year,
+        week: scoreboard.week?.number || windowStatus.targetWeek,
         type: scoreboard.season?.type || 2,
       },
       games,
@@ -1524,6 +1732,9 @@ export async function GET() {
       liveUpdates: liveUpdates.slice(0, 60), // Capped to 60 items to prevent memory bloat
       allPlayers: allAvailable,
       allAvailablePlayers: allAvailable,
+      isProjectionsMode: windowStatus.isProjectionsMode,
+      projectionsWeek: windowStatus.targetWeek,
+      projectionsKickoff: windowStatus.earliestKickoff,
     };
 
     // Store in global 10-second response cache

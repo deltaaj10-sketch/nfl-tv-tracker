@@ -74,6 +74,14 @@ export interface FantasyPlayer {
   stats: PlayerStats;
   points: FantasyPoints;
   playerRawStats?: PlayerRawNumericStats;
+  isProjection?: boolean;
+  projectedPoints?: FantasyPoints;
+  projectedStatLine?: string;
+  projectedStats?: PlayerStats;
+  injuryStatus?: string | null;
+  injuryNotes?: string | null;
+  injuryBodyPart?: string | null;
+  isInjured?: boolean;
 }
 
 export interface PlayerRawNumericStats {
@@ -169,6 +177,9 @@ export interface LiveFantasyResponse {
   liveUpdates: LiveUpdate[];
   allPlayers?: FantasyPlayer[];
   allAvailablePlayers?: FantasyPlayer[];
+  isProjectionsMode?: boolean;
+  projectionsWeek?: number;
+  projectionsKickoff?: string;
 }
 
 // Bets & Parlays Data Models
