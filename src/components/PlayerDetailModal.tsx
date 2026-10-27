@@ -243,55 +243,55 @@ export default function PlayerDetailModal({
           {/* Scoring Format Comparison Banner */}
           <div className="grid grid-cols-3 gap-3">
             <div
-              className={`p-3 rounded-lg flex flex-col items-center justify-center border transition-all ${
+              className={`p-3 rounded-[4px] flex flex-col items-center justify-center border transition-all ${
                 scoringFormat === 'ppr'
-                  ? 'bg-emerald-950/40 border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.3)] ring-1 ring-emerald-500/50'
-                  : 'bg-[#141722] border-white/10'
+                  ? 'bg-emerald-950/30 border-emerald-500/80 ring-1 ring-emerald-500/40'
+                  : 'bg-[#101217] border-zinc-800/80'
               }`}
             >
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
                 PPR
               </span>
               <span className="text-2xl md:text-3xl font-mono-score font-bold text-white mt-0.5">
                 {player.points.ppr.toFixed(1)}
               </span>
-              <span className="text-[9px] uppercase tracking-wider font-semibold text-slate-400">
+              <span className="text-[9px] uppercase tracking-wider font-semibold text-zinc-500">
                 PTS
               </span>
             </div>
 
             <div
-              className={`p-3 rounded-lg flex flex-col items-center justify-center border transition-all ${
+              className={`p-3 rounded-[4px] flex flex-col items-center justify-center border transition-all ${
                 scoringFormat === 'halfPpr'
-                  ? 'bg-emerald-950/40 border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.3)] ring-1 ring-emerald-500/50'
-                  : 'bg-[#141722] border-white/10'
+                  ? 'bg-emerald-950/30 border-emerald-500/80 ring-1 ring-emerald-500/40'
+                  : 'bg-[#101217] border-zinc-800/80'
               }`}
             >
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
                 0.5 PPR
               </span>
               <span className="text-2xl md:text-3xl font-mono-score font-bold text-white mt-0.5">
                 {player.points.halfPpr.toFixed(1)}
               </span>
-              <span className="text-[9px] uppercase tracking-wider font-semibold text-slate-400">
+              <span className="text-[9px] uppercase tracking-wider font-semibold text-zinc-500">
                 PTS
               </span>
             </div>
 
             <div
-              className={`p-3 rounded-lg flex flex-col items-center justify-center border transition-all ${
+              className={`p-3 rounded-[4px] flex flex-col items-center justify-center border transition-all ${
                 scoringFormat === 'standard'
-                  ? 'bg-emerald-950/40 border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.3)] ring-1 ring-emerald-500/50'
-                  : 'bg-[#141722] border-white/10'
+                  ? 'bg-emerald-950/30 border-emerald-500/80 ring-1 ring-emerald-500/40'
+                  : 'bg-[#101217] border-zinc-800/80'
               }`}
             >
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
                 STANDARD
               </span>
               <span className="text-2xl md:text-3xl font-mono-score font-bold text-white mt-0.5">
                 {player.points.standard.toFixed(1)}
               </span>
-              <span className="text-[9px] uppercase tracking-wider font-semibold text-slate-400">
+              <span className="text-[9px] uppercase tracking-wider font-semibold text-zinc-500">
                 PTS
               </span>
             </div>

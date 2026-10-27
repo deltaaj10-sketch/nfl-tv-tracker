@@ -319,7 +319,7 @@ export default function ManageLeaguesModal({
                 <button
                   onClick={handleAddSleeper}
                   disabled={sleeperLoading || !sleeperId.trim()}
-                  className="w-full py-2.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(16,185,129,0.3)]"
+                  className="w-full py-2.5 rounded-[4px] bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-black font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 border border-emerald-400/50"
                 >
                   {sleeperLoading ? (
                     <RefreshCw className="w-4 h-4 animate-spin" />
@@ -449,7 +449,7 @@ export default function ManageLeaguesModal({
                 <button
                   onClick={handleAddEspn}
                   disabled={espnLoading || !espnId.trim()}
-                  className="w-full py-2.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 text-slate-950 font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(6,182,212,0.3)]"
+                  className="w-full py-2.5 rounded-[4px] bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 text-black font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 border border-cyan-400/50"
                 >
                   {espnLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                   <span>Connect & Sync ESPN League</span>
@@ -505,7 +505,7 @@ export default function ManageLeaguesModal({
                 </p>
                 <button
                   onClick={handleLoadDemo}
-                  className="px-3 py-1.5 rounded-lg bg-amber-500/20 border border-amber-500/50 text-amber-300 hover:bg-amber-500/30 text-xs font-black uppercase flex items-center gap-1.5 transition-all shadow-[0_0_10px_rgba(245,158,11,0.2)]"
+                  className="px-3 py-1.5 rounded-[4px] bg-amber-500/10 border border-amber-500/40 text-amber-300 hover:bg-amber-500/20 text-xs font-black uppercase flex items-center gap-1.5 transition-all"
                 >
                   <Sparkles className="w-3.5 h-3.5" />
                   <span>Load Demo Preset (3 Friends)</span>
@@ -644,7 +644,7 @@ export default function ManageLeaguesModal({
                 <button
                   onClick={handleAddGuest}
                   disabled={!guestName.trim()}
-                  className="w-full py-2.5 rounded-lg bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(245,158,11,0.3)]"
+                  className="w-full py-2.5 rounded-[4px] bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 border border-amber-400/50"
                 >
                   <Plus className="w-4 h-4" />
                   <span>Add Friend to Living Room</span>

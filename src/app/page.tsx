@@ -50,40 +50,62 @@ import ManageBetsModal from '@/components/ManageBetsModal';
 import PlayerDetailModal from '@/components/PlayerDetailModal';
 import ParlayHedgeCalculator from '@/components/ParlayHedgeCalculator';
 
-const NFL_TEAM_COLORS: Record<string, string> = {
-  ARI: '#97233F',
-  ATL: '#A71930',
-  BAL: '#241773',
-  BUF: '#00338D',
-  CAR: '#0085CA',
-  CHI: '#0B162A',
-  CIN: '#FB4F14',
-  CLE: '#311D00',
-  DAL: '#003594',
-  DEN: '#FB4F14',
-  DET: '#0076B6',
-  GB:  '#203731',
-  HOU: '#03202F',
-  IND: '#002C5F',
-  JAX: '#006778',
-  KC:  '#E31837',
-  LAC: '#0080C6',
-  LAR: '#003594',
-  LV:  '#000000',
-  MIA: '#008E97',
-  MIN: '#4F2683',
-  NE:  '#002244',
-  NO:  '#D3BC8D',
-  NYG: '#0B2265',
-  NYJ: '#125740',
-  PHI: '#004C54',
-  PIT: '#FFB612',
-  SEA: '#002244',
-  SF:  '#AA0000',
-  TB:  '#D50A0A',
-  TEN: '#0C2340',
-  WAS: '#5A1414',
+interface TeamColorConfig {
+  primary: string;
+  accent: string;
+  name: string;
+}
+
+const NFL_TEAM_THEMES: Record<string, TeamColorConfig> = {
+  ARI: { primary: '#97233F', accent: '#FFB612', name: 'Cardinals' },
+  ATL: { primary: '#A71930', accent: '#C8102E', name: 'Falcons' },
+  BAL: { primary: '#241773', accent: '#9E7C0C', name: 'Ravens' },
+  BUF: { primary: '#00338D', accent: '#C60C30', name: 'Bills' },
+  CAR: { primary: '#0085CA', accent: '#101820', name: 'Panthers' },
+  CHI: { primary: '#0B162A', accent: '#C83803', name: 'Bears' },
+  CIN: { primary: '#FB4F14', accent: '#000000', name: 'Bengals' },
+  CLE: { primary: '#311D00', accent: '#FF3C00', name: 'Browns' },
+  DAL: { primary: '#003594', accent: '#869397', name: 'Cowboys' },
+  DEN: { primary: '#FB4F14', accent: '#002244', name: 'Broncos' },
+  DET: { primary: '#0076B6', accent: '#B0B7BC', name: 'Lions' },
+  GB:  { primary: '#203731', accent: '#FFB612', name: 'Packers' },
+  HOU: { primary: '#03202F', accent: '#A71930', name: 'Texans' },
+  IND: { primary: '#002C5F', accent: '#A2AAAD', name: 'Colts' },
+  JAX: { primary: '#006778', accent: '#D7A22A', name: 'Jaguars' },
+  KC:  { primary: '#E31837', accent: '#FFB81C', name: 'Chiefs' },
+  LAC: { primary: '#0080C6', accent: '#FFC20E', name: 'Chargers' },
+  LAR: { primary: '#003594', accent: '#FFA300', name: 'Rams' },
+  LV:  { primary: '#A5ACAF', accent: '#FFFFFF', name: 'Raiders' },
+  MIA: { primary: '#008E97', accent: '#FC4C02', name: 'Dolphins' },
+  MIN: { primary: '#4F2683', accent: '#FFC62F', name: 'Vikings' },
+  NE:  { primary: '#002244', accent: '#C60C30', name: 'Patriots' },
+  NO:  { primary: '#D3BC8D', accent: '#101820', name: 'Saints' },
+  NYG: { primary: '#0B2265', accent: '#A71930', name: 'Giants' },
+  NYJ: { primary: '#125740', accent: '#FFFFFF', name: 'Jets' },
+  PHI: { primary: '#004C54', accent: '#A5ACAF', name: 'Eagles' },
+  PIT: { primary: '#FFB612', accent: '#101820', name: 'Steelers' },
+  SEA: { primary: '#002244', accent: '#69BE28', name: 'Seahawks' },
+  SF:  { primary: '#AA0000', accent: '#B3995D', name: '49ers' },
+  TB:  { primary: '#D50A0A', accent: '#FF7900', name: 'Buccaneers' },
+  TEN: { primary: '#0C2340', accent: '#4B92DB', name: 'Titans' },
+  WAS: { primary: '#5A1414', accent: '#FFB612', name: 'Commanders' },
 };
+
+function getTeamAccentColor(abbr?: string): string {
+  if (!abbr) return '#10B981';
+  const clean = abbr.toUpperCase();
+  const theme = NFL_TEAM_THEMES[clean];
+  if (!theme) return '#10B981';
+  // Use vibrant accent colors for franchises with very dark navy/black primaries so they pop on matte dark canvas
+  if (['CHI', 'CLE', 'DAL', 'GB', 'HOU', 'IND', 'LV', 'NE', 'NYG', 'SEA', 'TEN', 'BAL'].includes(clean)) {
+    return theme.accent;
+  }
+  return theme.primary;
+}
+
+const NFL_TEAM_COLORS: Record<string, string> = new Proxy({} as Record<string, string>, {
+  get: (_, prop: string) => getTeamAccentColor(prop),
+});
 
 type MainTab = 'live' | FantasyPosition | 'room' | 'bets';
 
@@ -108,57 +130,57 @@ const TABS: { id: MainTab; label: string }[] = [
  */
 function getStatSegmentClasses(segment: string, position?: string): string {
   const s = segment.toUpperCase().trim();
-  if (!s) return 'text-slate-300 bg-[#141722] border-white/10';
+  if (!s) return 'text-zinc-300 bg-zinc-900 border-zinc-800';
 
   // 1. Any segment containing TD
   if (/\b\d*\s*TD\b|\bTOUCHDOWN\b/.test(s)) {
-    return 'text-emerald-400 font-bold bg-emerald-950/80 border-emerald-500/40 shadow-sm';
+    return 'text-emerald-400 font-bold bg-emerald-950/70 border-emerald-500/40';
   }
 
   // 2. Negative stat: FUM for offensive players, INT for QB (or offensive players)
   if (position !== 'DEF') {
     if (/\bFUM\b/.test(s) || (position === 'QB' && /\bINT\b/.test(s)) || (/\bINT\b/.test(s) && !/\bPOINT\b/.test(s))) {
-      return 'text-rose-400 font-semibold bg-rose-950/80 border-rose-500/40 shadow-sm';
+      return 'text-rose-400 font-semibold bg-rose-950/70 border-rose-500/40';
     }
   }
 
   // 2b. Negative yardage (e.g. -1 RUSH, -2 YDS, -5 REC, -1 CAR)
   if (/(?:^|\s)-[0-9]+(?:\s*(?:YDS?|RUSH|REC|PASS|CAR))?/.test(s)) {
-    return 'text-rose-400 font-semibold bg-rose-950/80 border-rose-500/40 shadow-sm';
+    return 'text-rose-400 font-semibold bg-rose-950/70 border-rose-500/40';
   }
 
   // Defensive takeaways (INT, FR, SAFETY) for DEF are positive
   if (position === 'DEF') {
     if (/\bINT\b|\bFR\b|\bSAFETY\b/.test(s)) {
-      return 'text-emerald-400 font-bold bg-emerald-950/80 border-emerald-500/40 shadow-sm';
+      return 'text-emerald-400 font-bold bg-emerald-950/70 border-emerald-500/40';
     }
   }
 
   // 3. 300+ PASS YDS
   const passMatch = s.match(/(\d+)\s*(?:PASS(?:ING)?(?:\s*YDS?)?|YDS?\s*PASS)/);
   if (passMatch && parseInt(passMatch[1], 10) >= 300) {
-    return 'text-amber-300 font-semibold bg-amber-950/80 border-amber-500/40 shadow-sm';
+    return 'text-amber-300 font-semibold bg-amber-950/70 border-amber-500/40';
   }
 
   // 100+ RUSH YDS
   const rushMatch = s.match(/(\d+)\s*(?:RUSH(?:ING)?(?:\s*YDS?)?|YDS?\s*RUSH)/);
   if (rushMatch && parseInt(rushMatch[1], 10) >= 100) {
-    return 'text-amber-300 font-semibold bg-amber-950/80 border-amber-500/40 shadow-sm';
+    return 'text-amber-300 font-semibold bg-amber-950/70 border-amber-500/40';
   }
 
   // 100+ REC YDS
   const recMatch = s.match(/(\d+)\s*(?:REC(?:EIVING)?(?:\s*YDS?)?|YDS?\s*REC)/);
   if (recMatch && parseInt(recMatch[1], 10) >= 100) {
-    return 'text-amber-300 font-semibold bg-amber-950/80 border-amber-500/40 shadow-sm';
+    return 'text-amber-300 font-semibold bg-amber-950/70 border-amber-500/40';
   }
 
   // Standalone 100+ YDS (e.g. 115 YDS or 100+ YDS)
   const genYdsMatch = s.match(/(\d+)\s*YDS?/);
   if (genYdsMatch && parseInt(genYdsMatch[1], 10) >= 100) {
-    return 'text-amber-300 font-semibold bg-amber-950/80 border-amber-500/40 shadow-sm';
+    return 'text-amber-300 font-semibold bg-amber-950/70 border-amber-500/40';
   }
 
-  return 'text-slate-300 bg-[#141722] border-white/10';
+  return 'text-zinc-200 bg-zinc-900 border-zinc-800';
 }
 
 /**
@@ -487,14 +509,14 @@ function getBetRingClasses(
 ): string {
   switch (category) {
     case 'cash_active':
-      return 'ring-2 ring-emerald-400 bg-emerald-950/90 text-emerald-300 shadow-[0_0_12px_rgba(52,211,153,0.5)] border border-emerald-400/60 font-bold';
+      return 'ring-1 ring-emerald-400/80 bg-emerald-950/80 text-emerald-300 border border-emerald-400/50 font-bold';
     case 'sweat_zone':
-      return 'ring-2 ring-amber-400 bg-amber-950/90 text-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.6)] animate-pulse border border-amber-400/60 font-bold';
+      return 'ring-1 ring-amber-400/80 bg-amber-950/80 text-amber-300 border border-amber-400/50 animate-pulse font-bold';
     case 'chalked':
-      return 'ring-2 ring-rose-500 bg-rose-950/90 text-rose-300 shadow-[0_0_12px_rgba(244,63,94,0.4)] border border-rose-500/60 font-bold';
+      return 'ring-1 ring-rose-500/80 bg-rose-950/80 text-rose-300 border border-rose-500/50 font-bold';
     case 'pending':
     default:
-      return 'ring-1 ring-slate-700 bg-slate-900 text-slate-300 border border-slate-700 font-medium';
+      return 'ring-1 ring-zinc-800 bg-zinc-900/90 text-zinc-300 border border-zinc-700/60 font-medium';
   }
 }
 
@@ -547,7 +569,7 @@ function gradeBetLeg(
         return {
           status: 'cashed',
           statusText: 'CASHED',
-          badgeStyle: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-[0_0_10px_rgba(16,185,129,0.4)]',
+          badgeStyle: 'bg-emerald-950/40 text-emerald-300 border-emerald-500/60 font-bold',
           progressText: `${currentVal} / ${target} (${progressPct}%)`,
           progressPct: 100,
           gameStatusText: gameClock,
@@ -616,7 +638,7 @@ function gradeBetLeg(
         return {
           status: 'cashed',
           statusText: 'CASHED',
-          badgeStyle: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-[0_0_10px_rgba(16,185,129,0.4)]',
+          badgeStyle: 'bg-emerald-950/40 text-emerald-300 border-emerald-500/60 font-bold',
           progressText: `${currentVal} / ${target} (Stayed Under)`,
           progressPct: 100,
           gameStatusText: gameClock,
@@ -678,7 +700,7 @@ function gradeBetLeg(
       return {
         status: 'cashed',
         statusText: 'CASHED (TD)',
-        badgeStyle: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-[0_0_10px_rgba(16,185,129,0.4)]',
+        badgeStyle: 'bg-emerald-950/40 text-emerald-300 border-emerald-500/60 font-bold',
         progressText: `${tdCount} TD Scored`,
         progressPct: 100,
         gameStatusText: gameClock,
@@ -764,7 +786,7 @@ function gradeBetLeg(
         return {
           status: 'cashed',
           statusText: 'CASHED',
-          badgeStyle: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-[0_0_10px_rgba(16,185,129,0.4)]',
+          badgeStyle: 'bg-emerald-950/40 text-emerald-300 border-emerald-500/60 font-bold',
           progressText: `Covered by +${diff.toFixed(1)} pts`,
           progressPct: 100,
           gameStatusText: gameClock,
@@ -860,7 +882,7 @@ function gradeBetLeg(
         return {
           status: 'cashed',
           statusText: 'CASHED',
-          badgeStyle: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-[0_0_10px_rgba(16,185,129,0.4)]',
+          badgeStyle: 'bg-emerald-950/40 text-emerald-300 border-emerald-500/60 font-bold',
           progressText: `Won by ${teamScore - oppScore} pts`,
           progressPct: 100,
           gameStatusText: gameClock,
@@ -940,7 +962,7 @@ function gradeBetLeg(
         return {
           status: 'cashed',
           statusText: 'CASHED',
-          badgeStyle: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-[0_0_10px_rgba(16,185,129,0.4)]',
+          badgeStyle: 'bg-emerald-950/40 text-emerald-300 border-emerald-500/60 font-bold',
           progressText: `${totalCurrent} / ${target} pts`,
           progressPct: 100,
           gameStatusText: gameClock,
@@ -1004,7 +1026,7 @@ function gradeBetLeg(
         return {
           status: 'cashed',
           statusText: 'CASHED',
-          badgeStyle: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-[0_0_10px_rgba(16,185,129,0.4)]',
+          badgeStyle: 'bg-emerald-950/40 text-emerald-300 border-emerald-500/60 font-bold',
           progressText: `${totalCurrent} / ${target} pts (Stayed Under)`,
           progressPct: 100,
           gameStatusText: gameClock,
@@ -1067,7 +1089,7 @@ function getSlipSummary(slip: BetSlip, allPlayers: FantasyPlayer[], games: LiveG
   if (cashedCount === total && total > 0) {
     overallStatus = 'cashed';
     badgeLabel = `ALL ${total} LEGS CASHED`;
-    badgeStyle = 'bg-emerald-500 text-slate-950 border-emerald-400 font-black shadow-[0_0_15px_rgba(16,185,129,0.8)]';
+    badgeStyle = 'bg-emerald-500 text-black border-emerald-400 font-black';
   } else if (chalkedCount > 0) {
     overallStatus = 'chalked';
     badgeLabel = `BUSTED (${cashedCount}/${total} Hit)`;
@@ -2600,8 +2622,8 @@ export default function TVCommandCenter() {
     const isPost = game.status?.state === 'post';
     const awayScore = parseInt(String(game.awayTeam.score)) || 0;
     const homeScore = parseInt(String(game.homeTeam.score)) || 0;
-    const isAwayLoser = isPost && awayScore < homeScore;
-    const isHomeLoser = isPost && homeScore < awayScore;
+    const isAwayLeading = (isLive || isPost) && awayScore > homeScore;
+    const isHomeLeading = (isLive || isPost) && homeScore > awayScore;
     const isSelected = selectedTickerGameId === game.id;
     const possessionAbbr = game.possessionTeamAbbr || game.situation?.possessionTeamAbbr;
     const hasPossessionAway = isLive && possessionAbbr === game.awayTeam.abbreviation;
@@ -2628,10 +2650,8 @@ export default function TVCommandCenter() {
             const team = parts[0].toUpperCase();
             const yds = parseInt(parts[1]) || 50;
             if (team === possessionAbbr?.toUpperCase()) {
-              // Own territory, e.g. "KC 25" -> 25% towards endzone
               fieldProgressPct = Math.max(5, Math.min(50, yds));
             } else {
-              // Opponent territory, e.g. "LAR 8" -> 92% towards endzone
               fieldProgressPct = Math.max(50, Math.min(99, 100 - yds));
             }
           }
@@ -2648,31 +2668,29 @@ export default function TVCommandCenter() {
       <div
         onClick={() => handleToggleTickerGame(game.id)}
         title={isSelected ? 'Active Filter: Click to reset to ALL GAMES' : `Click to filter: ${game.awayTeam.abbreviation} vs ${game.homeTeam.abbreviation}`}
-        className={`relative flex items-center gap-2 px-2 py-1 rounded-xl bg-slate-900/90 border transition-all shrink-0 min-w-[200px] cursor-pointer select-none ${
+        className={`relative flex items-center gap-2 px-2.5 py-1.5 rounded-[4px] border transition-all shrink-0 min-w-[205px] cursor-pointer select-none ${
           isSelected
-            ? 'border-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.65)] ring-2 ring-amber-400/80 bg-gradient-to-r from-amber-950/40 via-slate-900 to-amber-950/30'
+            ? 'border-amber-400 bg-[#12141C] ring-1 ring-amber-400/40'
             : isRedZone
-            ? 'border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.7)] animate-redzone bg-gradient-to-r from-red-950/40 to-slate-900 hover:border-red-400'
+            ? 'border-rose-500/70 bg-[#140B0E] animate-redzone'
             : isLive
-            ? 'border-emerald-500/60 shadow-[0_0_12px_rgba(16,185,129,0.35)] bg-gradient-to-r from-emerald-950/30 via-slate-900 to-amber-950/20 hover:border-emerald-400'
-            : 'border-slate-800/80 hover:border-slate-600 hover:bg-slate-800/40'
+            ? 'border-zinc-800 bg-[#0C0D10] border-l-[3px] border-l-emerald-500 hover:border-zinc-700'
+            : 'border-zinc-800/80 bg-[#0C0D10] hover:border-zinc-700 hover:bg-[#111318]'
         }`}
       >
         {/* Red Zone Badge Alert on card */}
         {isRedZone && !isRedZonePinned && (
-          <div className="absolute -top-2 right-1.5 px-1 py-0.2 bg-red-600 text-white text-[8px] font-black tracking-widest uppercase rounded shadow animate-pulse">
+          <div className="absolute -top-2 right-1.5 px-1.5 py-0.2 bg-rose-600 text-white text-[8px] font-condensed font-black tracking-widest uppercase rounded-[2px] shadow-sm">
             RED ZONE
           </div>
         )}
 
-        {/* Sleek Miniature Field-Position Progress Bar at Bottom of In-Progress Card */}
+        {/* Minimalist Field-Position Progress Bar at Bottom of In-Progress Card */}
         {isLive && (
-          <div className="absolute bottom-0 left-0 right-0 h-1 bg-slate-950/90 overflow-hidden rounded-b-xl">
+          <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-zinc-900 overflow-hidden rounded-b-[4px]">
             <div
               className={`h-full transition-all duration-300 ${
-                isRedZone
-                  ? 'bg-gradient-to-r from-amber-400 via-orange-500 to-red-500 shadow-[0_0_8px_rgba(239,68,68,0.9)]'
-                  : 'bg-gradient-to-r from-emerald-500 via-cyan-400 to-emerald-400 shadow-[0_0_6px_rgba(16,185,129,0.8)]'
+                isRedZone ? 'bg-rose-500' : 'bg-emerald-400'
               }`}
               style={{ width: `${fieldProgressPct}%` }}
               title={`Drive Progress: ${fieldProgressPct}% to End Zone`}
@@ -2680,103 +2698,111 @@ export default function TVCommandCenter() {
           </div>
         )}
 
-        {/* Away Team */}
-        <div
-          className={`flex flex-col items-center gap-0.5 w-11 py-0.5 px-1 rounded-lg transition-all ${
-            isAwayLoser ? 'opacity-45' : ''
-          } ${
-            hasPossessionAway
-              ? 'bg-amber-500/20 border border-amber-400/60 shadow-[0_0_10px_rgba(245,158,11,0.35)]'
-              : ''
-          }`}
-        >
-          <div className="relative w-7 h-7 flex items-center justify-center rounded-full bg-white/10 p-1 border border-white/10 shrink-0">
+        {/* Away Team: Asymmetric Leading / Trailing Styling */}
+        <div className="flex flex-col items-center gap-0.5 w-11 py-0.5 px-1 shrink-0">
+          <div className="relative w-7 h-7 flex items-center justify-center rounded-full bg-zinc-900 border border-zinc-800 p-1 shrink-0">
             <img
               src={game.awayTeam.logo}
               alt={game.awayTeam.abbreviation}
               className="w-full h-full object-contain team-logo-contrast"
-              style={{ filter: 'drop-shadow(0 0 3px rgba(255, 255, 255, 0.75))' }}
+              style={{ filter: 'drop-shadow(0 0 2.5px rgba(255, 255, 255, 0.45))' }}
               onError={(e) => {
                 (e.currentTarget as HTMLElement).style.display = 'none';
               }}
             />
           </div>
-          <div className="flex items-center gap-0.5">
+          <div className="flex items-center gap-1">
             <span
-              className={`text-[10px] font-bold ${
-                hasPossessionAway ? 'text-amber-300 font-black' : isAwayLoser ? 'text-slate-400' : 'text-slate-200'
+              className={`text-[10px] uppercase tracking-wide ${
+                isAwayLeading
+                  ? 'text-white font-black'
+                  : isHomeLeading
+                  ? 'text-zinc-500 font-semibold'
+                  : 'text-zinc-200 font-bold'
               }`}
             >
               {game.awayTeam.abbreviation}
             </span>
             {hasPossessionAway && (
-              <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 shadow-[0_0_6px_#fbbf24]" />
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" title="Possession" />
             )}
           </div>
-          <span className={`text-sm font-black tv-tabular leading-none ${isAwayLoser ? 'text-slate-400' : 'text-white'}`}>
+          <span
+            className={`text-sm font-mono-score leading-none ${
+              isAwayLeading
+                ? 'text-white font-black'
+                : isHomeLeading
+                ? 'text-zinc-400 font-medium'
+                : 'text-zinc-200 font-bold'
+            }`}
+          >
             {game.awayTeam.score}
           </span>
         </div>
 
-        {/* Game Clock & Situation Middle */}
-        <div className="flex flex-col items-center justify-center text-center px-1 border-x border-slate-800/60 min-w-[76px]">
+        {/* Game Clock & Situation Middle Column */}
+        <div className="flex flex-col items-center justify-center text-center px-1 border-x border-zinc-800/60 min-w-[76px] shrink-0">
           {isLive ? (
             <>
-              <div className="flex items-center gap-1 text-[10px] font-black text-amber-400 uppercase tracking-tight">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-ping" />
+              <div className="flex items-center gap-1 text-[10px] font-mono-score font-bold text-emerald-400 uppercase tracking-tight">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
                 <span>{game.status.shortDetail || 'LIVE'}</span>
               </div>
               {downDistanceDisplay && (
-                <span className="text-[9px] text-amber-300 font-extrabold leading-tight mt-0.5 px-1 py-0.2 rounded bg-slate-950/90 border border-slate-800 whitespace-nowrap shadow-sm">
+                <span className="text-[9px] text-zinc-300 font-mono-score font-medium leading-tight mt-0.5 px-1.5 py-0.5 rounded-[2px] bg-zinc-900 border border-zinc-800 whitespace-nowrap">
                   {downDistanceDisplay}
                 </span>
               )}
             </>
           ) : isPost ? (
-            <span className="text-[11px] font-black text-slate-400 uppercase tracking-wider">
+            <span className="text-[10px] font-condensed font-black text-zinc-500 uppercase tracking-wider">
               FINAL
             </span>
           ) : (
-            <span className="text-[10px] font-semibold text-slate-400">
+            <span className="text-[10px] font-condensed font-semibold text-zinc-400">
               {game.status.shortDetail || 'UPCOMING'}
             </span>
           )}
         </div>
 
-        {/* Home Team */}
-        <div
-          className={`flex flex-col items-center gap-0.5 w-11 py-0.5 px-1 rounded-lg transition-all ${
-            isHomeLoser ? 'opacity-45' : ''
-          } ${
-            hasPossessionHome
-              ? 'bg-amber-500/20 border border-amber-400/60 shadow-[0_0_10px_rgba(245,158,11,0.35)]'
-              : ''
-          }`}
-        >
-          <div className="relative w-7 h-7 flex items-center justify-center rounded-full bg-white/10 p-1 border border-white/10 shrink-0">
+        {/* Home Team: Asymmetric Leading / Trailing Styling */}
+        <div className="flex flex-col items-center gap-0.5 w-11 py-0.5 px-1 shrink-0">
+          <div className="relative w-7 h-7 flex items-center justify-center rounded-full bg-zinc-900 border border-zinc-800 p-1 shrink-0">
             <img
               src={game.homeTeam.logo}
               alt={game.homeTeam.abbreviation}
               className="w-full h-full object-contain team-logo-contrast"
-              style={{ filter: 'drop-shadow(0 0 3px rgba(255, 255, 255, 0.75))' }}
+              style={{ filter: 'drop-shadow(0 0 2.5px rgba(255, 255, 255, 0.45))' }}
               onError={(e) => {
                 (e.currentTarget as HTMLElement).style.display = 'none';
               }}
             />
           </div>
-          <div className="flex items-center gap-0.5">
+          <div className="flex items-center gap-1">
             <span
-              className={`text-[10px] font-bold ${
-                hasPossessionHome ? 'text-amber-300 font-black' : isHomeLoser ? 'text-slate-400' : 'text-slate-200'
+              className={`text-[10px] uppercase tracking-wide ${
+                isHomeLeading
+                  ? 'text-white font-black'
+                  : isAwayLeading
+                  ? 'text-zinc-500 font-semibold'
+                  : 'text-zinc-200 font-bold'
               }`}
             >
               {game.homeTeam.abbreviation}
             </span>
             {hasPossessionHome && (
-              <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 shadow-[0_0_6px_#fbbf24]" />
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" title="Possession" />
             )}
           </div>
-          <span className={`text-sm font-black tv-tabular leading-none ${isHomeLoser ? 'text-slate-400' : 'text-white'}`}>
+          <span
+            className={`text-sm font-mono-score leading-none ${
+              isHomeLeading
+                ? 'text-white font-black'
+                : isAwayLeading
+                ? 'text-zinc-400 font-medium'
+                : 'text-zinc-200 font-bold'
+            }`}
+          >
             {game.homeTeam.score}
           </span>
         </div>
@@ -2785,24 +2811,24 @@ export default function TVCommandCenter() {
   }, [selectedTickerGameId, handleToggleTickerGame]);
 
   return (
-    <div className="flex flex-col h-screen max-h-screen w-screen bg-[#07080C] text-slate-100 select-none overflow-hidden font-condensed justify-between pb-14">
+    <div className="flex flex-col h-screen max-h-screen w-screen bg-[#08090C] text-[#F4F4F6] select-none overflow-hidden font-condensed justify-between pb-14">
       {/* 1. AUTO-CYCLE PROGRESS BAR (Visual bar at the top of the TV) */}
-      <div className="w-full h-1 bg-[#0E1017] relative overflow-hidden shrink-0">
+      <div className="w-full h-1 bg-[#0A0C12] relative overflow-hidden shrink-0">
         {autoCycle && (
           <div
-            className="h-full bg-gradient-to-r from-[#00E676] via-cyan-400 to-amber-400 transition-all duration-200 ease-linear shadow-[0_0_10px_rgba(0,230,118,0.8)]"
+            className="h-full bg-gradient-to-r from-emerald-400 via-cyan-400 to-amber-400 transition-all duration-200 ease-linear"
             style={{ width: `${cycleProgress}%` }}
           />
         )}
       </div>
 
       {/* 2. UNIFIED 48PX BROADCAST HEADER BAR */}
-      <header className="h-12 bg-[#0B0D13] border-b border-white/10 px-4 flex items-center justify-between shrink-0 gap-3">
+      <header className="h-12 bg-[#0A0C12] border-b border-zinc-800/80 px-4 flex items-center justify-between shrink-0 gap-3">
         {/* Left Controls: LIVE REDZONE bug + segmented LIVE / ALL + PPR / HALF / STD */}
         <div className="flex items-center gap-2.5">
           {/* Status Bug: PROJECTIONS vs LIVE REDZONE */}
           {data?.isProjectionsMode ? (
-            <div className="flex items-center gap-2 px-2.5 py-1 bg-cyan-950/80 border border-cyan-500/50 rounded-[4px] text-cyan-300 shadow-sm">
+            <div className="flex items-center gap-2 px-2.5 py-1 bg-cyan-950/80 border border-cyan-500/50 rounded-[4px] text-cyan-300">
               <span className="relative flex h-2 w-2">
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-400"></span>
               </span>
@@ -2814,30 +2840,30 @@ export default function TVCommandCenter() {
               </span>
             </div>
           ) : (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-red-950/80 border border-red-500/50 rounded-[4px] text-red-400 shadow-sm">
+            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-rose-950/80 border border-rose-500/50 rounded-[4px] text-rose-300">
               <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
               </span>
-              <span className="text-[11px] font-condensed font-black tracking-wider uppercase text-red-200">
+              <span className="text-[11px] font-condensed font-black tracking-wider uppercase text-rose-100">
                 LIVE REDZONE
               </span>
             </div>
           )}
 
           {/* Segmented LIVE / ALL */}
-          <div className="flex items-center bg-[#141722] p-0.5 rounded-[4px] border border-white/10">
+          <div className="flex items-center bg-[#0C0D10] p-0.5 rounded-[4px] border border-zinc-800/80">
             <button
               onClick={() => handleSelectFilterMode('live')}
               className={`flex items-center gap-1.5 px-2.5 py-1 rounded-[2px] text-xs font-condensed font-bold uppercase transition-all ${
                 gameFilterMode === 'live'
-                  ? 'bg-red-600 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-rose-600 text-white font-black'
+                  : 'text-zinc-400 hover:text-zinc-200'
               }`}
             >
               <span
                 className={`h-1.5 w-1.5 rounded-full ${
-                  gameFilterMode === 'live' ? 'bg-white' : 'bg-red-500'
+                  gameFilterMode === 'live' ? 'bg-white' : 'bg-rose-500'
                 }`}
               />
               <span>LIVE</span>
@@ -2851,8 +2877,8 @@ export default function TVCommandCenter() {
               onClick={() => handleSelectFilterMode('all')}
               className={`px-2.5 py-1 rounded-[2px] text-xs font-condensed font-bold uppercase transition-all ${
                 gameFilterMode === 'all'
-                  ? 'bg-white/15 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-white/15 text-white font-black'
+                  : 'text-zinc-400 hover:text-zinc-200'
               }`}
             >
               ALL
@@ -2860,7 +2886,7 @@ export default function TVCommandCenter() {
           </div>
 
           {/* Segmented PPR / HALF / STD */}
-          <div className="flex items-center bg-[#141722] p-0.5 rounded-[4px] border border-white/10">
+          <div className="flex items-center bg-[#0C0D10] p-0.5 rounded-[4px] border border-zinc-800/80">
             {(['ppr', 'halfPpr', 'standard'] as ScoringFormat[]).map((fmt) => {
               const label = fmt === 'ppr' ? 'PPR' : fmt === 'halfPpr' ? 'HALF' : 'STD';
               const active = scoringFormat === fmt;
@@ -2870,8 +2896,8 @@ export default function TVCommandCenter() {
                   onClick={() => setScoringFormat(fmt)}
                   className={`px-2.5 py-1 rounded-[2px] text-xs font-condensed font-bold uppercase transition-all ${
                     active
-                      ? 'bg-[#00E676] text-black shadow-sm'
-                      : 'text-slate-400 hover:text-slate-200'
+                      ? 'bg-emerald-400 text-black font-black'
+                      : 'text-zinc-400 hover:text-zinc-200'
                   }`}
                 >
                   {label}
@@ -2886,7 +2912,7 @@ export default function TVCommandCenter() {
           {/* LEAGUES Button */}
           <button
             onClick={() => setIsManageModalOpen(true)}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-[4px] bg-[#141722] hover:bg-[#1E2330] text-xs font-condensed font-bold uppercase text-amber-300 border border-white/10 transition-colors"
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-[4px] bg-[#0C0D10] hover:bg-[#141620] text-xs font-condensed font-bold uppercase text-amber-300 border border-zinc-800/80 transition-colors"
           >
             <Settings className="w-3.5 h-3.5 text-amber-400" />
             <span>LEAGUES</span>
@@ -2900,7 +2926,7 @@ export default function TVCommandCenter() {
           {/* ROOM QR Button */}
           <button
             onClick={() => setIsQrModalOpen(true)}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-[4px] bg-[#141722] hover:bg-[#1E2330] text-xs font-condensed font-bold uppercase text-cyan-400 border border-white/10 transition-colors"
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-[4px] bg-[#0C0D10] hover:bg-[#141620] text-xs font-condensed font-bold uppercase text-cyan-400 border border-zinc-800/80 transition-colors"
             title="Scan QR Code with phone to join and add bets"
           >
             <QrCode className="w-3.5 h-3.5 text-cyan-400" />
@@ -2912,15 +2938,15 @@ export default function TVCommandCenter() {
             onClick={handleToggleSound}
             className={`flex items-center gap-1.5 px-2.5 py-1 rounded-[4px] text-xs font-condensed font-bold uppercase transition-colors border ${
               isSoundEnabled
-                ? 'bg-[#00E676]/15 border-[#00E676]/40 text-[#00E676]'
-                : 'bg-[#141722] border-white/10 text-slate-400 hover:text-slate-200'
+                ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400'
+                : 'bg-[#0C0D10] border-zinc-800/80 text-zinc-400 hover:text-zinc-200'
             }`}
             title={isSoundEnabled ? 'Sound is ON' : 'Sound is MUTED'}
           >
             {isSoundEnabled ? (
-              <Volume2 className="w-3.5 h-3.5 text-[#00E676]" />
+              <Volume2 className="w-3.5 h-3.5 text-emerald-400" />
             ) : (
-              <VolumeX className="w-3.5 h-3.5 text-slate-500" />
+              <VolumeX className="w-3.5 h-3.5 text-zinc-500" />
             )}
             <span>{isSoundEnabled ? 'AUDIO: ON' : 'MUTE'}</span>
           </button>
@@ -2933,11 +2959,11 @@ export default function TVCommandCenter() {
                 ? isHoveringMain
                   ? 'bg-amber-500/15 border-amber-500/40 text-amber-300'
                   : 'bg-cyan-500/15 border-cyan-500/40 text-cyan-300'
-                : 'bg-[#141722] border-white/10 text-slate-400 hover:text-slate-200'
+                : 'bg-[#0C0D10] border-zinc-800/80 text-zinc-400 hover:text-zinc-200'
             }`}
             title={autoCycle ? (isHoveringMain ? 'Cycle paused while hovering content' : 'Cycle is active') : 'Cycle is paused'}
           >
-            <Tv className={`w-3.5 h-3.5 ${autoCycle ? (isHoveringMain ? 'text-amber-400' : 'text-cyan-400') : 'text-slate-500'}`} />
+            <Tv className={`w-3.5 h-3.5 ${autoCycle ? (isHoveringMain ? 'text-amber-400' : 'text-cyan-400') : 'text-zinc-500'}`} />
             <span>CYCLE: {autoCycle ? (isHoveringMain ? 'PAUSED (HOVER)' : 'ON') : 'PAUSED'}</span>
           </button>
 
@@ -2949,7 +2975,7 @@ export default function TVCommandCenter() {
       {/* 3. HORIZONTAL LIVE NFL SCOREBOARD STRIP (Pinned RedZone on Left + Slow Scrolling on Right) */}
       <section
         ref={scoreboardRef}
-        className="w-full bg-[#0E1017] border-b border-white/10 px-2 py-1 overflow-hidden flex items-center shrink-0 relative"
+        className="w-full bg-[#0A0C12] border-b border-zinc-800/80 px-2 py-1 overflow-hidden flex items-center shrink-0 relative"
       >
         <style>{`
           @keyframes scoreboardScroll {
@@ -2959,23 +2985,23 @@ export default function TVCommandCenter() {
         `}</style>
 
         {loading && !data ? (
-          <div className="flex items-center gap-2 text-xs text-slate-400 py-0.5 px-3">
-            <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#00E676]" />
+          <div className="flex items-center gap-2 text-xs text-zinc-400 py-0.5 px-3">
+            <RefreshCw className="w-3.5 h-3.5 animate-spin text-emerald-400" />
             <span>Loading scoreboard...</span>
           </div>
         ) : (
           <div className="flex items-center w-full overflow-hidden">
             {/* Left Section — Pinned In-Progress Live Games */}
             {pinnedLiveGames.length > 0 && (
-              <div className="flex-shrink-0 z-20 flex items-center gap-2 pr-3 pl-1 border-r border-white/10 bg-[#0E1017] shadow-[10px_0_20px_rgba(0,0,0,0.8)]">
+              <div className="flex-shrink-0 z-20 flex items-center gap-2 pr-3 pl-1 border-r border-zinc-800/80 bg-[#0A0C12]">
                 <div
-                  className={`flex items-center gap-1.5 px-2 py-0.5 rounded-[4px] text-white text-[10px] font-condensed font-bold uppercase tracking-wider whitespace-nowrap shadow-sm ${
+                  className={`flex items-center gap-1.5 px-2 py-0.5 rounded-[4px] text-white text-[10px] font-condensed font-bold uppercase tracking-wider whitespace-nowrap ${
                     hasActiveRedZone
-                      ? 'bg-red-600 animate-pulse shadow-[0_0_12px_rgba(239,68,68,0.8)]'
-                      : 'bg-emerald-600 border border-emerald-400/50 shadow-[0_0_10px_rgba(16,185,129,0.5)]'
+                      ? 'bg-rose-600 font-black'
+                      : 'bg-emerald-950/80 border border-emerald-500/50 text-emerald-300 font-bold'
                   }`}
                 >
-                  <Activity className="w-3 h-3 text-white shrink-0" />
+                  <Activity className="w-3 h-3 shrink-0" />
                   <span>{hasActiveRedZone ? 'RED ZONE' : 'LIVE NOW'}</span>
                   <span className="px-1.5 py-0.2 rounded-[2px] bg-black/40 text-[9px] font-mono-score font-bold">
                     {pinnedLiveGames.length}
@@ -2994,7 +3020,7 @@ export default function TVCommandCenter() {
             {/* Right Section — Slow Continuous Scrolling Game Ticker (FINAL & PRE Games) */}
             <div className="overflow-hidden flex-1 relative flex items-center">
               {scrollingGames.length === 0 ? (
-                <div className="px-4 text-xs font-semibold text-slate-500 italic">
+                <div className="px-4 text-xs font-semibold text-zinc-500 italic">
                   All NFL games currently LIVE!
                 </div>
               ) : (
@@ -3031,7 +3057,7 @@ export default function TVCommandCenter() {
       </section>
 
       {/* 4. EDGE-TO-EDGE BROADCAST NAVIGATION TABS */}
-      <nav className="h-10 bg-[#0B0D13] border-b border-white/10 px-2 flex items-center shrink-0 w-full justify-between">
+      <nav className="h-10 bg-[#0A0C12] border-b border-zinc-800/80 px-2 flex items-center shrink-0 w-full justify-between">
         {TABS.map((tab) => {
           const active = activeTab === tab.id;
           return (
@@ -3043,8 +3069,8 @@ export default function TVCommandCenter() {
               }}
               className={`flex-1 h-full flex items-center justify-center font-condensed text-xs md:text-sm tracking-wider uppercase transition-colors relative font-bold ${
                 active
-                  ? 'text-[#00E676] border-b-2 border-[#00E676] bg-white/[0.03]'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.02]'
+                  ? 'text-white font-black border-b-2 border-emerald-400 bg-white/[0.02]'
+                  : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.01]'
               }`}
             >
               <span>{tab.label}</span>
@@ -3054,7 +3080,7 @@ export default function TVCommandCenter() {
                 </span>
               )}
               {tab.id === 'bets' && savedBets.length > 0 && (
-                <span className="ml-1.5 px-1.5 py-0.2 bg-[#00E676]/20 text-[#00E676] rounded-[2px] text-[10px] font-mono-score font-bold">
+                <span className="ml-1.5 px-1.5 py-0.2 bg-emerald-400/20 text-emerald-400 rounded-[2px] text-[10px] font-mono-score font-bold">
                   {savedBets.length}
                 </span>
               )}
@@ -3083,11 +3109,11 @@ export default function TVCommandCenter() {
           /* TAB 1: 12-COLUMN BROADCAST GRID (8-COL STUDS + 4-COL VERTICAL PLAY FEED) */
           <div className="grid grid-cols-12 gap-3 h-full overflow-hidden min-h-0">
             {/* LEFT 8 COLUMNS: #1 OVERALL STUDS RIGHT NOW (2x3 Grid) */}
-            <div className="col-span-12 lg:col-span-8 flex flex-col h-full bg-[#0E1017] rounded-[4px] border border-white/10 p-3 overflow-hidden shadow-xl min-h-0">
-              <div className="flex items-center justify-between pb-2 border-b border-white/10 shrink-0">
+            <div className="col-span-12 lg:col-span-8 flex flex-col h-full bg-[#0C0D10] rounded-[4px] border border-zinc-800/80 p-3 overflow-hidden min-h-0">
+              <div className="flex items-center justify-between pb-2 border-b border-zinc-800/80 shrink-0">
                 <div className="flex items-center gap-2">
                   <Trophy className="w-4 h-4 text-amber-400" />
-                  <h2 className="text-xs md:text-sm font-condensed font-bold tracking-wide uppercase text-white">
+                  <h2 className="text-xs md:text-sm font-condensed font-black tracking-wide uppercase text-white">
                     {data?.isProjectionsMode
                       ? `#1 PROJECTED STUDS (WEEK ${data.projectionsWeek || data.season?.week})`
                       : gameFilterMode === 'live'
@@ -3114,8 +3140,8 @@ export default function TVCommandCenter() {
                         data?.isProjectionsMode
                           ? 'bg-cyan-950/80 text-cyan-300 border border-cyan-500/40'
                           : gameFilterMode === 'live'
-                          ? 'bg-red-950/80 text-red-300 border border-red-500/40'
-                          : 'bg-white/10 text-slate-300 border border-white/15'
+                          ? 'bg-rose-950/80 text-rose-300 border border-rose-500/40'
+                          : 'bg-zinc-900 text-zinc-300 border border-zinc-800'
                       }`}
                     >
                       {data?.isProjectionsMode
@@ -3127,7 +3153,7 @@ export default function TVCommandCenter() {
                   )}
                 </div>
 
-                <span className="text-[11px] font-condensed font-bold text-[#00E676] uppercase tracking-wider">
+                <span className="text-[11px] font-condensed font-bold text-emerald-400 uppercase tracking-wider">
                   {scoringFormat.toUpperCase()} LEADERS
                 </span>
               </div>
@@ -3149,20 +3175,20 @@ export default function TVCommandCenter() {
                     return (
                       <div
                         key={pos}
-                        className="p-2.5 md:p-3 rounded-[4px] border border-white/10 bg-[#141722] flex flex-col justify-between"
+                        className="p-2.5 md:p-3 rounded-[4px] border border-zinc-800/80 bg-[#101217] flex flex-col justify-between"
                       >
                         <div className="flex items-center justify-between">
-                          <span className="text-[10px] font-condensed font-bold tracking-wider uppercase px-2 py-0.5 rounded-[2px] bg-[#0E1017] text-slate-400 border border-white/10">
+                          <span className="text-[10px] font-condensed font-bold tracking-wider uppercase px-2 py-0.5 rounded-[2px] bg-zinc-900 text-zinc-400 border border-zinc-800">
                             {label}
                           </span>
                         </div>
                         <div className="text-center py-2">
-                          <span className="text-xs font-condensed font-bold text-slate-500 block uppercase">
+                          <span className="text-xs font-condensed font-medium text-zinc-500 block uppercase">
                             {gameFilterMode === 'live' ? 'Awaiting Live Game Play' : 'No Data Available'}
                           </span>
                         </div>
-                        <div className="text-right border-t border-white/10 pt-1.5">
-                          <span className="text-sm font-mono-score font-bold text-slate-600">0.0 PTS</span>
+                        <div className="text-right border-t border-zinc-800/80 pt-1.5">
+                          <span className="text-sm font-mono-score font-bold text-zinc-600">0.0 PTS</span>
                         </div>
                       </div>
                     );
@@ -3174,6 +3200,7 @@ export default function TVCommandCenter() {
                   const isGameOver = player.gameStatus.state === 'post' || player.gameStatus.detail?.toLowerCase().includes('final');
                   const isStaleInjury = isGameOver && (player.injuryStatus === 'Questionable' || player.injuryStatus === 'Doubtful');
                   const showInjury = Boolean(player.injuryStatus && player.injuryStatus !== 'NA' && !isStaleInjury);
+                  const teamAccent = getTeamAccentColor(player.team.abbreviation);
 
                   // Consolidate secondary stats & targets into crisp pills
                   const statPills = formatPlayerStatPills(player);
@@ -3182,10 +3209,11 @@ export default function TVCommandCenter() {
                     <div
                       key={player.id}
                       onClick={() => setSelectedDetailPlayer(player)}
+                      style={{ borderLeftColor: teamAccent, borderLeftWidth: '3px' }}
                       className={`relative p-2.5 md:p-3 rounded-[4px] border flex flex-col justify-between transition-all cursor-pointer ${
                         isBoosted
-                          ? 'border-[#00E676] shadow-[0_0_20px_rgba(0,230,118,0.8)] bg-[#00E676]/10 scale-[1.01]'
-                          : 'bg-[#141722] border-white/10 hover:border-emerald-500/40 hover:bg-[#181C2A]'
+                          ? 'border-emerald-400 bg-emerald-950/20'
+                          : 'bg-[#101217] border-zinc-800/80 hover:border-zinc-700 hover:bg-[#141720]'
                       }`}
                     >
                       {/* Top Row: Position badge, larger headshot, Name, Clock, Matchup, and massive glowing Points */}
@@ -3193,7 +3221,7 @@ export default function TVCommandCenter() {
                         <div className="flex items-center gap-3 min-w-0 flex-1">
                           {/* Larger Player Headshot Container */}
                           <div className="relative w-14 h-14 md:w-16 md:h-16 shrink-0">
-                            <div className="w-full h-full rounded-[4px] overflow-hidden bg-[#07080C] border border-white/10 shadow-md">
+                            <div className="w-full h-full rounded-[4px] overflow-hidden bg-zinc-950 border border-zinc-800">
                               <img
                                 src={player.headshot}
                                 alt={player.name}
@@ -3206,7 +3234,7 @@ export default function TVCommandCenter() {
                             </div>
                             {/* Miniature Team Logo in Corner - Hidden on DEF cards */}
                             {player.position !== 'DEF' && (
-                              <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-zinc-900 ring-1 ring-zinc-700 p-0.5 z-20 flex items-center justify-center shadow-md">
+                              <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-zinc-900 ring-1 ring-zinc-700 p-0.5 z-20 flex items-center justify-center">
                                 <img
                                   src={player.team.logo}
                                   alt={player.team.abbreviation}
@@ -3220,15 +3248,15 @@ export default function TVCommandCenter() {
                           <div className="min-w-0 flex-1 flex flex-col justify-center gap-0.5">
                             {/* Meta badges: Position Badge + Matchup + Clock + Owner */}
                             <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="text-[10px] font-condensed font-bold tracking-wider uppercase px-1.5 py-0.5 rounded-[2px] bg-[#0E1017] text-amber-300 border border-amber-500/40 shrink-0">
+                              <span className="text-[10px] font-condensed font-black tracking-wider uppercase px-1.5 py-0.5 rounded-[2px] bg-zinc-900 text-zinc-300 border border-zinc-800 shrink-0">
                                 {label}
                               </span>
-                              <span className="text-xs font-condensed font-bold text-slate-300 shrink-0">
+                              <span className="text-xs font-condensed font-bold text-zinc-400 shrink-0">
                                 {player.team.abbreviation} vs {player.opponent.abbreviation}
                               </span>
-                              <span className={`text-[11px] font-condensed font-bold shrink-0 ${player.isGameLive ? 'text-amber-400 flex items-center gap-1' : player.isProjection ? 'text-cyan-400 font-bold' : 'text-slate-400'}`}>
+                              <span className={`text-[11px] font-mono-score font-bold shrink-0 ${player.isGameLive ? 'text-amber-400 flex items-center gap-1' : player.isProjection ? 'text-cyan-400 font-bold' : 'text-zinc-500'}`}>
                                 {player.isGameLive && (
-                                  <span className="h-1.5 w-1.5 rounded-full bg-[#00E676] animate-ping inline-block" />
+                                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse inline-block" />
                                 )}
                                 {player.isProjection ? 'PROJ' : player.gameStatus.clock ? `${player.gameStatus.clock}${player.gameStatus.period ? ` - ${player.gameStatus.period === 1 ? '1st' : player.gameStatus.period === 2 ? '2nd' : player.gameStatus.period === 3 ? '3rd' : player.gameStatus.period === 4 ? '4th' : `OT`}` : ''}` : player.gameStatus.detail || (player.isGameLive ? 'Live' : 'Final')}
                               </span>
@@ -3242,16 +3270,16 @@ export default function TVCommandCenter() {
 
                             {/* Player Name & Live Injury Badge */}
                             <div className="flex items-center gap-1.5 min-w-0">
-                              <h3 className="text-sm md:text-base font-condensed font-bold text-white truncate leading-tight uppercase">
+                              <h3 className="text-sm md:text-base font-condensed font-black text-white truncate leading-tight uppercase tracking-tight">
                                 {player.name}
                               </h3>
                               {showInjury && (
                                 <span
-                                  className={`px-1.5 py-0.2 rounded-[2px] text-[9px] font-black uppercase tracking-wider shrink-0 ${
+                                  className={`px-1.5 py-0.2 rounded-[2px] text-[8px] font-black uppercase tracking-wider shrink-0 ${
                                     player.injuryStatus === 'Out' || player.injuryStatus === 'IR' || player.injuryStatus === 'PUP'
-                                      ? 'bg-red-600 text-white border border-red-500 shadow-sm'
+                                      ? 'bg-rose-600 text-white'
                                       : player.injuryStatus === 'Doubtful'
-                                      ? 'bg-orange-600 text-white border border-orange-500'
+                                      ? 'bg-orange-600 text-white'
                                       : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
                                   }`}
                                   title={player.injuryNotes ? `${player.injuryStatus}: ${player.injuryNotes}` : player.injuryStatus || undefined}
@@ -3263,19 +3291,19 @@ export default function TVCommandCenter() {
                           </div>
                         </div>
 
-                        {/* Right: Massive Glowing Fantasy Points Readout */}
+                        {/* Right: Editorial Stack: Subdued Metadata above Massive Display Number */}
                         <div className="flex flex-col items-end shrink-0 pl-2">
-                          <span className="text-3xl md:text-4xl font-mono-score font-bold text-[#00E676] leading-none">
-                            {formatPoints(pts)}
-                          </span>
-                          <span className="text-[9px] font-condensed font-bold uppercase text-slate-400 tracking-widest mt-1">
+                          <span className="text-[9px] font-condensed font-bold uppercase text-zinc-500 tracking-widest leading-none mb-1">
                             {getScoringUnitLabel(pos, scoringFormat, player.isProjection)}
+                          </span>
+                          <span className="text-3xl md:text-4xl font-mono-score font-black tracking-tight text-emerald-400 leading-none">
+                            {formatPoints(pts)}
                           </span>
                         </div>
                       </div>
 
                       {/* Bottom Stat Pills Area: Individual Crisp High-Contrast Pills (Never truncated!) */}
-                      <div className="flex items-center gap-1.5 mt-2 pt-2 border-t border-white/10 overflow-x-auto no-scrollbar flex-nowrap py-0.5">
+                      <div className="flex items-center gap-1.5 mt-2 pt-2 border-t border-zinc-800/80 overflow-x-auto no-scrollbar flex-nowrap py-0.5">
                         {statPills.length > 0 ? (
                           statPills.map((pill, pIdx) => {
                             const pillClass = getStatSegmentClasses(pill, player.position);
@@ -3289,7 +3317,7 @@ export default function TVCommandCenter() {
                             );
                           })
                         ) : (
-                          <span className="text-[10px] font-condensed font-semibold text-slate-500 italic">
+                          <span className="text-[10px] font-condensed font-medium text-zinc-500 italic">
                             Stats updating live...
                           </span>
                         )}
@@ -3301,12 +3329,12 @@ export default function TVCommandCenter() {
             </div>
 
             {/* RIGHT 4 COLUMNS: VERTICAL LIVE SCORING & BIG PLAYS FEED */}
-            <div className="col-span-12 lg:col-span-4 flex flex-col h-full bg-[#0E1017] rounded-[4px] border border-white/10 p-3 overflow-hidden shadow-xl min-h-0">
-              <div className="flex flex-col gap-1.5 pb-2 border-b border-white/10 shrink-0">
+            <div className="col-span-12 lg:col-span-4 flex flex-col h-full bg-[#0C0D10] rounded-[4px] border border-zinc-800/80 p-3 overflow-hidden min-h-0">
+              <div className="flex flex-col gap-1.5 pb-2 border-b border-zinc-800/80 shrink-0">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Zap className="w-4 h-4 text-amber-400" />
-                    <h2 className="text-xs md:text-sm font-condensed font-bold tracking-wide uppercase text-white">
+                    <h2 className="text-xs md:text-sm font-condensed font-black tracking-wide uppercase text-white">
                       LIVE SCORING &amp; BIG PLAYS FEED
                     </h2>
                     {selectedTickerGame ? (
@@ -3327,8 +3355,8 @@ export default function TVCommandCenter() {
                       <span
                         className={`text-[9px] font-condensed font-bold uppercase px-1.5 py-0.2 rounded-[2px] ${
                           gameFilterMode === 'live'
-                            ? 'bg-red-950/80 text-red-300 border border-red-500/40'
-                            : 'bg-white/10 text-slate-300 border border-white/15'
+                            ? 'bg-rose-950/80 text-rose-300 border border-rose-500/40'
+                            : 'bg-zinc-900 text-zinc-300 border border-zinc-800'
                         }`}
                       >
                         {gameFilterMode === 'live' ? 'LIVE' : 'ALL'}
@@ -3338,7 +3366,7 @@ export default function TVCommandCenter() {
 
                   {/* Inline Fantasy Burst Alert */}
                   {burstAlerts.length > 0 && (
-                    <div className="flex items-center gap-1 px-2 py-0.5 rounded-[2px] bg-emerald-950/90 border border-emerald-500/50 text-emerald-300 text-[10px] font-mono-score font-bold animate-pulse shadow-sm">
+                    <div className="flex items-center gap-1 px-2 py-0.5 rounded-[2px] bg-emerald-950/90 border border-emerald-500/50 text-emerald-300 text-[10px] font-mono-score font-bold animate-pulse">
                       <Flame className="w-3 h-3 text-emerald-400" />
                       <span>+{burstAlerts[0].delta.toFixed(1)}: {burstAlerts[0].playerName}</span>
                     </div>
@@ -3353,10 +3381,10 @@ export default function TVCommandCenter() {
                       <button
                         key={filterType}
                         onClick={() => setPlayTypeFilter(filterType)}
-                        className={`px-2 py-0.5 rounded-[2px] text-[9px] font-condensed font-bold uppercase tracking-wider transition-colors shrink-0 ${
+                        className={`px-2 py-0.5 rounded-[2px] text-[9px] font-condensed uppercase tracking-wider transition-colors shrink-0 ${
                           isActive
-                            ? 'bg-amber-400 text-black shadow-sm font-black'
-                            : 'bg-[#141722] text-slate-400 hover:text-slate-200 border border-white/10'
+                            ? 'bg-white text-black font-black'
+                            : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800 font-bold'
                         }`}
                       >
                         {filterType}
@@ -3369,7 +3397,7 @@ export default function TVCommandCenter() {
               {/* Scrollable Vertical Plays List */}
               <div className="flex-1 flex flex-col gap-2 overflow-y-auto max-h-[calc(100vh-230px)] pr-1 pt-2">
                 {filteredLiveUpdates.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center text-slate-500 font-condensed font-semibold text-xs py-8 gap-2 text-center">
+                  <div className="h-full flex flex-col items-center justify-center text-zinc-500 font-condensed font-medium text-xs py-8 gap-2 text-center">
                     <span>
                       {data?.isProjectionsMode
                         ? `Week ${data.projectionsWeek || data.season?.week} Projections active. Real-time scoring feed will activate automatically when Thursday Night Football kicks off.`
@@ -3382,7 +3410,7 @@ export default function TVCommandCenter() {
                     {gameFilterMode === 'live' && liveGamesCount === 0 && (
                       <button
                         onClick={() => handleSelectFilterMode('all')}
-                        className="px-2.5 py-1 rounded-[4px] bg-blue-600/80 hover:bg-blue-600 text-white text-[11px] font-condensed font-bold uppercase transition-colors"
+                        className="px-2.5 py-1 rounded-[4px] bg-zinc-800 hover:bg-zinc-700 text-white text-[11px] font-condensed font-bold uppercase transition-colors border border-zinc-700"
                       >
                         Switch to ALL GAMES
                       </button>
@@ -3404,65 +3432,65 @@ export default function TVCommandCenter() {
                         key={`${upd.id}-${idx}`}
                         className={`h-auto p-3 rounded-[4px] border transition-all flex flex-col gap-1.5 ${
                           isTD
-                            ? 'bg-emerald-950/30 border-emerald-500/40 shadow-sm'
+                            ? 'bg-[#101512] border-emerald-500/40 border-l-[3px] border-l-emerald-400'
                             : isTO
-                            ? 'bg-rose-950/30 border-rose-500/40 shadow-sm'
+                            ? 'bg-[#151012] border-rose-500/40 border-l-[3px] border-l-rose-500'
                             : isFG
-                            ? 'bg-cyan-950/30 border-cyan-500/40'
+                            ? 'bg-[#101416] border-cyan-500/40 border-l-[3px] border-l-cyan-400'
                             : isSafety
-                            ? 'bg-purple-950/30 border-purple-500/40'
-                            : 'bg-[#141722] border-white/10'
+                            ? 'bg-[#141016] border-purple-500/40 border-l-[3px] border-l-purple-400'
+                            : 'bg-[#101217] border-zinc-800/80 border-l-[3px] border-l-zinc-700'
                         }`}
                       >
                         {/* Play Header: Type Badge • Matchup • Clock • Score */}
                         <div className="flex items-center justify-between gap-1 flex-wrap">
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <span
-                              className={`text-[9px] font-condensed font-bold uppercase px-1.5 py-0.5 rounded-[2px] tracking-wider ${
+                              className={`text-[9px] font-condensed font-black uppercase px-1.5 py-0.5 rounded-[2px] tracking-wider ${
                                 isTD
-                                  ? 'bg-[#00E676] text-black font-bold'
+                                  ? 'bg-emerald-400 text-black'
                                   : isTO
-                                  ? 'bg-rose-600 text-white font-bold'
+                                  ? 'bg-rose-600 text-white'
                                   : isFG
-                                  ? 'bg-cyan-500 text-black font-bold'
-                                  : 'bg-amber-500 text-black font-bold'
+                                  ? 'bg-cyan-500 text-black'
+                                  : 'bg-zinc-800 text-zinc-200'
                               }`}
                             >
                               {upd.headline}
                             </span>
-                            <span className="text-[11px] font-condensed font-bold text-slate-300">
+                            <span className="text-[11px] font-condensed font-bold text-zinc-400">
                               {upd.gameName} • {upd.gameClock}
                             </span>
                             {upd.downDistanceText && (
-                              <span className="text-[9px] font-condensed font-bold text-amber-300 bg-[#07080C] px-1.5 py-0.2 rounded-[2px] border border-white/10 shrink-0">
+                              <span className="text-[9px] font-mono-score font-semibold text-zinc-300 bg-zinc-900 px-1.5 py-0.2 rounded-[2px] border border-zinc-800 shrink-0">
                                 {upd.downDistanceText}
                               </span>
                             )}
                           </div>
 
                           {upd.scoreSummary && (
-                            <span className="text-[11px] font-mono-score font-bold text-slate-300 shrink-0">
+                            <span className="text-[11px] font-mono-score font-bold text-white shrink-0">
                               {upd.scoreSummary}
                             </span>
                           )}
                         </div>
 
                         {/* Full Play Description (Formatted & Never clipped!) */}
-                        <p className="text-xs font-semibold text-slate-200 leading-snug">
+                        <p className="text-xs font-medium text-zinc-200 leading-snug">
                           {renderCleanPlayDescription(upd.description)}
                         </p>
 
                         {/* Fantasy Impact & Ownership Tagging */}
                         <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
                           {upd.fantasyImpact && (
-                            <span className="text-[10px] font-mono-score font-bold text-[#00E676] bg-emerald-950/80 border border-emerald-500/30 px-2 py-0.5 rounded-[2px] shadow-sm flex items-center gap-1">
-                              <Zap className="w-3 h-3 text-[#00E676]" />
+                            <span className="text-[10px] font-mono-score font-bold text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-2 py-0.5 rounded-[2px] flex items-center gap-1">
+                              <Zap className="w-3 h-3 text-emerald-400" />
                               <span>{upd.fantasyImpact}</span>
                             </span>
                           )}
 
                           {matchingOwners.length > 0 && (
-                            <span className="text-[9px] font-condensed font-bold uppercase px-2 py-0.5 rounded-[2px] bg-amber-500/15 text-amber-300 border border-amber-500/40 flex items-center gap-1 shadow-sm">
+                            <span className="text-[9px] font-condensed font-bold uppercase px-2 py-0.5 rounded-[2px] bg-amber-500/15 text-amber-300 border border-amber-500/30 flex items-center gap-1">
                               <Users className="w-3 h-3 text-amber-400" />
                               <span>{matchingOwners[0][1][0]?.ownerName.toUpperCase()}&apos;S PLAYER</span>
                             </span>
@@ -3479,30 +3507,30 @@ export default function TVCommandCenter() {
           /* TAB 8: ROOM MATCHUPS & ROSTERS */
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-3.5 h-full overflow-hidden">
             {/* Left 6 Columns: Living Room Friends Leaderboard */}
-            <div className="lg:col-span-6 flex flex-col h-full bg-slate-900/50 rounded-2xl border border-slate-800/80 p-3 overflow-hidden backdrop-blur-sm shadow-xl">
-              <div className="flex items-center justify-between pb-2 border-b border-slate-800 shrink-0">
+            <div className="lg:col-span-6 flex flex-col h-full bg-[#0C0D10] rounded-[4px] border border-zinc-800/80 p-3 overflow-hidden">
+              <div className="flex items-center justify-between pb-2 border-b border-zinc-800/80 shrink-0">
                 <div className="flex items-center gap-2">
                   <Crown className="w-4 h-4 text-amber-400" />
-                  <h2 className="text-sm font-black tracking-wide uppercase text-white">
-                    Living Room Leaderboard (Who is Winning Today?)
+                  <h2 className="text-sm font-condensed font-black tracking-wide uppercase text-white">
+                    Living Room Leaderboard
                   </h2>
                 </div>
                 <button
                   onClick={() => setIsManageModalOpen(true)}
-                  className="text-xs font-bold text-amber-400 hover:text-amber-300 uppercase"
+                  className="text-xs font-condensed font-bold text-amber-400 hover:text-amber-300 uppercase tracking-wide"
                 >
                   + Add / Edit Friends
                 </button>
               </div>
 
-              <div className="flex-1 overflow-y-auto pr-1 pt-2 space-y-2.5">
+              <div className="flex-1 overflow-y-auto pr-1 pt-2 space-y-2">
                 {roomFriendsLeaderboard.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center gap-2 text-slate-400">
-                    <Users className="w-8 h-8 text-slate-600" />
-                    <p className="text-xs font-semibold">No friends tagged in the living room yet.</p>
+                  <div className="h-full flex flex-col items-center justify-center gap-2 text-zinc-500 font-condensed">
+                    <Users className="w-8 h-8 text-zinc-600" />
+                    <p className="text-xs font-medium">No friends tagged in the living room yet.</p>
                     <button
                       onClick={() => setIsManageModalOpen(true)}
-                      className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs uppercase"
+                      className="px-3 py-1.5 rounded-[4px] bg-amber-400 text-black font-black text-xs uppercase"
                     >
                       Tag Friends in Room
                     </button>
@@ -3515,56 +3543,56 @@ export default function TVCommandCenter() {
                     return (
                       <div
                         key={`${friend.name}-${idx}`}
-                        className={`p-3 rounded-xl border transition-all ${
+                        className={`p-3 rounded-[4px] border transition-all ${
                           isFirst
-                            ? 'bg-gradient-to-r from-amber-950/30 via-slate-900 to-slate-900 border-amber-500/60 shadow-[0_0_15px_rgba(245,158,11,0.2)]'
-                            : 'bg-slate-900/90 border-slate-800'
+                            ? 'bg-[#12141C] border-amber-500/50 border-l-[3px] border-l-amber-400'
+                            : 'bg-[#101217] border-zinc-800/80 hover:border-zinc-700'
                         }`}
                       >
                         <div className="flex items-center justify-between mb-2">
                           <div className="flex items-center gap-2.5">
                             <div
-                              className={`w-6 h-6 rounded-md flex items-center justify-center text-xs font-black border ${
+                              className={`w-6 h-6 rounded-[2px] flex items-center justify-center text-xs font-mono-score font-bold border ${
                                 rank === 1
-                                  ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-sm'
+                                  ? 'bg-amber-400 text-black border-amber-300 font-black'
                                   : rank === 2
-                                  ? 'bg-slate-300 text-slate-950 border-slate-200'
+                                  ? 'bg-zinc-300 text-black border-zinc-200'
                                   : rank === 3
                                   ? 'bg-amber-700 text-white border-amber-600'
-                                  : 'bg-slate-800 text-slate-400 border-slate-700'
+                                  : 'bg-zinc-900 text-zinc-400 border-zinc-800'
                               }`}
                             >
                               {rank}
                             </div>
                             <div>
-                              <h3 className="text-sm font-black text-white leading-tight">
+                              <h3 className="text-sm font-condensed font-black text-white leading-tight uppercase tracking-tight">
                                 {friend.name}
                               </h3>
                               {friend.teamName && (
-                                <p className="text-[11px] text-amber-400/90 font-bold">{friend.teamName}</p>
+                                <p className="text-[11px] text-amber-400 font-semibold">{friend.teamName}</p>
                               )}
                             </div>
                           </div>
 
                           <div className="text-right">
-                            <div className="text-xl font-black text-emerald-400 tv-tabular">
+                            <div className="text-xl font-mono-score font-black text-emerald-400 leading-none">
                               {friend.totalPoints.toFixed(1)}
                             </div>
-                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                            <span className="text-[9px] font-condensed font-bold text-zinc-500 uppercase tracking-widest mt-0.5 block">
                               TOTAL {scoringFormat.toUpperCase()} PTS
                             </span>
                           </div>
                         </div>
 
                         {/* Rostered Players Chips */}
-                        <div className="pt-1.5 border-t border-slate-800/80 flex flex-wrap gap-1">
+                        <div className="pt-1.5 border-t border-zinc-800/80 flex flex-wrap gap-1">
                           {friend.rosteredPlayers.map((p, pIdx) => (
                             <span
                               key={`${p.name}-${pIdx}`}
-                              className="px-2 py-0.5 rounded bg-slate-950 border border-slate-800 text-[10px] font-semibold text-slate-300 flex items-center gap-1.5"
+                              className="px-2 py-0.5 rounded-[2px] bg-zinc-950 border border-zinc-800 text-[10px] font-mono-score font-medium text-zinc-300 flex items-center gap-1.5"
                             >
                               <span>{p.name}</span>
-                              <span className="text-[10px] font-bold text-emerald-400 tv-tabular">
+                              <span className="font-bold text-emerald-400">
                                 {p.points > 0 ? `${p.points.toFixed(1)} pts` : '0 pts'}
                               </span>
                             </span>
@@ -3578,27 +3606,27 @@ export default function TVCommandCenter() {
             </div>
 
             {/* Right 6 Columns: Connected League Matchups */}
-            <div className="lg:col-span-6 flex flex-col h-full bg-slate-900/50 rounded-2xl border border-slate-800/80 p-3 overflow-hidden backdrop-blur-sm shadow-xl">
-              <div className="flex items-center justify-between pb-2 border-b border-slate-800 shrink-0">
+            <div className="lg:col-span-6 flex flex-col h-full bg-[#0C0D10] rounded-[4px] border border-zinc-800/80 p-3 overflow-hidden">
+              <div className="flex items-center justify-between pb-2 border-b border-zinc-800/80 shrink-0">
                 <div className="flex items-center gap-2">
                   <Swords className="w-4 h-4 text-cyan-400" />
-                  <h2 className="text-sm font-black tracking-wide uppercase text-white">
-                    Live Head-to-Head League Matchups
+                  <h2 className="text-sm font-condensed font-black tracking-wide uppercase text-white">
+                    Live League Matchups
                   </h2>
                 </div>
-                <span className="text-xs font-bold text-slate-400 uppercase">
+                <span className="text-xs font-condensed font-bold text-zinc-500 uppercase tracking-wider">
                   {allConnectedMatchups.length} MATCHUPS
                 </span>
               </div>
 
               <div className="flex-1 overflow-y-auto pr-1 pt-2 space-y-2">
                 {allConnectedMatchups.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center gap-2 text-slate-400">
-                    <Swords className="w-8 h-8 text-slate-600" />
-                    <p className="text-xs font-semibold">No Sleeper or ESPN leagues connected yet.</p>
+                  <div className="h-full flex flex-col items-center justify-center gap-2 text-zinc-500 font-condensed">
+                    <Swords className="w-8 h-8 text-zinc-600" />
+                    <p className="text-xs font-medium">No Sleeper or ESPN leagues connected yet.</p>
                     <button
                       onClick={() => setIsManageModalOpen(true)}
-                      className="px-3 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black text-xs uppercase"
+                      className="px-3 py-1.5 rounded-[4px] bg-cyan-500 hover:bg-cyan-400 text-black font-black text-xs uppercase"
                     >
                       Connect Your League
                     </button>
@@ -3611,14 +3639,14 @@ export default function TVCommandCenter() {
                     return (
                       <div
                         key={`${match.id}-${mIdx}`}
-                        className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 hover:border-slate-700 transition-all space-y-1.5"
+                        className="p-2.5 rounded-[4px] bg-[#101217] border border-zinc-800/80 hover:border-zinc-700 transition-all space-y-1.5"
                       >
                         {/* League Title Badge */}
-                        <div className="flex items-center justify-between text-[10px] text-slate-400">
-                          <span className="font-black text-cyan-400 uppercase tracking-wider">
+                        <div className="flex items-center justify-between text-[10px]">
+                          <span className="font-condensed font-black text-cyan-400 uppercase tracking-wider">
                             {match.leagueType.toUpperCase()} • {match.leagueName}
                           </span>
-                          <span className="text-[9px] font-bold text-slate-500">HEAD-TO-HEAD</span>
+                          <span className="text-[9px] font-condensed font-bold text-zinc-500 uppercase tracking-wider">HEAD-TO-HEAD</span>
                         </div>
 
                         {/* Matchup Teams Grid */}
@@ -3684,33 +3712,33 @@ export default function TVCommandCenter() {
           /* TAB 9: BETS & PARLAYS TRACKER (10-FOOT TV BROADCAST UI) */
           <div className="h-full flex flex-col justify-between overflow-hidden">
             {/* Header row with Summary, View Toggle & Add Button */}
-            <div className="flex items-center justify-between pb-2 shrink-0 border-b border-slate-800 gap-2 flex-wrap">
+            <div className="flex items-center justify-between pb-2 shrink-0 border-b border-zinc-800/80 gap-2 flex-wrap">
               <div className="flex items-center gap-2.5 flex-wrap">
                 <div className="flex items-center gap-1.5">
                   <DollarSign className="w-5 h-5 text-emerald-400" />
-                  <h2 className="text-base font-black tracking-wide uppercase text-white">
+                  <h2 className="text-sm md:text-base font-condensed font-black tracking-wide uppercase text-white">
                     Live Parlay &amp; Bet Tracker
                   </h2>
                 </div>
 
                 {/* Sub-View Switcher: Slips vs Live Props Market */}
-                <div className="flex items-center bg-slate-950 p-0.5 rounded-xl border border-slate-800">
+                <div className="flex items-center bg-zinc-950 p-0.5 rounded-[4px] border border-zinc-800/80">
                   <button
                     onClick={() => setBettingSubView('slips')}
-                    className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase transition-all ${
+                    className={`px-2.5 py-1 rounded-[2px] text-[10px] font-condensed uppercase transition-all ${
                       bettingSubView === 'slips'
-                        ? 'bg-amber-400 text-slate-950 shadow'
-                        : 'text-slate-400 hover:text-white'
+                        ? 'bg-white text-black font-black'
+                        : 'text-zinc-400 hover:text-white font-bold'
                     }`}
                   >
                     Tracked Slips ({savedBets.length})
                   </button>
                   <button
                     onClick={() => setBettingSubView('props')}
-                    className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase transition-all ${
+                    className={`px-2.5 py-1 rounded-[2px] text-[10px] font-condensed uppercase transition-all ${
                       bettingSubView === 'props'
-                        ? 'bg-emerald-400 text-slate-950 shadow'
-                        : 'text-slate-400 hover:text-white'
+                        ? 'bg-emerald-400 text-black font-black'
+                        : 'text-zinc-400 hover:text-white font-bold'
                     }`}
                   >
                     Live Props Market ({allActivePlayers.length})
@@ -3718,7 +3746,7 @@ export default function TVCommandCenter() {
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <span className="px-2 py-0.5 rounded-full bg-slate-900 border border-slate-800 text-[10px] font-black text-slate-300 uppercase">
+                  <span className="px-2 py-0.5 rounded-[2px] bg-zinc-900 border border-zinc-800 text-[10px] font-mono-score font-bold text-zinc-400 uppercase">
                     {savedBets.length} Active {savedBets.length === 1 ? 'Slip' : 'Slips'}
                   </span>
                   {(() => {
@@ -3728,7 +3756,7 @@ export default function TVCommandCenter() {
                     return (
                       <>
                         {cashedSlips > 0 && (
-                          <span className="px-2 py-0.5 rounded-[2px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-condensed font-bold uppercase flex items-center gap-1 shadow-sm">
+                          <span className="px-2 py-0.5 rounded-[2px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-condensed font-bold uppercase flex items-center gap-1">
                             <Trophy className="w-3 h-3 text-emerald-400" />
                             <span>{cashedSlips} CASHOUT</span>
                           </span>
@@ -3746,7 +3774,7 @@ export default function TVCommandCenter() {
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setIsBetsModalOpen(true)}
-                  className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs uppercase shadow-[0_0_15px_rgba(16,185,129,0.5)] transition-all flex items-center gap-1.5"
+                  className="px-3 py-1.5 rounded-[4px] bg-emerald-400 hover:bg-emerald-300 text-black font-condensed font-black text-xs uppercase transition-colors flex items-center gap-1.5"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>+ Manage Slips &amp; Props</span>
@@ -3759,31 +3787,31 @@ export default function TVCommandCenter() {
               /* LIVE PROPS & PLAYER MARKET BOARD */
               <div className="flex-1 flex flex-col min-h-0 pt-2">
                 {/* Search & Filters Bar */}
-                <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-2 pb-2 shrink-0 border-b border-slate-800/80">
+                <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-2 pb-2 shrink-0 border-b border-zinc-800/80">
                   {/* Search Bar */}
                   <div className="relative flex-1 max-w-md">
-                    <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
+                    <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-2.5" />
                     <input
                       type="text"
                       value={bettingSearch}
                       onChange={(e) => setBettingSearch(e.target.value)}
-                      placeholder="Search any NFL player, team, or position... e.g., Matthew Golden"
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 font-bold"
+                      placeholder="Search any NFL player, team, or position..."
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-[4px] pl-9 pr-3 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-700 font-bold"
                     />
                   </div>
 
                   {/* Filter Pills: Position + Game */}
                   <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
                     {/* Position Pills */}
-                    <div className="flex items-center gap-1 bg-slate-950 p-0.5 rounded-lg border border-slate-800 shrink-0">
+                    <div className="flex items-center gap-1 bg-zinc-950 p-0.5 rounded-[4px] border border-zinc-800 shrink-0">
                       {(['ALL', 'QB', 'RB', 'WR', 'TE', 'K'] as const).map((pos) => (
                         <button
                           key={pos}
                           onClick={() => setBettingPosFilter(pos)}
-                          className={`px-2 py-0.5 rounded text-[9px] font-black uppercase transition-all ${
+                          className={`px-2 py-0.5 rounded-[2px] text-[9px] font-condensed uppercase transition-all ${
                             bettingPosFilter === pos
-                              ? 'bg-cyan-400 text-slate-950 font-black'
-                              : 'text-slate-400 hover:text-white'
+                              ? 'bg-white text-black font-black'
+                              : 'text-zinc-400 hover:text-white font-bold'
                           }`}
                         >
                           {pos}
@@ -3796,10 +3824,10 @@ export default function TVCommandCenter() {
                       <div className="flex items-center gap-1 overflow-x-auto no-scrollbar shrink-0">
                         <button
                           onClick={() => setBettingGameFilter('ALL')}
-                          className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase transition-all ${
+                          className={`px-2 py-1 rounded-[2px] text-[9px] font-condensed uppercase transition-all ${
                             bettingGameFilter === 'ALL'
-                              ? 'bg-amber-400 text-slate-950 font-black'
-                              : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
+                              ? 'bg-amber-400 text-black font-black'
+                              : 'bg-zinc-950 text-zinc-400 hover:text-white border border-zinc-800 font-bold'
                           }`}
                         >
                           All Games
@@ -3811,12 +3839,12 @@ export default function TVCommandCenter() {
                             <button
                               key={g.id}
                               onClick={() => setBettingGameFilter(g.id)}
-                              className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase transition-all flex items-center gap-1 shrink-0 ${
+                              className={`px-2 py-1 rounded-[2px] text-[9px] font-condensed uppercase transition-all flex items-center gap-1 shrink-0 ${
                                 active
-                                  ? 'bg-amber-400 text-slate-950 font-black'
+                                  ? 'bg-amber-400 text-black font-black'
                                   : isLive
-                                  ? 'bg-emerald-950/80 border border-emerald-500/50 text-emerald-300'
-                                  : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
+                                  ? 'bg-emerald-950/80 border border-emerald-500/50 text-emerald-300 font-bold'
+                                  : 'bg-zinc-950 text-zinc-400 hover:text-white border border-zinc-800 font-medium'
                               }`}
                             >
                               {isLive && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />}
@@ -3832,8 +3860,8 @@ export default function TVCommandCenter() {
                 {/* Player Props Cards Grid */}
                 <div className="flex-1 overflow-y-auto pr-1 pt-2">
                   {filteredMarketPlayers.length === 0 ? (
-                    <div className="h-full flex flex-col items-center justify-center text-slate-400 py-12">
-                      <p className="text-sm font-bold uppercase text-slate-300">No matching players found</p>
+                    <div className="h-full flex flex-col items-center justify-center text-zinc-500 py-12 font-condensed">
+                      <p className="text-sm font-bold uppercase text-zinc-400">No matching players found</p>
                       <button
                         onClick={() => {
                           setBettingSearch('');
@@ -3850,41 +3878,43 @@ export default function TVCommandCenter() {
                       {filteredMarketPlayers.map((player) => {
                         const props = getPlayerPropsSummary(player);
                         const isLive = player.isGameLive || player.isLive || player.gameStatus?.state === 'in';
+                        const teamAccent = getTeamAccentColor(player.team.abbreviation);
                         return (
                           <div
                             key={player.id}
-                            className={`rounded-2xl border p-3 flex flex-col justify-between backdrop-blur-sm transition-all shadow-lg ${
+                            style={{ borderLeftColor: teamAccent, borderLeftWidth: '3px' }}
+                            className={`rounded-[4px] border p-3 flex flex-col justify-between transition-all ${
                               isLive
-                                ? 'bg-slate-900/90 border-emerald-500/40 shadow-[0_0_15px_rgba(16,185,129,0.15)]'
-                                : 'bg-slate-900/80 border-slate-800 hover:border-slate-700'
+                                ? 'bg-[#101217] border-zinc-800 hover:border-zinc-700'
+                                : 'bg-[#0C0D10] border-zinc-800/80 hover:border-zinc-700'
                             }`}
                           >
                             {/* Card Header */}
-                            <div className="flex items-center justify-between pb-2 border-b border-slate-800/80">
+                            <div className="flex items-center justify-between pb-2 border-b border-zinc-800/80">
                               <div className="flex items-center gap-2.5 min-w-0">
                                 <img
                                   src={player.headshot}
                                   alt={player.name}
-                                  className="w-8 h-8 rounded-full object-cover bg-slate-950 border border-slate-700 shrink-0"
+                                  className="w-8 h-8 rounded-full object-cover bg-zinc-950 border border-zinc-800 shrink-0"
                                   onError={(e) => {
                                     (e.currentTarget as HTMLImageElement).src = player.team.logo;
                                   }}
                                 />
                                 <div className="min-w-0">
                                   <div className="flex items-center gap-1.5 flex-wrap">
-                                    <span className="text-xs font-black text-white truncate">
+                                    <span className="text-xs font-condensed font-black text-white truncate">
                                       {player.name} {player.jersey ? `#${player.jersey}` : ''}
                                     </span>
-                                    <span className="text-[9px] font-black text-amber-400 px-1 py-0.2 rounded bg-amber-500/10 border border-amber-500/30 shrink-0">
+                                    <span className="text-[9px] font-condensed font-black text-amber-400 px-1 py-0.2 rounded bg-amber-500/10 border border-amber-500/30 shrink-0">
                                       {player.position}
                                     </span>
                                     {player.injuryStatus && player.injuryStatus !== 'NA' && (
                                       <span
-                                        className={`px-1.5 py-0.2 rounded text-[8px] font-black uppercase tracking-wider shrink-0 ${
+                                        className={`px-1.5 py-0.2 rounded-[2px] text-[8px] font-black uppercase tracking-wider shrink-0 ${
                                           player.injuryStatus === 'Out' || player.injuryStatus === 'IR' || player.injuryStatus === 'PUP'
-                                            ? 'bg-red-600 text-white border border-red-500 shadow-sm'
+                                            ? 'bg-rose-600 text-white'
                                             : player.injuryStatus === 'Doubtful'
-                                            ? 'bg-orange-600 text-white border border-orange-500'
+                                            ? 'bg-orange-600 text-white'
                                             : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
                                         }`}
                                         title={player.injuryNotes ? `${player.injuryStatus}: ${player.injuryNotes}` : player.injuryStatus}
@@ -3893,10 +3923,10 @@ export default function TVCommandCenter() {
                                       </span>
                                     )}
                                   </div>
-                                  <div className="flex items-center gap-1 text-[10px] text-slate-400 font-bold truncate">
-                                    <span>{player.team.abbreviation} vs {player.opponent.abbreviation}</span>
+                                  <div className="flex items-center gap-1 text-[10px] text-zinc-500 font-medium truncate">
+                                    <span className="text-zinc-300 font-bold">{player.team.abbreviation} vs {player.opponent.abbreviation}</span>
                                     <span>•</span>
-                                    <span className={isLive ? 'text-emerald-400 font-black' : player.isProjection ? 'text-cyan-400 font-bold' : ''}>
+                                    <span className={isLive ? 'text-amber-400 font-bold' : player.isProjection ? 'text-cyan-400 font-bold' : ''}>
                                       {player.isProjection ? 'PROJ' : player.gameStatus?.detail || (isLive ? 'LIVE' : 'Upcoming')}
                                     </span>
                                   </div>
@@ -3905,7 +3935,7 @@ export default function TVCommandCenter() {
 
                               <button
                                 onClick={() => setIsBetsModalOpen(true)}
-                                className="px-2 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 text-[10px] font-black uppercase transition-all shrink-0"
+                                className="px-2 py-1 rounded-[2px] bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-emerald-300 text-[10px] font-condensed font-black uppercase transition-all shrink-0"
                               >
                                 + Bet Prop
                               </button>
@@ -3913,32 +3943,32 @@ export default function TVCommandCenter() {
 
                             {/* Live In-Game Stat Line vs Projected Stats */}
                             <div className="py-2 flex items-center justify-between text-[11px] font-bold">
-                              <span className="text-slate-400 uppercase text-[9px] tracking-wider">
-                                {player.isProjection ? 'Projected Line' : 'Live In-Game Stats'}
+                              <span className="text-zinc-500 font-condensed uppercase text-[9px] tracking-wider">
+                                {player.isProjection ? 'Projected Line' : 'Live Stats'}
                               </span>
-                              <span className="text-white tv-tabular font-black">
+                              <span className="text-white font-mono-score font-bold">
                                 {player.rawStatLine || '0 PTS'}
                               </span>
                             </div>
 
                             {/* Dynamic Prop Lines with Live Progress */}
-                            <div className="space-y-2 pt-1 border-t border-slate-800/60">
+                            <div className="space-y-2 pt-1 border-t border-zinc-800/60">
                               {props.map((pr) => (
                                 <div key={pr.id} className="space-y-1">
-                                  <div className="flex items-center justify-between text-[10px] font-bold">
-                                    <span className="text-slate-300">
+                                  <div className="flex items-center justify-between text-[10px]">
+                                    <span className="text-zinc-300 font-condensed font-semibold">
                                       {pr.label} (O/U {pr.target})
                                     </span>
-                                    <span className={`font-black tv-tabular ${pr.isCashed ? 'text-emerald-400' : 'text-slate-400'}`}>
+                                    <span className={`font-mono-score font-bold ${pr.isCashed ? 'text-emerald-400' : 'text-zinc-500'}`}>
                                       {pr.statusText}
                                     </span>
                                   </div>
-                                  <div className="w-full h-1.5 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
+                                  <div className="w-full h-1.5 bg-zinc-950 rounded-full overflow-hidden border border-zinc-800">
                                     <div
                                       className={`h-full transition-all duration-300 ${
                                         pr.isCashed
-                                          ? 'bg-gradient-to-r from-emerald-500 to-teal-400 shadow-[0_0_6px_rgba(16,185,129,0.8)]'
-                                          : 'bg-gradient-to-r from-cyan-400 to-blue-500'
+                                          ? 'bg-emerald-400'
+                                          : 'bg-cyan-500'
                                       }`}
                                       style={{ width: `${Math.max(4, pr.pct)}%` }}
                                     />
@@ -3957,28 +3987,28 @@ export default function TVCommandCenter() {
               /* Slips 2-Column Grid */
               <div className="flex-1 overflow-y-auto pr-1 pt-2">
                 {savedBets.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center gap-3 text-slate-400 py-12">
-                    <div className="p-4 rounded-full bg-slate-900 border border-slate-800">
-                      <DollarSign className="w-10 h-10 text-emerald-400" />
+                  <div className="h-full flex flex-col items-center justify-center gap-3 text-zinc-500 py-12 font-condensed">
+                    <div className="p-3 rounded-[4px] bg-[#0C0D10] border border-zinc-800">
+                      <DollarSign className="w-8 h-8 text-emerald-400" />
                     </div>
                     <div className="text-center">
                       <p className="text-base font-black text-white uppercase">
                         No Bets or Parlays Currently Tracked
                       </p>
-                      <p className="text-xs text-slate-500 max-w-sm mt-1 font-medium">
+                      <p className="text-xs text-zinc-500 max-w-sm mt-1 font-medium">
                         Add player props, game spreads, totals, and anytime touchdown scorers to watch them grade live on your second TV.
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => setIsBetsModalOpen(true)}
-                        className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs uppercase shadow-lg transition-all"
+                        className="px-4 py-2 rounded-[4px] bg-emerald-400 hover:bg-emerald-300 text-black font-condensed font-black text-xs uppercase transition-colors"
                       >
                         + Add Your First Bet / Parlay
                       </button>
                       <button
                         onClick={() => setBettingSubView('props')}
-                        className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-white font-black text-xs uppercase transition-all"
+                        className="px-4 py-2 rounded-[4px] bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-white font-condensed font-bold text-xs uppercase transition-colors"
                       >
                         Browse Player Props Market
                       </button>
@@ -3991,21 +4021,21 @@ export default function TVCommandCenter() {
                     return (
                       <div
                         key={slip.id}
-                        className={`rounded-2xl border p-3 flex flex-col justify-between backdrop-blur-sm transition-all shadow-xl ${
+                        className={`rounded-[4px] border p-3 flex flex-col justify-between transition-all ${
                           summary.overallStatus === 'cashed'
-                            ? 'bg-gradient-to-br from-emerald-950/40 via-slate-900/90 to-slate-950 border-emerald-500/70 shadow-[0_0_20px_rgba(16,185,129,0.25)]'
+                            ? 'bg-[#101512] border-emerald-500/50'
                             : summary.overallStatus === 'chalked'
-                            ? 'bg-slate-900/80 border-slate-800/80 opacity-90'
-                            : 'bg-slate-900/90 border-slate-800 hover:border-slate-700'
+                            ? 'bg-[#121318] border-zinc-800/80 opacity-80'
+                            : 'bg-[#0C0D10] border-zinc-800/80 hover:border-zinc-700'
                         }`}
                       >
                         {/* Slip Card Header */}
-                        <div className="flex items-center justify-between pb-2 border-b border-slate-800/80 gap-2 flex-wrap sm:flex-nowrap">
+                        <div className="flex items-center justify-between pb-2 border-b border-zinc-800/80 gap-2 flex-wrap sm:flex-nowrap">
                           <div className="flex items-center gap-2 min-w-0">
-                            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-slate-950 border border-slate-800 text-slate-300 shrink-0">
+                            <span className="text-[10px] font-mono-score font-bold uppercase px-2 py-0.5 rounded-[2px] bg-zinc-900 border border-zinc-800 text-zinc-400 shrink-0">
                               {slip.legs.length > 1 ? `${slip.legs.length}-LEG` : 'STRAIGHT'}
                             </span>
-                            <h3 className="text-sm font-black text-white truncate">{slip.title}</h3>
+                            <h3 className="text-sm font-condensed font-black text-white truncate uppercase">{slip.title}</h3>
                             {slip.ownerName && (
                               <span className="text-[10px] font-condensed font-bold text-amber-300 bg-amber-500/20 px-1.5 py-0.2 rounded-[2px] border border-amber-500/40 shrink-0 flex items-center gap-1">
                                 <Users className="w-2.5 h-2.5 text-amber-400" />
@@ -4017,10 +4047,10 @@ export default function TVCommandCenter() {
                           <div className="flex items-center gap-2 shrink-0">
                             <button
                               onClick={() => setOpenHedgeSlipId(openHedgeSlipId === slip.id ? null : slip.id)}
-                              className={`px-2 py-0.5 rounded text-[10px] font-black uppercase transition-all flex items-center gap-1 border shrink-0 ${
+                              className={`px-2 py-0.5 rounded-[2px] text-[10px] font-condensed font-bold uppercase transition-all flex items-center gap-1 border shrink-0 ${
                                 openHedgeSlipId === slip.id
-                                  ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-[0_0_10px_rgba(251,191,36,0.5)]'
-                                  : 'bg-slate-950/80 hover:bg-slate-800 text-amber-300 border-amber-500/40 hover:border-amber-400'
+                                  ? 'bg-amber-400 text-black border-amber-300 font-black'
+                                  : 'bg-zinc-900 hover:bg-zinc-800 text-amber-300 border-zinc-700'
                               }`}
                               title="Calculate live parlay equity and hedge recommendations"
                             >
@@ -4028,11 +4058,11 @@ export default function TVCommandCenter() {
                               <span>{openHedgeSlipId === slip.id ? 'Close Hedge' : 'Calculate / Hedge'}</span>
                             </button>
                             {slip.payout && (
-                              <span className="text-[11px] font-extrabold text-emerald-400 bg-emerald-950/70 px-2 py-0.5 rounded border border-emerald-500/40 font-mono-score">
+                              <span className="text-[11px] font-bold text-emerald-400 bg-emerald-950/70 px-2 py-0.5 rounded-[2px] border border-emerald-500/40 font-mono-score">
                                 {slip.payout}
                               </span>
                             )}
-                            <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded transition-all ${getBetRingClasses(summary.overallRingCategory)}`}>
+                            <span className={`text-[10px] font-condensed font-black uppercase px-2 py-0.5 rounded-[2px] transition-all ${getBetRingClasses(summary.overallRingCategory)}`}>
                               {summary.badgeLabel}
                             </span>
                           </div>
@@ -4043,16 +4073,16 @@ export default function TVCommandCenter() {
                           {summary.gradedLegs.map(({ leg, result }, idx) => (
                             <div
                               key={leg.id || idx}
-                              className={`p-2.5 rounded-xl border flex flex-col justify-between transition-all ${
+                              className={`p-2.5 rounded-[4px] border flex flex-col justify-between transition-all ${
                                 result.status === 'cashed'
-                                  ? 'bg-emerald-950/30 border-emerald-500/50 shadow-sm'
+                                  ? 'bg-[#101512] border-emerald-500/40 border-l-[3px] border-l-emerald-400'
                                   : result.status === 'chalked'
-                                  ? 'bg-rose-950/30 border-rose-500/40'
+                                  ? 'bg-[#151012] border-rose-500/40 border-l-[3px] border-l-rose-500'
                                   : result.status === 'covering'
-                                  ? 'bg-cyan-950/30 border-cyan-500/40'
+                                  ? 'bg-[#101416] border-cyan-500/40 border-l-[3px] border-l-cyan-400'
                                   : result.status === 'sweating'
-                                  ? 'bg-amber-950/30 border-amber-500/40'
-                                  : 'bg-slate-950/70 border-slate-800/80'
+                                  ? 'bg-[#161410] border-amber-500/40 border-l-[3px] border-l-amber-400'
+                                  : 'bg-[#101217] border-zinc-800/80 border-l-[3px] border-l-zinc-700'
                               }`}
                             >
                               {/* Leg Top Info */}
@@ -4062,38 +4092,38 @@ export default function TVCommandCenter() {
                                     <img
                                       src={leg.playerHeadshot}
                                       alt={leg.playerName || ''}
-                                      className="w-6 h-6 rounded-full object-cover bg-slate-900 border border-slate-700 shrink-0"
+                                      className="w-6 h-6 rounded-full object-cover bg-zinc-950 border border-zinc-800 shrink-0"
                                       onError={(e) => {
                                         (e.currentTarget as HTMLElement).style.display = 'none';
                                       }}
                                     />
                                   ) : (
-                                    <div className="w-6 h-6 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center text-[10px] font-black text-amber-400 shrink-0">
+                                    <div className="w-6 h-6 rounded-[2px] bg-zinc-900 border border-zinc-800 flex items-center justify-center text-[10px] font-bold text-amber-400 shrink-0">
                                       {leg.teamAbbr || 'NFL'}
                                     </div>
                                   )}
                                   <div className="min-w-0">
                                     <div className="flex items-center gap-2 flex-wrap">
-                                      <span className="text-xs font-black text-white block truncate leading-tight">
+                                      <span className="text-xs font-condensed font-black text-white block truncate leading-tight uppercase">
                                         {leg.description}
                                       </span>
                                       {/* Live Game State Mini-Ticker Pill */}
                                       {result.liveGameMini && (
                                         <span
-                                          className={`inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-mono-score font-bold tracking-tight shrink-0 border ${
+                                          className={`inline-flex items-center gap-1 px-1.5 py-0.2 rounded-[2px] text-[9px] font-mono-score font-semibold tracking-tight shrink-0 border ${
                                             result.liveGameMini.isLive
                                               ? result.liveGameMini.isRedZone
-                                                ? 'bg-rose-950/90 text-rose-300 border-rose-500/80 animate-pulse shadow-[0_0_8px_rgba(244,63,94,0.5)]'
-                                                : 'bg-emerald-950/90 text-emerald-300 border-emerald-500/50 shadow-sm'
+                                                ? 'bg-rose-950/90 text-rose-300 border-rose-500/60'
+                                                : 'bg-emerald-950/80 text-emerald-300 border-emerald-500/40'
                                               : result.liveGameMini.isPost
-                                              ? 'bg-slate-900/90 text-slate-400 border-slate-700'
-                                              : 'bg-slate-900/90 text-slate-300 border-slate-800'
+                                              ? 'bg-zinc-900 text-zinc-400 border-zinc-800'
+                                              : 'bg-zinc-900 text-zinc-300 border-zinc-800'
                                           }`}
                                         >
                                           {result.liveGameMini.isLive && (
                                             <span
                                               className={`w-1.5 h-1.5 rounded-full ${
-                                                result.liveGameMini.isRedZone ? 'bg-rose-400 animate-ping' : 'bg-emerald-400 animate-pulse'
+                                                result.liveGameMini.isRedZone ? 'bg-rose-400 animate-pulse' : 'bg-emerald-400 animate-pulse'
                                               }`}
                                             />
                                           )}
@@ -4103,7 +4133,7 @@ export default function TVCommandCenter() {
                                       )}
                                     </div>
                                     {result.gameStatusText && (
-                                      <span className="text-[10px] font-bold text-slate-400 block truncate">
+                                      <span className="text-[10px] font-medium text-zinc-500 block truncate">
                                         {result.gameStatusText}
                                       </span>
                                     )}
@@ -4113,7 +4143,7 @@ export default function TVCommandCenter() {
                                 {/* Leg Status with Distinct Visual Ring Badge */}
                                 <div className="text-right shrink-0">
                                   <span
-                                    className={`inline-flex items-center gap-1 text-[10px] font-black uppercase px-2 py-0.5 rounded transition-all ${getBetRingClasses(
+                                    className={`inline-flex items-center gap-1 text-[10px] font-condensed font-black uppercase px-2 py-0.5 rounded-[2px] transition-all ${getBetRingClasses(
                                       result.ringCategory
                                     )}`}
                                   >
@@ -4125,7 +4155,7 @@ export default function TVCommandCenter() {
                                           ? 'bg-amber-400 animate-ping'
                                           : result.ringCategory === 'chalked'
                                           ? 'bg-rose-400'
-                                          : 'bg-slate-400'
+                                          : 'bg-zinc-400'
                                       }`}
                                     />
                                     <span>{result.statusText}</span>
@@ -4134,27 +4164,27 @@ export default function TVCommandCenter() {
                               </div>
 
                               {/* Leg Live Progress Bar */}
-                              <div className="mt-2 pt-1.5 border-t border-slate-800/60">
+                              <div className="mt-2 pt-1.5 border-t border-zinc-800/60">
                                 <div className="flex items-center justify-between text-[10px] font-bold mb-1">
-                                  <span className="text-slate-400 uppercase tracking-wider">
+                                  <span className="text-zinc-500 uppercase tracking-wider font-condensed">
                                     LIVE PROGRESS
                                   </span>
-                                  <span className="text-slate-200 tv-tabular font-black">
+                                  <span className="text-zinc-200 font-mono-score font-bold">
                                     {result.progressText}
                                   </span>
                                 </div>
-                                <div className="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden border border-slate-800">
+                                <div className="w-full h-1.5 bg-zinc-950 rounded-full overflow-hidden border border-zinc-800">
                                   <div
                                     className={`h-full transition-all duration-300 ${
                                       result.status === 'cashed'
-                                        ? 'bg-gradient-to-r from-emerald-500 to-teal-400 shadow-[0_0_8px_rgba(16,185,129,0.8)]'
+                                        ? 'bg-emerald-400'
                                         : result.status === 'chalked'
                                         ? 'bg-rose-600'
                                         : result.status === 'covering'
-                                        ? 'bg-gradient-to-r from-cyan-400 to-emerald-400 shadow-[0_0_8px_rgba(6,182,212,0.8)]'
+                                        ? 'bg-cyan-400'
                                         : result.status === 'sweating'
-                                        ? 'bg-gradient-to-r from-amber-400 to-orange-500'
-                                        : 'bg-slate-700'
+                                        ? 'bg-amber-400'
+                                        : 'bg-zinc-700'
                                     }`}
                                     style={{ width: `${Math.max(4, result.progressPct)}%` }}
                                   />
@@ -4166,7 +4196,7 @@ export default function TVCommandCenter() {
 
                         {/* Live Parlay Payout & Hedge Calculator Drawer */}
                         {openHedgeSlipId === slip.id && (
-                          <div className="mt-3 pt-3 border-t border-slate-800 animate-fadeIn">
+                          <div className="mt-3 pt-3 border-t border-zinc-800 animate-fadeIn">
                             <ParlayHedgeCalculator slip={slip} gradedLegs={summary.gradedLegs} />
                           </div>
                         )}
@@ -4182,10 +4212,10 @@ export default function TVCommandCenter() {
           /* TABS 2-7: TOP 10 LEADERBOARDS (2-COLUMN GRID: 1-5 ON LEFT, 6-10 ON RIGHT) */
           <div className="h-full flex flex-col justify-between overflow-hidden">
             {/* Compact Subheader with Inline Burst Alert */}
-            <div className="flex items-center justify-between pb-1.5 shrink-0">
+            <div className="flex items-center justify-between pb-1.5 shrink-0 border-b border-zinc-800/80 mb-1.5">
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-1.5">
-                  <h2 className="text-sm md:text-base font-condensed font-bold tracking-wide uppercase text-white">
+                  <h2 className="text-sm md:text-base font-condensed font-black tracking-wide uppercase text-white">
                     {data?.isProjectionsMode ? `PROJECTED TOP 10 ${TABS.find((t) => t.id === activeTab)?.label}` : `TOP 10 ${TABS.find((t) => t.id === activeTab)?.label}`}
                   </h2>
                   {selectedTickerGame ? (
@@ -4208,8 +4238,8 @@ export default function TVCommandCenter() {
                         data?.isProjectionsMode
                           ? 'bg-cyan-950/80 text-cyan-300 border border-cyan-500/40'
                           : gameFilterMode === 'live'
-                          ? 'bg-red-950/80 text-red-300 border border-red-500/40'
-                          : 'bg-white/10 text-slate-300 border border-white/15'
+                          ? 'bg-rose-950/80 text-rose-300 border border-rose-500/40'
+                          : 'bg-zinc-900 text-zinc-300 border border-zinc-800'
                       }`}
                     >
                       {data?.isProjectionsMode
@@ -4230,9 +4260,9 @@ export default function TVCommandCenter() {
                 )}
               </div>
 
-              <div className="flex items-center gap-2 text-[11px] font-condensed font-bold text-slate-400">
-                <span>SCORING:</span>
-                <span className="text-[#00E676] font-bold uppercase">
+              <div className="flex items-center gap-2 text-[11px] font-condensed font-bold text-zinc-500">
+                <span className="uppercase tracking-wider">SCORING:</span>
+                <span className="text-emerald-400 font-bold uppercase font-mono-score">
                   {scoringFormat.toUpperCase()}
                 </span>
               </div>
@@ -4240,15 +4270,15 @@ export default function TVCommandCenter() {
 
             {/* If 0 players found (e.g. in Live mode when no players are active in that position) */}
             {sortedLeaderboards?.[activeTab as FantasyPosition]?.length === 0 ? (
-              <div className="flex-1 flex flex-col items-center justify-center gap-3 text-slate-400">
-                <div className="p-3 rounded-[4px] bg-[#0E1017] border border-white/10">
+              <div className="flex-1 flex flex-col items-center justify-center gap-3 text-zinc-400">
+                <div className="p-3 rounded-[4px] bg-[#0C0D10] border border-zinc-800/80">
                   <Radio className="w-8 h-8 text-amber-400 animate-pulse" />
                 </div>
                 <div className="text-center font-condensed">
-                  <p className="text-base font-bold text-white uppercase">
+                  <p className="text-base font-black text-white uppercase">
                     No {TABS.find((t) => t.id === activeTab)?.label}s Active In Live Games Right Now
                   </p>
-                  <p className="text-xs text-slate-400 mt-1">
+                  <p className="text-xs text-zinc-500 mt-1">
                     {liveGamesCount === 0
                       ? 'Zero NFL games are currently in progress.'
                       : 'Active in-progress games do not have stats for this position yet.'}
@@ -4256,7 +4286,7 @@ export default function TVCommandCenter() {
                 </div>
                 <button
                   onClick={() => handleSelectFilterMode('all')}
-                  className="px-3 py-1.5 rounded-[4px] bg-blue-600 hover:bg-blue-500 text-white font-condensed font-bold text-xs uppercase shadow-md transition-colors"
+                  className="px-3 py-1.5 rounded-[4px] bg-zinc-800 hover:bg-zinc-700 text-white font-condensed font-bold text-xs uppercase transition-colors border border-zinc-700"
                 >
                   Switch to ALL GAMES
                 </button>
@@ -4305,8 +4335,8 @@ export default function TVCommandCenter() {
         )}
       </main>
 
-      {/* 6. CONTINUOUS NEWS-NETWORK SCROLLING MARQUEE TICKER (ESPN BottomLine Style) */}
-      <footer className="fixed bottom-0 left-0 right-0 z-40 h-14 bg-[#0B0D13] border-t-2 border-[#00E676]/40 overflow-hidden flex items-center shadow-2xl">
+      {/* 6. CONTINUOUS NEWS-NETWORK SCROLLING MARQUEE TICKER (Athletic Tech Terminal Style) */}
+      <footer className="fixed bottom-0 left-0 right-0 z-40 h-14 bg-[#0A0C12] border-t border-zinc-800/80 overflow-hidden flex items-center">
         <style>{`
           @keyframes tickerScroll {
             0% { transform: translate3d(0, 0, 0); }
@@ -4315,13 +4345,13 @@ export default function TVCommandCenter() {
         `}</style>
 
         {/* Fixed Left Label Badge (Anchored) */}
-        <div className="h-full px-3 md:px-4 bg-[#07080C] border-r border-white/10 flex items-center gap-2 z-20 shrink-0 shadow-lg">
-          <span className="text-[#00E676] font-condensed font-bold tracking-wider text-xs md:text-sm flex items-center gap-1.5 whitespace-nowrap uppercase">
+        <div className="h-full px-3 md:px-4 bg-[#08090C] border-r border-zinc-800/80 flex items-center gap-2 z-20 shrink-0">
+          <span className="text-white font-condensed font-black tracking-wider text-xs md:text-sm flex items-center gap-1.5 whitespace-nowrap uppercase">
             <Trophy className="w-3.5 h-3.5 text-amber-400" />
-            <span>LIVE LEAGUE SCORES</span>
+            <span>LEAGUE SCORES</span>
           </span>
           {displayMatchups.length > 0 && (
-            <span className="px-1.5 py-0.2 rounded-[2px] bg-[#00E676]/20 text-[#00E676] text-[10px] font-mono-score font-bold">
+            <span className="px-1.5 py-0.2 rounded-[2px] bg-zinc-900 border border-zinc-800 text-zinc-400 text-[10px] font-mono-score font-bold">
               {displayMatchups.length}
             </span>
           )}
@@ -4330,8 +4360,8 @@ export default function TVCommandCenter() {
         {/* Seamless Infinite Marquee Track - Relaxed 110s Pace for Effortless 10-Foot Reading */}
         <div className="flex-1 overflow-hidden relative h-full flex items-center">
           {displayMatchups.length === 0 ? (
-            <div className="px-4 text-xs font-condensed font-semibold text-slate-400 flex items-center gap-2">
-              <Activity className="w-3.5 h-3.5 text-[#00E676] animate-pulse" />
+            <div className="px-4 text-xs font-condensed font-medium text-zinc-500 flex items-center gap-2">
+              <Activity className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
               <span>Tip: Click &quot;LEAGUES&quot; in the top bar to link your Sleeper/ESPN leagues or living room friends.</span>
             </div>
           ) : (
@@ -4351,23 +4381,23 @@ export default function TVCommandCenter() {
               {tickerMatchups.map((m, idx) => (
                 <div
                   key={`m1-${m.id || idx}-${idx}`}
-                  className="flex items-center gap-3 px-3 py-1.5 rounded-[4px] bg-[#0E1017] border border-white/10 shrink-0 whitespace-nowrap shadow-sm hover:border-white/20 transition-colors"
+                  className="flex items-center gap-3 px-3 py-1.5 rounded-[4px] bg-[#0E1017] border border-zinc-800 shrink-0 whitespace-nowrap hover:border-zinc-700 transition-colors"
                 >
-                  <span className="text-[10px] font-condensed font-bold uppercase text-cyan-400 bg-cyan-950/60 px-1.5 py-0.5 rounded-[2px] border border-cyan-500/30">
+                  <span className="text-[10px] font-condensed font-bold uppercase text-zinc-400 bg-zinc-900 px-1.5 py-0.5 rounded-[2px] border border-zinc-800">
                     {m.leagueName}
                   </span>
-                  <div className="flex items-center gap-2 text-xs font-condensed font-bold">
-                    <span className={m.team1.points > m.team2.points ? 'text-[#00E676] font-bold' : 'text-slate-200'}>
+                  <div className="flex items-center gap-2 text-xs font-condensed">
+                    <span className={m.team1.points > m.team2.points ? 'text-emerald-400 font-black' : 'text-zinc-300 font-semibold'}>
                       {m.team1.ownerName}
                     </span>
-                    <span className="text-sm font-mono-score font-bold text-white px-1.5 py-0.2 rounded-[2px] bg-[#07080C] border border-white/10">
+                    <span className="text-sm font-mono-score font-bold text-white px-1.5 py-0.2 rounded-[2px] bg-zinc-950 border border-zinc-800">
                       {m.team1.points.toFixed(1)}
                     </span>
-                    <span className="text-slate-500 text-[10px] font-bold">VS</span>
-                    <span className="text-sm font-mono-score font-bold text-white px-1.5 py-0.2 rounded-[2px] bg-[#07080C] border border-white/10">
+                    <span className="text-zinc-600 text-[10px] font-bold">VS</span>
+                    <span className="text-sm font-mono-score font-bold text-white px-1.5 py-0.2 rounded-[2px] bg-zinc-950 border border-zinc-800">
                       {m.team2.points.toFixed(1)}
                     </span>
-                    <span className={m.team2.points > m.team1.points ? 'text-[#00E676] font-bold' : 'text-slate-200'}>
+                    <span className={m.team2.points > m.team1.points ? 'text-emerald-400 font-black' : 'text-zinc-300 font-semibold'}>
                       {m.team2.ownerName}
                     </span>
                   </div>
@@ -4378,23 +4408,23 @@ export default function TVCommandCenter() {
               {tickerMatchups.map((m, idx) => (
                 <div
                   key={`m2-${m.id || idx}-${idx}`}
-                  className="flex items-center gap-3 px-3 py-1.5 rounded-[4px] bg-[#0E1017] border border-white/10 shrink-0 whitespace-nowrap shadow-sm hover:border-white/20 transition-colors"
+                  className="flex items-center gap-3 px-3 py-1.5 rounded-[4px] bg-[#0E1017] border border-zinc-800 shrink-0 whitespace-nowrap hover:border-zinc-700 transition-colors"
                 >
-                  <span className="text-[10px] font-condensed font-bold uppercase text-cyan-400 bg-cyan-950/60 px-1.5 py-0.5 rounded-[2px] border border-cyan-500/30">
+                  <span className="text-[10px] font-condensed font-bold uppercase text-zinc-400 bg-zinc-900 px-1.5 py-0.5 rounded-[2px] border border-zinc-800">
                     {m.leagueName}
                   </span>
-                  <div className="flex items-center gap-2 text-xs font-condensed font-bold">
-                    <span className={m.team1.points > m.team2.points ? 'text-[#00E676] font-bold' : 'text-slate-200'}>
+                  <div className="flex items-center gap-2 text-xs font-condensed">
+                    <span className={m.team1.points > m.team2.points ? 'text-emerald-400 font-black' : 'text-zinc-300 font-semibold'}>
                       {m.team1.ownerName}
                     </span>
-                    <span className="text-sm font-mono-score font-bold text-white px-1.5 py-0.2 rounded-[2px] bg-[#07080C] border border-white/10">
+                    <span className="text-sm font-mono-score font-bold text-white px-1.5 py-0.2 rounded-[2px] bg-zinc-950 border border-zinc-800">
                       {m.team1.points.toFixed(1)}
                     </span>
-                    <span className="text-slate-500 text-[10px] font-bold">VS</span>
-                    <span className="text-sm font-mono-score font-bold text-white px-1.5 py-0.2 rounded-[2px] bg-[#07080C] border border-white/10">
+                    <span className="text-zinc-600 text-[10px] font-bold">VS</span>
+                    <span className="text-sm font-mono-score font-bold text-white px-1.5 py-0.2 rounded-[2px] bg-zinc-950 border border-zinc-800">
                       {m.team2.points.toFixed(1)}
                     </span>
-                    <span className={m.team2.points > m.team1.points ? 'text-[#00E676] font-bold' : 'text-slate-200'}>
+                    <span className={m.team2.points > m.team1.points ? 'text-emerald-400 font-black' : 'text-zinc-300 font-semibold'}>
                       {m.team2.ownerName}
                     </span>
                   </div>
@@ -4405,20 +4435,20 @@ export default function TVCommandCenter() {
         </div>
 
         {/* Fixed Right Sync Time & Screen WakeLock Status */}
-        <div className="h-full px-3 bg-[#07080C] border-l border-white/10 flex items-center gap-3 text-[10px] text-slate-500 shrink-0 z-20 font-condensed">
+        <div className="h-full px-3 bg-[#08090C] border-l border-zinc-800/80 flex items-center gap-3 text-[10px] text-zinc-500 shrink-0 z-20 font-condensed">
           <div
-            className="flex items-center gap-1.5 cursor-pointer hover:text-slate-300 transition-colors"
+            className="flex items-center gap-1.5 cursor-pointer hover:text-zinc-300 transition-colors"
             onClick={requestWakeLock}
             title={isWakeLockActive ? "Screen WakeLock Active: TV display will stay awake" : "Click to activate Screen WakeLock"}
           >
-            <Tv className={`w-3.5 h-3.5 ${isWakeLockActive ? 'text-[#00E676]' : 'text-slate-600'}`} />
+            <Tv className={`w-3.5 h-3.5 ${isWakeLockActive ? 'text-emerald-400' : 'text-zinc-600'}`} />
             <span className="hidden md:inline font-bold uppercase text-[9px]">
               {isWakeLockActive ? 'WAKELOCK' : 'SLEEP-DEFENSE'}
             </span>
           </div>
 
-          <div className="flex items-center gap-1.5 font-mono-score">
-            <Activity className="w-3.5 h-3.5 text-[#00E676]" />
+          <div className="flex items-center gap-1.5 font-mono-score text-zinc-400">
+            <Activity className="w-3.5 h-3.5 text-emerald-400" />
             <span suppressHydrationWarning>{mounted && data?.lastUpdated ? `SYNC: ${new Date(data.lastUpdated).toLocaleTimeString()}` : ''}</span>
           </div>
         </div>
@@ -4455,35 +4485,35 @@ export default function TVCommandCenter() {
       {isQrModalOpen && (
         <div
           onClick={() => setIsQrModalOpen(false)}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 cursor-pointer animate-fadeIn"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 cursor-pointer animate-fadeIn font-condensed"
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="relative max-w-md w-full p-6 md:p-8 rounded-3xl bg-slate-900 border border-cyan-500/40 shadow-[0_0_60px_rgba(6,182,212,0.3)] flex flex-col items-center text-center cursor-default"
+            className="relative max-w-md w-full p-6 md:p-8 rounded-[4px] bg-[#0E1017] border border-zinc-800 flex flex-col items-center text-center cursor-default"
           >
             {/* Close button */}
             <button
               onClick={() => setIsQrModalOpen(false)}
-              className="absolute top-4 right-4 p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
+              className="absolute top-4 right-4 p-1.5 rounded-[2px] bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
             >
               <X className="w-5 h-5" />
             </button>
 
             {/* Header */}
-            <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-950/80 border border-cyan-500/40 text-cyan-300 text-xs font-black uppercase mb-3">
+            <div className="flex items-center gap-2 px-2.5 py-1 rounded-[2px] bg-cyan-950/60 border border-cyan-500/40 text-cyan-300 text-xs font-black uppercase mb-3 tracking-wider">
               <Smartphone className="w-3.5 h-3.5 text-cyan-400" />
               <span>Room Phone Sync</span>
             </div>
 
-            <h2 className="text-xl md:text-2xl font-black text-white uppercase tracking-wide">
+            <h2 className="text-xl md:text-2xl font-black text-white uppercase tracking-wider">
               Scan to Add Bets &amp; Players
             </h2>
-            <p className="text-xs text-slate-400 mt-1 mb-5 max-w-xs leading-relaxed">
+            <p className="text-xs text-zinc-400 mt-1 mb-5 max-w-xs leading-relaxed">
               Point your phone camera here to open this tracker on mobile, add your parlays, or connect fantasy teams to this TV in real-time.
             </p>
 
             {/* High-Contrast QR Code Card */}
-            <div className="p-4 bg-white rounded-2xl shadow-2xl border-4 border-cyan-400/80 mb-5 flex items-center justify-center">
+            <div className="p-3 bg-white rounded-[4px] border-2 border-zinc-700 mb-5 flex items-center justify-center">
               <img
                 src={`https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(
                   typeof window !== 'undefined' ? window.location.origin : ''
@@ -4494,8 +4524,8 @@ export default function TVCommandCenter() {
             </div>
 
             {/* Room URL & Copy Button */}
-            <div className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs">
-              <span className="text-slate-400 font-mono truncate text-[11px]">
+            <div className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-[2px] bg-[#07080C] border border-zinc-800 text-xs font-mono-score">
+              <span className="text-zinc-400 font-mono truncate text-[11px]">
                 {typeof window !== 'undefined' ? window.location.origin : ''}
               </span>
               <button
@@ -4506,14 +4536,14 @@ export default function TVCommandCenter() {
                     setTimeout(() => setCopiedLink(false), 2000);
                   }
                 }}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-black text-[10px] uppercase transition-all shrink-0"
+                className="flex items-center gap-1 px-2.5 py-1 rounded-[2px] bg-cyan-500 hover:bg-cyan-400 text-black font-black text-[10px] uppercase transition-all shrink-0"
               >
                 {copiedLink ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
                 <span>{copiedLink ? 'Copied!' : 'Copy'}</span>
               </button>
             </div>
 
-            <div className="flex items-center gap-2 mt-4 text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+            <div className="flex items-center gap-2 mt-4 text-[10px] text-zinc-500 font-bold uppercase tracking-wider">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
               <span>Live Multi-Device Room Sync Active</span>
             </div>
@@ -4660,7 +4690,7 @@ export default function TVCommandCenter() {
 
 /**
  * Render an individual player leaderboard card in the Top 10 2-column grid
- * Fully responsive to available height with zero stat truncation and high-impact highlights
+ * Fully responsive to available height with deliberate asymmetry for the #1 leader and high-contrast typography
  */
 function renderLeaderboardCard(
   player: FantasyPlayer,
@@ -4674,28 +4704,22 @@ function renderLeaderboardCard(
   const pts = player.points[scoringFormat] ?? 0;
   const isBoosted = Boolean(boosted && Date.now() - boosted.timestamp < 6000);
   const owners = ownershipTags || [];
+  const isLeader = nominalRank === 1;
 
   const isPost = player.gameStatus.state === 'post' || player.gameStatus.detail?.toLowerCase().includes('final');
   const isStaleInjury = isPost && (player.injuryStatus === 'Questionable' || player.injuryStatus === 'Doubtful');
   const showInjuryBadge = Boolean(player.injuryStatus && player.injuryStatus !== 'NA' && !isStaleInjury);
 
-  // Rank Accent Color: Gold (1), Silver (2), Bronze (3), or NFL Team Primary Color (4-10)
-  const accentColor =
-    nominalRank === 1
-      ? '#FFD700'
-      : nominalRank === 2
-      ? '#C0C0C0'
-      : nominalRank === 3
-      ? '#CD7F32'
-      : NFL_TEAM_COLORS[player.team.abbreviation] || '#38BDF8';
+  // Authentic franchise accent color
+  const teamAccent = getTeamAccentColor(player.team.abbreviation);
 
-  let rankBadgeStyle = 'bg-[#141722] text-slate-300 border border-white/10';
+  let rankBadgeStyle = 'bg-zinc-900 text-zinc-400 border border-zinc-800';
   if (nominalRank === 1) {
-    rankBadgeStyle = 'bg-[#FFD700] text-black font-black border border-[#FFD700] shadow-[0_0_12px_rgba(255,215,0,0.6)]';
+    rankBadgeStyle = 'bg-amber-400 text-black font-black border border-amber-300';
   } else if (nominalRank === 2) {
-    rankBadgeStyle = 'bg-[#C0C0C0] text-black font-black border border-[#C0C0C0] shadow-[0_0_10px_rgba(192,192,192,0.5)]';
+    rankBadgeStyle = 'bg-zinc-300 text-black font-black border border-zinc-200';
   } else if (nominalRank === 3) {
-    rankBadgeStyle = 'bg-[#CD7F32] text-white font-black border border-[#CD7F32] shadow-[0_0_8px_rgba(205,127,50,0.5)]';
+    rankBadgeStyle = 'bg-[#CD7F32] text-white font-black border border-[#CD7F32]';
   }
 
   const statPills = formatPlayerStatPills(player);
@@ -4704,16 +4728,18 @@ function renderLeaderboardCard(
     <div
       key={`${player.id}-${rankDisplay}`}
       onClick={() => onSelectPlayer?.(player)}
-      style={{ borderLeftColor: accentColor }}
-      className={`relative flex items-center justify-between px-3 py-1.5 rounded-[4px] border-l-[3px] border-y border-r border-white/10 transition-all h-[98px] max-h-[98px] min-h-[98px] shrink-0 cursor-pointer ${
+      style={{ borderLeftColor: teamAccent, borderLeftWidth: isLeader ? '4px' : '2.5px' }}
+      className={`relative flex items-center justify-between px-3 py-1.5 rounded-[4px] border-y border-r transition-all h-[98px] max-h-[98px] min-h-[98px] shrink-0 cursor-pointer ${
         isBoosted
-          ? 'bg-[#00E676]/10 border-r-[#00E676] border-y-[#00E676] shadow-[0_0_20px_rgba(0,230,118,0.7)] animate-burst'
-          : 'bg-[#0E1017] hover:bg-[#141722] hover:border-emerald-500/40'
+          ? 'bg-emerald-950/20 border-r-emerald-500/50 border-y-emerald-500/50 animate-burst'
+          : isLeader
+          ? 'bg-[#12141C] border-zinc-700/80 hover:bg-[#161924] hover:border-zinc-600'
+          : 'bg-[#0C0D10] border-zinc-800/80 hover:bg-[#111318] hover:border-zinc-700'
       }`}
     >
       {/* Floating Delta Badge when points increase */}
       {isBoosted && (
-        <div className="absolute -top-2 right-4 px-2 py-0.2 rounded-[2px] bg-[#00E676] text-black text-[10px] font-mono-score font-bold tracking-wider shadow-[0_0_10px_rgba(0,230,118,0.9)] animate-bounce z-10">
+        <div className="absolute -top-2 right-4 px-2 py-0.2 rounded-[2px] bg-emerald-400 text-black text-[10px] font-mono-score font-bold tracking-wider animate-bounce z-10">
           +{boosted?.delta.toFixed(1)} PTS!
         </div>
       )}
@@ -4722,14 +4748,14 @@ function renderLeaderboardCard(
       <div className="flex items-center gap-2.5 min-w-0 flex-1 mr-2">
         {/* Rank Number / Tied Badge */}
         <div
-          className={`min-w-[28px] h-7 px-1 rounded-[2px] flex items-center justify-center text-xs font-mono-score font-bold shrink-0 ${rankBadgeStyle}`}
+          className={`min-w-[28px] h-7 px-1.5 rounded-[2px] flex items-center justify-center text-xs font-mono-score font-bold shrink-0 ${rankBadgeStyle}`}
         >
           <span>{rankDisplay}</span>
         </div>
 
         {/* Headshot / Team Logo Container: Circular Headshot with Unclipped Corner Team Badge */}
-        <div className="relative w-12 h-12 shrink-0">
-          <div className="w-full h-full rounded-full overflow-hidden bg-[#07080C] border border-white/10 shadow-md">
+        <div className={`relative shrink-0 ${isLeader ? 'w-13 h-13' : 'w-12 h-12'}`}>
+          <div className="w-full h-full rounded-full overflow-hidden bg-zinc-950 border border-zinc-800">
             <img
               src={player.headshot}
               alt={player.name}
@@ -4742,7 +4768,7 @@ function renderLeaderboardCard(
           </div>
           {/* Miniature Team Logo in Corner - Hidden on DEF cards since primary avatar is already the team logo */}
           {player.position !== 'DEF' && (
-            <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-zinc-900 ring-1 ring-zinc-700 p-0.5 z-20 flex items-center justify-center shadow-md">
+            <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-zinc-900 ring-1 ring-zinc-700 p-0.5 z-20 flex items-center justify-center">
               <img
                 src={player.team.logo}
                 alt={player.team.abbreviation}
@@ -4756,7 +4782,7 @@ function renderLeaderboardCard(
         {/* Name, Team vs Opponent, Live Clock, Owner Badges, and FULL UNTRUNCATED STAT LINE */}
         <div className="min-w-0 flex-1 font-condensed">
           <div className="flex items-center gap-1.5 flex-wrap">
-            <h3 className="text-xs md:text-sm font-bold text-white truncate leading-tight tracking-tight uppercase">
+            <h3 className="text-xs md:text-sm font-black text-white truncate leading-tight tracking-tight uppercase">
               {player.name}
             </h3>
 
@@ -4765,9 +4791,9 @@ function renderLeaderboardCard(
               <span
                 className={`px-1.5 py-0.2 rounded-[2px] text-[8px] font-black uppercase tracking-wider shrink-0 ${
                   player.injuryStatus === 'Out' || player.injuryStatus === 'IR' || player.injuryStatus === 'PUP'
-                    ? 'bg-red-600 text-white border border-red-500 shadow-sm'
+                    ? 'bg-rose-600 text-white'
                     : player.injuryStatus === 'Doubtful'
-                    ? 'bg-orange-600 text-white border border-orange-500'
+                    ? 'bg-orange-600 text-white'
                     : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
                 }`}
                 title={player.injuryNotes ? `${player.injuryStatus}: ${player.injuryNotes}` : player.injuryStatus || undefined}
@@ -4778,12 +4804,12 @@ function renderLeaderboardCard(
 
             {/* Red Zone Badge */}
             {player.gameStatus.isRedZone && (
-              <span className="px-1 py-0.2 bg-red-600 text-white text-[8px] font-bold rounded-[2px] uppercase animate-pulse shrink-0">
+              <span className="px-1 py-0.2 bg-rose-600 text-white text-[8px] font-bold rounded-[2px] uppercase animate-pulse shrink-0">
                 RZ
               </span>
             )}
 
-            {/* GLOWING LEAGUE / GUEST OWNERSHIP BADGES */}
+            {/* LEAGUE / GUEST OWNERSHIP BADGES */}
             {owners.length > 0 && (
               <div className="inline-flex items-center gap-1">
                 {owners.length === 1 ? (
@@ -4801,8 +4827,8 @@ function renderLeaderboardCard(
             )}
           </div>
 
-          <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-semibold truncate mt-0.5">
-            <span className="text-slate-200 font-bold">{player.team.abbreviation}</span>
+          <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 font-medium truncate mt-0.5">
+            <span className="text-zinc-300 font-bold">{player.team.abbreviation}</span>
             <span>vs {player.opponent.abbreviation}</span>
             <span>•</span>
             <span
@@ -4811,11 +4837,11 @@ function renderLeaderboardCard(
                   ? 'text-cyan-400 font-bold'
                   : player.isGameLive || player.gameStatus.state === 'in'
                   ? 'text-amber-400 font-bold inline-flex items-center gap-1'
-                  : ''
+                  : 'text-zinc-500'
               }
             >
               {(player.isGameLive || player.gameStatus.state === 'in') && (
-                <span className="h-1.5 w-1.5 rounded-full bg-[#00E676] animate-ping inline-block" />
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse inline-block" />
               )}
               {player.isProjection ? 'PROJ' : player.gameStatus.detail || (player.isGameLive ? 'Live' : 'Final')}
             </span>
@@ -4836,7 +4862,7 @@ function renderLeaderboardCard(
                 );
               })
             ) : (
-              <span className="inline-block px-1.5 py-0.5 rounded-[2px] bg-[#141722] border border-white/10 text-[10px] md:text-[11px] font-mono-score font-bold text-slate-400 whitespace-nowrap">
+              <span className="inline-block px-1.5 py-0.5 rounded-[2px] bg-zinc-900 border border-zinc-800 text-[10px] md:text-[11px] font-mono-score font-medium text-zinc-500 whitespace-nowrap">
                 --
               </span>
             )}
@@ -4844,13 +4870,13 @@ function renderLeaderboardCard(
         </div>
       </div>
 
-      {/* Right: Huge High-Contrast Fantasy Points Display */}
-      <div className="flex flex-col items-end justify-center shrink-0 pl-2 border-l border-white/10 min-w-[70px]">
-        <div className="text-xl lg:text-2xl font-mono-score font-bold text-[#00E676] leading-none">
-          {Number.isInteger(pts) ? pts.toFixed(1) : pts.toFixed(1)}
-        </div>
-        <div className="text-[9px] font-condensed font-bold text-slate-400 uppercase tracking-widest mt-0.5">
+      {/* Right: Editorial Stack: Subdued Metadata above Massive Display Number */}
+      <div className="flex flex-col items-end justify-center shrink-0 pl-2 border-l border-zinc-800/80 min-w-[70px]">
+        <div className="text-[9px] font-condensed font-bold text-zinc-500 uppercase tracking-widest leading-none mb-1">
           {getScoringUnitLabel(player.position, scoringFormat, player.isProjection)}
+        </div>
+        <div className={`${isLeader ? 'text-2xl lg:text-3xl font-black' : 'text-xl lg:text-2xl font-bold'} font-mono-score tracking-tight text-emerald-400 leading-none`}>
+          {Number.isInteger(pts) ? pts.toFixed(1) : pts.toFixed(1)}
         </div>
       </div>
     </div>

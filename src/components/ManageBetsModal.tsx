@@ -712,8 +712,8 @@ export default function ManageBetsModal({
               onClick={() => setActiveTab('props_market')}
               className={`px-3 py-1.5 rounded-[4px] text-xs font-bold uppercase transition-all flex items-center gap-1.5 ${
                 activeTab === 'props_market'
-                  ? 'bg-amber-400 text-slate-950 font-black shadow-[0_0_12px_rgba(251,191,36,0.6)]'
-                  : 'bg-[#141722] text-slate-300 hover:text-white border border-white/10'
+                  ? 'bg-amber-400 text-black font-black'
+                  : 'bg-zinc-900 text-zinc-300 hover:text-white border border-zinc-800'
               }`}
             >
               <Pin className="w-3.5 h-3.5" />
@@ -723,8 +723,8 @@ export default function ManageBetsModal({
               onClick={() => setActiveTab('list')}
               className={`px-3 py-1.5 rounded-[4px] text-xs font-bold uppercase transition-all flex items-center gap-1.5 ${
                 activeTab === 'list'
-                  ? 'bg-amber-400 text-slate-950 font-black shadow-[0_0_12px_rgba(251,191,36,0.6)]'
-                  : 'bg-[#141722] text-slate-300 hover:text-white border border-white/10'
+                  ? 'bg-amber-400 text-black font-black'
+                  : 'bg-zinc-900 text-zinc-300 hover:text-white border border-zinc-800'
               }`}
             >
               <Layers className="w-3.5 h-3.5" />
@@ -734,8 +734,8 @@ export default function ManageBetsModal({
               onClick={() => setActiveTab('create')}
               className={`px-3 py-1.5 rounded-[4px] text-xs font-bold uppercase transition-all flex items-center gap-1.5 ${
                 activeTab === 'create'
-                  ? 'bg-amber-400 text-slate-950 font-black shadow-[0_0_12px_rgba(251,191,36,0.6)]'
-                  : 'bg-[#141722] text-slate-300 hover:text-white border border-white/10'
+                  ? 'bg-amber-400 text-black font-black'
+                  : 'bg-zinc-900 text-zinc-300 hover:text-white border border-zinc-800'
               }`}
             >
               <Plus className="w-3.5 h-3.5" />
@@ -835,10 +835,10 @@ export default function ManageBetsModal({
                     return (
                       <div
                         key={prop.id}
-                        className={`p-2.5 rounded-lg border transition-all flex items-center justify-between gap-3 ${
+                        className={`p-2.5 rounded-[4px] border transition-all flex items-center justify-between gap-3 ${
                           pinned
-                            ? 'bg-emerald-950/30 border-emerald-500/60 shadow-[0_0_12px_rgba(16,185,129,0.3)]'
-                            : 'bg-[#141722] border-white/10 hover:border-white/20'
+                            ? 'bg-[#101512] border-emerald-500/50 border-l-[3px] border-l-emerald-400'
+                            : 'bg-zinc-900 border-zinc-800 hover:border-zinc-700'
                         }`}
                       >
                         {/* Prop Info */}
@@ -898,8 +898,8 @@ export default function ManageBetsModal({
                             onClick={() => handleTogglePinProp(prop)}
                             className={`px-3 py-1.5 rounded-[4px] text-xs font-bold uppercase transition-all flex items-center gap-1 ${
                               pinned
-                                ? 'bg-emerald-500 text-black font-black shadow-[0_0_12px_rgba(16,185,129,0.7)] hover:bg-rose-600 hover:text-white'
-                                : 'bg-[#181C2A] text-white hover:bg-amber-400 hover:text-black border border-white/20'
+                                ? 'bg-emerald-400 text-black font-black hover:bg-rose-600 hover:text-white'
+                                : 'bg-zinc-800 text-white hover:bg-amber-400 hover:text-black border border-zinc-700'
                             }`}
                           >
                             {pinned ? (
@@ -1143,7 +1143,7 @@ export default function ManageBetsModal({
                   type="button"
                   disabled={legs.length === 0}
                   onClick={handleSaveSlip}
-                  className="px-5 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed text-slate-950 font-black text-xs uppercase shadow-[0_0_15px_rgba(16,185,129,0.5)] transition-all"
+                  className="px-5 py-2 rounded-[4px] bg-emerald-400 hover:bg-emerald-300 disabled:opacity-40 disabled:cursor-not-allowed text-black font-black text-xs uppercase transition-colors"
                 >
                   Save Slip ({legs.length} {legs.length === 1 ? 'Leg' : 'Legs'})
                 </button>

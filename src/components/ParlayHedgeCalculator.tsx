@@ -244,8 +244,8 @@ export default function ParlayHedgeCalculator({ slip, gradedLegs }: ParlayHedgeC
                   onClick={() => setActiveStrategy('equal')}
                   className={`px-2 py-1.5 rounded-[4px] text-[10px] font-bold uppercase transition-all flex flex-col items-center justify-center border ${
                     activeStrategy === 'equal'
-                      ? 'bg-amber-500 text-black border-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.6)] font-black'
-                      : 'bg-[#141722] text-slate-300 border-white/10 hover:border-white/20'
+                      ? 'bg-amber-400 text-black border-amber-300 font-black'
+                      : 'bg-zinc-900 text-zinc-300 border-zinc-800 hover:border-zinc-700'
                   }`}
                 >
                   <span>1. Lock Profit (Equal)</span>
@@ -258,8 +258,8 @@ export default function ParlayHedgeCalculator({ slip, gradedLegs }: ParlayHedgeC
                   onClick={() => setActiveStrategy('freeroll')}
                   className={`px-2 py-1.5 rounded-[4px] text-[10px] font-bold uppercase transition-all flex flex-col items-center justify-center border ${
                     activeStrategy === 'freeroll'
-                      ? 'bg-amber-500 text-black border-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.6)] font-black'
-                      : 'bg-[#141722] text-slate-300 border-white/10 hover:border-white/20'
+                      ? 'bg-amber-400 text-black border-amber-300 font-black'
+                      : 'bg-zinc-900 text-zinc-300 border-zinc-800 hover:border-zinc-700'
                   }`}
                 >
                   <span>2. Cover Stake Only</span>
@@ -272,8 +272,8 @@ export default function ParlayHedgeCalculator({ slip, gradedLegs }: ParlayHedgeC
                   onClick={() => setActiveStrategy('aggressive')}
                   className={`px-2 py-1.5 rounded-[4px] text-[10px] font-bold uppercase transition-all flex flex-col items-center justify-center border ${
                     activeStrategy === 'aggressive'
-                      ? 'bg-amber-500 text-black border-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.6)] font-black'
-                      : 'bg-[#141722] text-slate-300 border-white/10 hover:border-white/20'
+                      ? 'bg-amber-400 text-black border-amber-300 font-black'
+                      : 'bg-zinc-900 text-zinc-300 border-zinc-800 hover:border-zinc-700'
                   }`}
                 >
                   <span>3. Aggressive 75% Lock</span>
