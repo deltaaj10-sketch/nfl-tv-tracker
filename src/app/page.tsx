@@ -25,6 +25,7 @@ import {
   QrCode,
   Copy,
   Check,
+  Scale,
   X,
 } from 'lucide-react';
 import { playBroadcastAlertSound } from '@/lib/soundEffects';
@@ -47,6 +48,7 @@ import {
 import ManageLeaguesModal from '@/components/ManageLeaguesModal';
 import ManageBetsModal from '@/components/ManageBetsModal';
 import PlayerDetailModal from '@/components/PlayerDetailModal';
+import ParlayHedgeCalculator from '@/components/ParlayHedgeCalculator';
 
 const NFL_TEAM_COLORS: Record<string, string> = {
   ARI: '#97233F',
@@ -390,6 +392,15 @@ export interface TouchdownAlert {
   owners: PlayerOwnerTag[];
 }
 
+export interface LiveGameMiniPill {
+  clock: string;
+  score: string;
+  isLive: boolean;
+  isPost: boolean;
+  isRedZone: boolean;
+  formatted: string;
+}
+
 interface GradedLegResult {
   status: 'cashed' | 'covering' | 'sweating' | 'chalked' | 'upcoming';
   statusText: string;
@@ -398,6 +409,93 @@ interface GradedLegResult {
   progressPct: number;
   gameStatusText?: string;
   currentValue?: number | string;
+  liveGameMini?: LiveGameMiniPill;
+  ringCategory?: 'cash_active' | 'sweat_zone' | 'chalked' | 'pending';
+}
+
+function extractLiveGameMini(
+  leg: BetLeg,
+  games: LiveGame[],
+  player?: FantasyPlayer | null
+): LiveGameMiniPill | undefined {
+  let targetGame: LiveGame | undefined;
+  if (leg.gameId) {
+    targetGame = games.find((g) => g.id === leg.gameId);
+  }
+  if (!targetGame && leg.teamAbbr) {
+    targetGame = games.find(
+      (g) =>
+        g.awayTeam.abbreviation.toUpperCase() === leg.teamAbbr?.toUpperCase() ||
+        g.homeTeam.abbreviation.toUpperCase() === leg.teamAbbr?.toUpperCase()
+    );
+  }
+  if (!targetGame && player?.team?.abbreviation) {
+    targetGame = games.find(
+      (g) =>
+        g.awayTeam.abbreviation.toUpperCase() === player.team.abbreviation.toUpperCase() ||
+        g.homeTeam.abbreviation.toUpperCase() === player.team.abbreviation.toUpperCase()
+    );
+  }
+  if (!targetGame && leg.playerTeam) {
+    targetGame = games.find(
+      (g) =>
+        g.awayTeam.abbreviation.toUpperCase() === leg.playerTeam?.toUpperCase() ||
+        g.homeTeam.abbreviation.toUpperCase() === leg.playerTeam?.toUpperCase()
+    );
+  }
+
+  if (!targetGame) {
+    if (player?.gameStatus?.detail) {
+      return {
+        clock: player.gameStatus.clock || player.gameStatus.detail,
+        score: `${player.team.abbreviation} vs ${player.opponent.abbreviation}`,
+        isLive: Boolean(player.isGameLive || player.gameStatus.state === 'in'),
+        isPost: player.gameStatus.state === 'post',
+        isRedZone: Boolean(player.gameStatus.isRedZone),
+        formatted: `${player.gameStatus.detail || (player.isGameLive ? 'LIVE' : 'FINAL')}`,
+      };
+    }
+    return undefined;
+  }
+
+  const isLive = targetGame.status.state === 'in';
+  const isPost = targetGame.status.state === 'post';
+  const isRedZone = isLive && Boolean(targetGame.isRedZone || targetGame.situation?.isRedZone);
+  const clock = isLive
+    ? targetGame.status.shortDetail || targetGame.status.displayClock || 'LIVE'
+    : isPost
+    ? 'FINAL'
+    : targetGame.status.shortDetail || 'UPCOMING';
+  const score = `${targetGame.awayTeam.score}-${targetGame.homeTeam.score}`;
+
+  return {
+    clock,
+    score,
+    isLive,
+    isPost,
+    isRedZone,
+    formatted: isLive
+      ? `${clock} • ${score}`
+      : isPost
+      ? `FINAL • ${score}`
+      : `${targetGame.awayTeam.abbreviation} @ ${targetGame.homeTeam.abbreviation}`,
+  };
+}
+
+function getBetRingClasses(
+  category?: 'cash_active' | 'sweat_zone' | 'chalked' | 'pending'
+): string {
+  switch (category) {
+    case 'cash_active':
+      return 'ring-2 ring-emerald-400 bg-emerald-950/90 text-emerald-300 shadow-[0_0_12px_rgba(52,211,153,0.5)] border border-emerald-400/60 font-bold';
+    case 'sweat_zone':
+      return 'ring-2 ring-amber-400 bg-amber-950/90 text-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.6)] animate-pulse border border-amber-400/60 font-bold';
+    case 'chalked':
+      return 'ring-2 ring-rose-500 bg-rose-950/90 text-rose-300 shadow-[0_0_12px_rgba(244,63,94,0.4)] border border-rose-500/60 font-bold';
+    case 'pending':
+    default:
+      return 'ring-1 ring-slate-700 bg-slate-900 text-slate-300 border border-slate-700 font-medium';
+  }
 }
 
 function gradeBetLeg(
@@ -437,9 +535,12 @@ function gradeBetLeg(
     const target = leg.targetValue || 0;
     const direction = leg.direction || 'OVER';
     const progressPct = target > 0 ? Math.min(100, Math.round((currentVal / target) * 100)) : 0;
+    const liveGameMini = extractLiveGameMini(leg, games, player);
     const gameClock = player
       ? `${player.team.abbreviation} vs ${player.opponent.abbreviation} • ${player.gameStatus?.detail || (isLive ? 'LIVE' : isPost ? 'FINAL' : 'Upcoming')}`
       : 'Upcoming';
+
+    const isWithin15 = target > 0 && currentVal >= target * 0.85;
 
     if (direction === 'OVER') {
       if (currentVal >= target) {
@@ -451,6 +552,8 @@ function gradeBetLeg(
           progressPct: 100,
           gameStatusText: gameClock,
           currentValue: currentVal,
+          liveGameMini,
+          ringCategory: 'cash_active',
         };
       }
       if (isPost) {
@@ -462,20 +565,25 @@ function gradeBetLeg(
           progressPct,
           gameStatusText: gameClock,
           currentValue: currentVal,
+          liveGameMini,
+          ringCategory: 'chalked',
         };
       }
       if (isLive) {
-        const isCovering = progressPct >= 65;
         return {
-          status: isCovering ? 'covering' : 'sweating',
-          statusText: isCovering ? 'ON PACE' : 'SWEATING',
-          badgeStyle: isCovering
+          status: isWithin15 ? 'sweating' : progressPct >= 65 ? 'covering' : 'sweating',
+          statusText: isWithin15 ? 'SWEAT (15%)' : progressPct >= 65 ? 'ON PACE' : 'SWEATING',
+          badgeStyle: isWithin15
+            ? 'bg-amber-950/80 text-amber-300 border-amber-500/50 animate-pulse'
+            : progressPct >= 65
             ? 'bg-cyan-950/80 text-cyan-300 border-cyan-500/50'
-            : 'bg-amber-950/80 text-amber-300 border-amber-500/50 animate-pulse',
+            : 'bg-slate-900 text-slate-300 border-slate-700',
           progressText: `${currentVal} / ${target} (${progressPct}%)`,
           progressPct,
           gameStatusText: gameClock,
           currentValue: currentVal,
+          liveGameMini,
+          ringCategory: isWithin15 ? 'sweat_zone' : progressPct >= 65 ? 'cash_active' : 'pending',
         };
       }
       return {
@@ -486,6 +594,8 @@ function gradeBetLeg(
         progressPct: 0,
         gameStatusText: gameClock,
         currentValue: 0,
+        liveGameMini,
+        ringCategory: 'pending',
       };
     } else {
       // UNDER
@@ -498,6 +608,8 @@ function gradeBetLeg(
           progressPct: 100,
           gameStatusText: gameClock,
           currentValue: currentVal,
+          liveGameMini,
+          ringCategory: 'chalked',
         };
       }
       if (isPost) {
@@ -509,20 +621,23 @@ function gradeBetLeg(
           progressPct: 100,
           gameStatusText: gameClock,
           currentValue: currentVal,
+          liveGameMini,
+          ringCategory: 'cash_active',
         };
       }
       if (isLive) {
-        const isSafe = progressPct <= 60;
         return {
-          status: isSafe ? 'covering' : 'sweating',
-          statusText: isSafe ? 'UNDER PACE' : 'SWEATING',
-          badgeStyle: isSafe
-            ? 'bg-cyan-950/80 text-cyan-300 border-cyan-500/50'
-            : 'bg-amber-950/80 text-amber-300 border-amber-500/50 animate-pulse',
+          status: isWithin15 ? 'sweating' : progressPct <= 60 ? 'covering' : 'sweating',
+          statusText: isWithin15 ? 'SWEAT (15%)' : progressPct <= 60 ? 'UNDER PACE' : 'SWEATING',
+          badgeStyle: isWithin15
+            ? 'bg-amber-950/80 text-amber-300 border-amber-500/50 animate-pulse'
+            : 'bg-cyan-950/80 text-cyan-300 border-cyan-500/50',
           progressText: `${currentVal} / ${target} (${progressPct}%)`,
           progressPct,
           gameStatusText: gameClock,
           currentValue: currentVal,
+          liveGameMini,
+          ringCategory: isWithin15 ? 'sweat_zone' : progressPct <= 60 ? 'cash_active' : 'sweat_zone',
         };
       }
       return {
@@ -533,6 +648,8 @@ function gradeBetLeg(
         progressPct: 0,
         gameStatusText: gameClock,
         currentValue: 0,
+        liveGameMini,
+        ringCategory: 'pending',
       };
     }
   }
@@ -547,6 +664,7 @@ function gradeBetLeg(
 
     const isLive = Boolean(player?.isGameLive || player?.isLive || player?.gameStatus?.state === 'in');
     const isPost = player?.gameStatus?.state === 'post';
+    const liveGameMini = extractLiveGameMini(leg, games, player);
     const gameClock = player
       ? `${player.team.abbreviation} vs ${player.opponent.abbreviation} • ${player.gameStatus?.detail || (isLive ? 'LIVE' : isPost ? 'FINAL' : 'Upcoming')}`
       : 'Upcoming';
@@ -565,6 +683,8 @@ function gradeBetLeg(
         progressPct: 100,
         gameStatusText: gameClock,
         currentValue: tdCount,
+        liveGameMini,
+        ringCategory: 'cash_active',
       };
     }
     if (isPost) {
@@ -576,17 +696,24 @@ function gradeBetLeg(
         progressPct: 0,
         gameStatusText: gameClock,
         currentValue: 0,
+        liveGameMini,
+        ringCategory: 'chalked',
       };
     }
     if (isLive) {
+      const inRz = Boolean(player?.gameStatus.isRedZone || liveGameMini?.isRedZone);
       return {
         status: 'sweating',
-        statusText: 'HUNTING TD',
-        badgeStyle: 'bg-amber-950/80 text-amber-300 border-amber-500/50 animate-pulse',
-        progressText: '0 TDs so far',
-        progressPct: 35,
+        statusText: inRz ? 'RED ZONE SWEAT' : 'HUNTING TD',
+        badgeStyle: inRz
+          ? 'bg-red-950/80 text-red-300 border-red-500/60 shadow-sm animate-pulse'
+          : 'bg-amber-950/80 text-amber-300 border-amber-500/50 animate-pulse',
+        progressText: inRz ? 'In Red Zone Right Now' : '0 TDs so far',
+        progressPct: inRz ? 85 : 35,
         gameStatusText: gameClock,
         currentValue: 0,
+        liveGameMini,
+        ringCategory: 'sweat_zone',
       };
     }
     return {
@@ -597,6 +724,8 @@ function gradeBetLeg(
       progressPct: 0,
       gameStatusText: gameClock,
       currentValue: 0,
+      liveGameMini,
+      ringCategory: 'pending',
     };
   }
 
@@ -616,6 +745,7 @@ function gradeBetLeg(
         badgeStyle: 'bg-slate-900 text-slate-400 border-slate-800',
         progressText: 'Game Not Found',
         progressPct: 0,
+        ringCategory: 'pending',
       };
     }
 
@@ -626,6 +756,7 @@ function gradeBetLeg(
     const oppScore = isAway ? game.homeTeam.score : game.awayTeam.score;
     const spread = leg.spread || 0;
     const diff = teamScore + spread - oppScore;
+    const liveGameMini = extractLiveGameMini(leg, games);
     const gameClock = `${game.awayTeam.abbreviation} ${game.awayTeam.score} - ${game.homeTeam.score} ${game.homeTeam.abbreviation} • ${game.status.shortDetail || (isLive ? 'LIVE' : isPost ? 'FINAL' : 'Upcoming')}`;
 
     if (isPost) {
@@ -637,6 +768,8 @@ function gradeBetLeg(
           progressText: `Covered by +${diff.toFixed(1)} pts`,
           progressPct: 100,
           gameStatusText: gameClock,
+          liveGameMini,
+          ringCategory: 'cash_active',
         };
       } else if (diff === 0) {
         return {
@@ -646,6 +779,8 @@ function gradeBetLeg(
           progressText: 'Push',
           progressPct: 100,
           gameStatusText: gameClock,
+          liveGameMini,
+          ringCategory: 'cash_active',
         };
       } else {
         return {
@@ -655,21 +790,28 @@ function gradeBetLeg(
           progressText: `Missed by ${Math.abs(diff).toFixed(1)} pts`,
           progressPct: 0,
           gameStatusText: gameClock,
+          liveGameMini,
+          ringCategory: 'chalked',
         };
       }
     }
 
     if (isLive) {
       const isCovering = diff > 0;
+      const isWithin3 = Math.abs(diff) <= 3;
       return {
         status: isCovering ? 'covering' : 'sweating',
-        statusText: isCovering ? 'COVERING' : 'TRAILING SPREAD',
-        badgeStyle: isCovering
+        statusText: isWithin3 ? (isCovering ? 'SWEAT (+1-3)' : 'SWEAT (-1-3)') : isCovering ? 'COVERING' : 'TRAILING SPREAD',
+        badgeStyle: isWithin3
+          ? 'bg-amber-950/80 text-amber-300 border-amber-500/50 animate-pulse'
+          : isCovering
           ? 'bg-cyan-950/80 text-cyan-300 border-cyan-500/50'
           : 'bg-amber-950/80 text-amber-300 border-amber-500/50 animate-pulse',
         progressText: isCovering ? `Covering (+${diff.toFixed(1)})` : `Trailing (${diff.toFixed(1)})`,
         progressPct: isCovering ? 75 : 35,
         gameStatusText: gameClock,
+        liveGameMini,
+        ringCategory: isWithin3 ? 'sweat_zone' : isCovering ? 'cash_active' : 'sweat_zone',
       };
     }
 
@@ -680,6 +822,8 @@ function gradeBetLeg(
       progressText: `${leg.teamAbbr} ${spread > 0 ? `+${spread}` : spread}`,
       progressPct: 0,
       gameStatusText: game.status.shortDetail || 'Upcoming',
+      liveGameMini,
+      ringCategory: 'pending',
     };
   }
 
@@ -699,6 +843,7 @@ function gradeBetLeg(
         badgeStyle: 'bg-slate-900 text-slate-400 border-slate-800',
         progressText: 'Game Not Found',
         progressPct: 0,
+        ringCategory: 'pending',
       };
     }
 
@@ -707,6 +852,7 @@ function gradeBetLeg(
     const isAway = game.awayTeam.abbreviation === leg.teamAbbr;
     const teamScore = isAway ? game.awayTeam.score : game.homeTeam.score;
     const oppScore = isAway ? game.homeTeam.score : game.awayTeam.score;
+    const liveGameMini = extractLiveGameMini(leg, games);
     const gameClock = `${game.awayTeam.abbreviation} ${game.awayTeam.score} - ${game.homeTeam.score} ${game.homeTeam.abbreviation} • ${game.status.shortDetail || (isLive ? 'LIVE' : isPost ? 'FINAL' : 'Upcoming')}`;
 
     if (isPost) {
@@ -718,6 +864,8 @@ function gradeBetLeg(
           progressText: `Won by ${teamScore - oppScore} pts`,
           progressPct: 100,
           gameStatusText: gameClock,
+          liveGameMini,
+          ringCategory: 'cash_active',
         };
       } else {
         return {
@@ -727,21 +875,28 @@ function gradeBetLeg(
           progressText: 'Lost Game',
           progressPct: 0,
           gameStatusText: gameClock,
+          liveGameMini,
+          ringCategory: 'chalked',
         };
       }
     }
 
     if (isLive) {
       const winning = teamScore > oppScore;
+      const isClose = Math.abs(teamScore - oppScore) <= 3;
       return {
         status: winning ? 'covering' : 'sweating',
-        statusText: winning ? 'LEADING' : 'TRAILING',
-        badgeStyle: winning
+        statusText: isClose ? (winning ? 'LEAD (1-3)' : 'SWEAT (1-3)') : winning ? 'LEADING' : 'TRAILING',
+        badgeStyle: isClose
+          ? 'bg-amber-950/80 text-amber-300 border-amber-500/50 animate-pulse'
+          : winning
           ? 'bg-cyan-950/80 text-cyan-300 border-cyan-500/50'
           : 'bg-amber-950/80 text-amber-300 border-amber-500/50 animate-pulse',
         progressText: `${teamScore} - ${oppScore}`,
         progressPct: winning ? 70 : 30,
         gameStatusText: gameClock,
+        liveGameMini,
+        ringCategory: isClose ? 'sweat_zone' : winning ? 'cash_active' : 'pending',
       };
     }
 
@@ -752,6 +907,8 @@ function gradeBetLeg(
       progressText: `${leg.teamAbbr} Moneyline`,
       progressPct: 0,
       gameStatusText: game.status.shortDetail || 'Upcoming',
+      liveGameMini,
+      ringCategory: 'pending',
     };
   }
 
@@ -764,6 +921,7 @@ function gradeBetLeg(
         badgeStyle: 'bg-slate-900 text-slate-400 border-slate-800',
         progressText: 'Game Not Found',
         progressPct: 0,
+        ringCategory: 'pending',
       };
     }
 
@@ -773,7 +931,9 @@ function gradeBetLeg(
     const target = leg.totalPoints || 0;
     const direction = leg.direction || 'OVER';
     const progressPct = target > 0 ? Math.min(100, Math.round((totalCurrent / target) * 100)) : 0;
+    const liveGameMini = extractLiveGameMini(leg, games);
     const gameClock = `${game.awayTeam.abbreviation} ${game.awayTeam.score} - ${game.homeTeam.score} ${game.homeTeam.abbreviation} • ${game.status.shortDetail || (isLive ? 'LIVE' : isPost ? 'FINAL' : 'Upcoming')}`;
+    const isWithin15 = target > 0 && totalCurrent >= target * 0.85;
 
     if (direction === 'OVER') {
       if (totalCurrent > target) {
@@ -784,6 +944,8 @@ function gradeBetLeg(
           progressText: `${totalCurrent} / ${target} pts`,
           progressPct: 100,
           gameStatusText: gameClock,
+          liveGameMini,
+          ringCategory: 'cash_active',
         };
       }
       if (isPost) {
@@ -794,19 +956,24 @@ function gradeBetLeg(
           progressText: `${totalCurrent} / ${target} pts`,
           progressPct,
           gameStatusText: gameClock,
+          liveGameMini,
+          ringCategory: 'chalked',
         };
       }
       if (isLive) {
-        const isCovering = progressPct >= 65;
         return {
-          status: isCovering ? 'covering' : 'sweating',
-          statusText: isCovering ? 'ON PACE' : 'SWEATING',
-          badgeStyle: isCovering
+          status: isWithin15 ? 'sweating' : progressPct >= 65 ? 'covering' : 'sweating',
+          statusText: isWithin15 ? 'SWEAT (15%)' : progressPct >= 65 ? 'ON PACE' : 'SWEATING',
+          badgeStyle: isWithin15
+            ? 'bg-amber-950/80 text-amber-300 border-amber-500/50 animate-pulse'
+            : progressPct >= 65
             ? 'bg-cyan-950/80 text-cyan-300 border-cyan-500/50'
             : 'bg-amber-950/80 text-amber-300 border-amber-500/50 animate-pulse',
           progressText: `${totalCurrent} / ${target} pts (${progressPct}%)`,
           progressPct,
           gameStatusText: gameClock,
+          liveGameMini,
+          ringCategory: isWithin15 ? 'sweat_zone' : progressPct >= 65 ? 'cash_active' : 'pending',
         };
       }
       return {
@@ -816,6 +983,8 @@ function gradeBetLeg(
         progressText: `Target: > ${target} pts`,
         progressPct: 0,
         gameStatusText: game.status.shortDetail || 'Upcoming',
+        liveGameMini,
+        ringCategory: 'pending',
       };
     } else {
       // UNDER
@@ -827,6 +996,8 @@ function gradeBetLeg(
           progressText: `${totalCurrent} / ${target} pts (Exceeded)`,
           progressPct: 100,
           gameStatusText: gameClock,
+          liveGameMini,
+          ringCategory: 'chalked',
         };
       }
       if (isPost) {
@@ -837,19 +1008,22 @@ function gradeBetLeg(
           progressText: `${totalCurrent} / ${target} pts (Stayed Under)`,
           progressPct: 100,
           gameStatusText: gameClock,
+          liveGameMini,
+          ringCategory: 'cash_active',
         };
       }
       if (isLive) {
-        const isSafe = progressPct <= 60;
         return {
-          status: isSafe ? 'covering' : 'sweating',
-          statusText: isSafe ? 'UNDER PACE' : 'SWEATING',
-          badgeStyle: isSafe
-            ? 'bg-cyan-950/80 text-cyan-300 border-cyan-500/50'
-            : 'bg-amber-950/80 text-amber-300 border-amber-500/50 animate-pulse',
+          status: isWithin15 ? 'sweating' : progressPct <= 60 ? 'covering' : 'sweating',
+          statusText: isWithin15 ? 'SWEAT (15%)' : progressPct <= 60 ? 'UNDER PACE' : 'SWEATING',
+          badgeStyle: isWithin15
+            ? 'bg-amber-950/80 text-amber-300 border-amber-500/50 animate-pulse'
+            : 'bg-cyan-950/80 text-cyan-300 border-cyan-500/50',
           progressText: `${totalCurrent} / ${target} pts`,
           progressPct,
           gameStatusText: gameClock,
+          liveGameMini,
+          ringCategory: isWithin15 ? 'sweat_zone' : progressPct <= 60 ? 'cash_active' : 'sweat_zone',
         };
       }
       return {
@@ -859,6 +1033,8 @@ function gradeBetLeg(
         progressText: `Target: < ${target} pts`,
         progressPct: 0,
         gameStatusText: game.status.shortDetail || 'Upcoming',
+        liveGameMini,
+        ringCategory: 'pending',
       };
     }
   }
@@ -869,6 +1045,7 @@ function gradeBetLeg(
     badgeStyle: 'bg-slate-900 text-slate-400 border-slate-800',
     progressText: '',
     progressPct: 0,
+    ringCategory: 'pending',
   };
 }
 
@@ -900,7 +1077,18 @@ function getSlipSummary(slip: BetSlip, allPlayers: FantasyPlayer[], games: LiveG
     badgeStyle = 'bg-cyan-950/80 text-cyan-300 border-cyan-500/50';
   }
 
-  return { gradedLegs, total, cashedCount, chalkedCount, overallStatus, badgeLabel, badgeStyle };
+  let overallRingCategory: 'cash_active' | 'sweat_zone' | 'chalked' | 'pending' = 'pending';
+  if (overallStatus === 'cashed') {
+    overallRingCategory = 'cash_active';
+  } else if (overallStatus === 'chalked') {
+    overallRingCategory = 'chalked';
+  } else if (gradedLegs.some((g) => g.result.ringCategory === 'sweat_zone')) {
+    overallRingCategory = 'sweat_zone';
+  } else if (gradedLegs.some((g) => g.result.ringCategory === 'cash_active')) {
+    overallRingCategory = 'cash_active';
+  }
+
+  return { gradedLegs, total, cashedCount, chalkedCount, overallStatus, overallRingCategory, badgeLabel, badgeStyle };
 }
 
 interface SyncedLeagueTeam {
@@ -1159,6 +1347,7 @@ export default function TVCommandCenter() {
   const [isBetsModalOpen, setIsBetsModalOpen] = useState(false);
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
   const [selectedDetailPlayer, setSelectedDetailPlayer] = useState<FantasyPlayer | null>(null);
+  const [openHedgeSlipId, setOpenHedgeSlipId] = useState<string | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
 
   // Web Audio Alert Sound Settings & Cashed Bet Tracking
@@ -3811,7 +4000,7 @@ export default function TVCommandCenter() {
                         }`}
                       >
                         {/* Slip Card Header */}
-                        <div className="flex items-center justify-between pb-2 border-b border-slate-800/80 gap-2">
+                        <div className="flex items-center justify-between pb-2 border-b border-slate-800/80 gap-2 flex-wrap sm:flex-nowrap">
                           <div className="flex items-center gap-2 min-w-0">
                             <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-slate-950 border border-slate-800 text-slate-300 shrink-0">
                               {slip.legs.length > 1 ? `${slip.legs.length}-LEG` : 'STRAIGHT'}
@@ -3826,12 +4015,24 @@ export default function TVCommandCenter() {
                           </div>
 
                           <div className="flex items-center gap-2 shrink-0">
+                            <button
+                              onClick={() => setOpenHedgeSlipId(openHedgeSlipId === slip.id ? null : slip.id)}
+                              className={`px-2 py-0.5 rounded text-[10px] font-black uppercase transition-all flex items-center gap-1 border shrink-0 ${
+                                openHedgeSlipId === slip.id
+                                  ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-[0_0_10px_rgba(251,191,36,0.5)]'
+                                  : 'bg-slate-950/80 hover:bg-slate-800 text-amber-300 border-amber-500/40 hover:border-amber-400'
+                              }`}
+                              title="Calculate live parlay equity and hedge recommendations"
+                            >
+                              <Scale className="w-3 h-3 text-amber-400" />
+                              <span>{openHedgeSlipId === slip.id ? 'Close Hedge' : 'Calculate / Hedge'}</span>
+                            </button>
                             {slip.payout && (
-                              <span className="text-[11px] font-extrabold text-emerald-400 bg-emerald-950/70 px-2 py-0.5 rounded border border-emerald-500/40">
+                              <span className="text-[11px] font-extrabold text-emerald-400 bg-emerald-950/70 px-2 py-0.5 rounded border border-emerald-500/40 font-mono-score">
                                 {slip.payout}
                               </span>
                             )}
-                            <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded border ${summary.badgeStyle}`}>
+                            <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded transition-all ${getBetRingClasses(summary.overallRingCategory)}`}>
                               {summary.badgeLabel}
                             </span>
                           </div>
@@ -3872,9 +4073,35 @@ export default function TVCommandCenter() {
                                     </div>
                                   )}
                                   <div className="min-w-0">
-                                    <span className="text-xs font-black text-white block truncate leading-tight">
-                                      {leg.description}
-                                    </span>
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className="text-xs font-black text-white block truncate leading-tight">
+                                        {leg.description}
+                                      </span>
+                                      {/* Live Game State Mini-Ticker Pill */}
+                                      {result.liveGameMini && (
+                                        <span
+                                          className={`inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-mono-score font-bold tracking-tight shrink-0 border ${
+                                            result.liveGameMini.isLive
+                                              ? result.liveGameMini.isRedZone
+                                                ? 'bg-rose-950/90 text-rose-300 border-rose-500/80 animate-pulse shadow-[0_0_8px_rgba(244,63,94,0.5)]'
+                                                : 'bg-emerald-950/90 text-emerald-300 border-emerald-500/50 shadow-sm'
+                                              : result.liveGameMini.isPost
+                                              ? 'bg-slate-900/90 text-slate-400 border-slate-700'
+                                              : 'bg-slate-900/90 text-slate-300 border-slate-800'
+                                          }`}
+                                        >
+                                          {result.liveGameMini.isLive && (
+                                            <span
+                                              className={`w-1.5 h-1.5 rounded-full ${
+                                                result.liveGameMini.isRedZone ? 'bg-rose-400 animate-ping' : 'bg-emerald-400 animate-pulse'
+                                              }`}
+                                            />
+                                          )}
+                                          {result.liveGameMini.isRedZone && <span className="text-[8px] font-black text-rose-400">RZ</span>}
+                                          <span>{result.liveGameMini.formatted}</span>
+                                        </span>
+                                      )}
+                                    </div>
                                     {result.gameStatusText && (
                                       <span className="text-[10px] font-bold text-slate-400 block truncate">
                                         {result.gameStatusText}
@@ -3883,9 +4110,25 @@ export default function TVCommandCenter() {
                                   </div>
                                 </div>
 
+                                {/* Leg Status with Distinct Visual Ring Badge */}
                                 <div className="text-right shrink-0">
-                                  <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded border ${result.badgeStyle}`}>
-                                    {result.statusText}
+                                  <span
+                                    className={`inline-flex items-center gap-1 text-[10px] font-black uppercase px-2 py-0.5 rounded transition-all ${getBetRingClasses(
+                                      result.ringCategory
+                                    )}`}
+                                  >
+                                    <span
+                                      className={`w-1.5 h-1.5 rounded-full ${
+                                        result.ringCategory === 'cash_active'
+                                          ? 'bg-emerald-400'
+                                          : result.ringCategory === 'sweat_zone'
+                                          ? 'bg-amber-400 animate-ping'
+                                          : result.ringCategory === 'chalked'
+                                          ? 'bg-rose-400'
+                                          : 'bg-slate-400'
+                                      }`}
+                                    />
+                                    <span>{result.statusText}</span>
                                   </span>
                                 </div>
                               </div>
@@ -3920,6 +4163,13 @@ export default function TVCommandCenter() {
                             </div>
                           ))}
                         </div>
+
+                        {/* Live Parlay Payout & Hedge Calculator Drawer */}
+                        {openHedgeSlipId === slip.id && (
+                          <div className="mt-3 pt-3 border-t border-slate-800 animate-fadeIn">
+                            <ParlayHedgeCalculator slip={slip} gradedLegs={summary.gradedLegs} />
+                          </div>
+                        )}
                       </div>
                     );
                   })}

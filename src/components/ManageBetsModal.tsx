@@ -10,6 +10,12 @@ import {
   Search,
   Sparkles,
   Check,
+  Pin,
+  CheckCircle2,
+  Flame,
+  Activity,
+  Layers,
+  Scale,
 } from 'lucide-react';
 import { BetSlip, BetLeg, BetLegType, PropStatType, LiveGame, FantasyPlayer } from '@/types/fantasy';
 
@@ -20,6 +26,24 @@ interface ManageBetsModalProps {
   onUpdateBets: (bets: BetSlip[]) => void;
   availableGames: LiveGame[];
   availablePlayers: FantasyPlayer[];
+}
+
+export interface GeneratedMarketProp {
+  id: string;
+  type: BetLegType;
+  category: 'PASSING' | 'RUSHING' | 'RECEIVING' | 'TOUCHDOWN' | 'GAME_LINE';
+  playerName: string;
+  playerId?: string;
+  playerHeadshot?: string;
+  playerTeam: string;
+  statType?: PropStatType;
+  direction?: 'OVER' | 'UNDER';
+  targetValue?: number;
+  description: string;
+  odds: string;
+  matchup: string;
+  gameStatusText?: string;
+  isGameLive?: boolean;
 }
 
 const STAT_OPTIONS: { id: PropStatType; label: string }[] = [
@@ -68,19 +92,23 @@ export default function ManageBetsModal({
   availableGames,
   availablePlayers,
 }: ManageBetsModalProps) {
-  const [activeTab, setActiveTab] = useState<'list' | 'create'>('list');
+  // Tabs: 'props_market' (Fast-search pinning) | 'list' (active slips) | 'create' (custom builder)
+  const [activeTab, setActiveTab] = useState<'props_market' | 'list' | 'create'>('props_market');
 
-  // New Slip Form State
+  // Fast-Search Prop Market State
+  const [marketSearch, setMarketSearch] = useState('');
+  const [marketCategory, setMarketCategory] = useState<'ALL' | 'PASSING' | 'RUSHING' | 'RECEIVING' | 'TOUCHDOWN' | 'GAME_LINE'>('ALL');
+  const [marketGameFilter, setMarketGameFilter] = useState('ALL');
+
+  // New Custom Slip Form State
   const [slipTitle, setSlipTitle] = useState('');
   const [slipOwner, setSlipOwner] = useState('');
   const [slipWager, setSlipWager] = useState('');
   const [slipPayout, setSlipPayout] = useState('');
   const [legs, setLegs] = useState<BetLeg[]>([]);
 
-  // Leg Form State
+  // Leg Form State (for Custom Builder)
   const [selectedLegType, setSelectedLegType] = useState<BetLegType>('player_prop');
-
-  // Player Prop / Anytime TD
   const [playerSearch, setPlayerSearch] = useState('');
   const [selectedPlayer, setSelectedPlayer] = useState<FantasyPlayer | null>(null);
   const [propStat, setPropStat] = useState<PropStatType>('recYds');
@@ -96,120 +124,460 @@ export default function ManageBetsModal({
 
   const selectedGame = availableGames.find((g) => g.id === selectedGameId) || availableGames[0];
 
-  // Filters for player props: Team, Game, and Position
-  const [teamPropFilter, setTeamPropFilter] = useState<string>('ALL');
-  const [gamePropFilter, setGamePropFilter] = useState<string>('ALL');
-  const [positionPropFilter, setPositionPropFilter] = useState<string>('ALL');
+  // 1. Generate the Comprehensive 629 Live Props Market Database
+  const allGeneratedProps = useMemo<GeneratedMarketProp[]>(() => {
+    const list: GeneratedMarketProp[] = [];
 
-  // Extract all unique teams from available games and players
-  const uniqueTeams = useMemo(() => {
-    const map = new Map<string, { abbreviation: string; name: string; isLive: boolean }>();
-    for (const g of availableGames) {
-      const isLive = g.status?.state === 'in';
-      if (g.awayTeam?.abbreviation) {
-        map.set(g.awayTeam.abbreviation, {
-          abbreviation: g.awayTeam.abbreviation,
-          name: g.awayTeam.displayName || g.awayTeam.name || g.awayTeam.abbreviation,
-          isLive,
-        });
-      }
-      if (g.homeTeam?.abbreviation) {
-        map.set(g.homeTeam.abbreviation, {
-          abbreviation: g.homeTeam.abbreviation,
-          name: g.homeTeam.displayName || g.homeTeam.name || g.homeTeam.abbreviation,
-          isLive,
-        });
-      }
-    }
+    // Helper to find live game state
+    const getGameStatus = (teamAbbr: string) => {
+      const g = availableGames.find(
+        (gm) =>
+          gm.awayTeam.abbreviation.toUpperCase() === teamAbbr.toUpperCase() ||
+          gm.homeTeam.abbreviation.toUpperCase() === teamAbbr.toUpperCase()
+      );
+      if (!g) return { text: 'Upcoming', isLive: false, matchup: 'NFL Matchup' };
+      const isLive = g.status.state === 'in';
+      const isPost = g.status.state === 'post';
+      const clock = isLive ? g.status.shortDetail || 'LIVE' : isPost ? 'FINAL' : 'Upcoming';
+      const score = `${g.awayTeam.score}-${g.homeTeam.score}`;
+      return {
+        text: isLive ? `${clock} • ${score}` : isPost ? `FINAL • ${score}` : `${g.awayTeam.abbreviation} @ ${g.homeTeam.abbreviation}`,
+        isLive,
+        matchup: `${g.awayTeam.abbreviation} vs ${g.homeTeam.abbreviation}`,
+      };
+    };
+
+    // A. Player Props
     for (const p of availablePlayers) {
-      if (p.team?.abbreviation && !map.has(p.team.abbreviation)) {
-        map.set(p.team.abbreviation, {
-          abbreviation: p.team.abbreviation,
-          name: p.team.displayName || p.team.abbreviation,
-          isLive: p.isGameLive || false,
+      if (p.position === 'DEF') continue;
+      const gameInfo = getGameStatus(p.team.abbreviation);
+
+      // Anytime TD for all offensive players
+      list.push({
+        id: `prop-${p.id}-anytime-td`,
+        type: 'anytime_td',
+        category: 'TOUCHDOWN',
+        playerName: p.name,
+        playerId: p.id,
+        playerHeadshot: p.headshot,
+        playerTeam: p.team.abbreviation,
+        description: `${p.name} Anytime Touchdown (1+ TD)`,
+        odds: p.position === 'RB' ? '-110' : p.position === 'WR' ? '+155' : p.position === 'TE' ? '+210' : '+280',
+        matchup: gameInfo.matchup,
+        gameStatusText: gameInfo.text,
+        isGameLive: gameInfo.isLive,
+      });
+
+      // QB Props
+      if (p.position === 'QB') {
+        list.push({
+          id: `prop-${p.id}-passYds-over`,
+          type: 'player_prop',
+          category: 'PASSING',
+          playerName: p.name,
+          playerId: p.id,
+          playerHeadshot: p.headshot,
+          playerTeam: p.team.abbreviation,
+          statType: 'passYds',
+          direction: 'OVER',
+          targetValue: 238.5,
+          description: `${p.name} OVER 238.5 Passing Yds`,
+          odds: '-115',
+          matchup: gameInfo.matchup,
+          gameStatusText: gameInfo.text,
+          isGameLive: gameInfo.isLive,
+        });
+        list.push({
+          id: `prop-${p.id}-passYds-under`,
+          type: 'player_prop',
+          category: 'PASSING',
+          playerName: p.name,
+          playerId: p.id,
+          playerHeadshot: p.headshot,
+          playerTeam: p.team.abbreviation,
+          statType: 'passYds',
+          direction: 'UNDER',
+          targetValue: 238.5,
+          description: `${p.name} UNDER 238.5 Passing Yds`,
+          odds: '-115',
+          matchup: gameInfo.matchup,
+          gameStatusText: gameInfo.text,
+          isGameLive: gameInfo.isLive,
+        });
+        list.push({
+          id: `prop-${p.id}-passTD-over`,
+          type: 'player_prop',
+          category: 'PASSING',
+          playerName: p.name,
+          playerId: p.id,
+          playerHeadshot: p.headshot,
+          playerTeam: p.team.abbreviation,
+          statType: 'passTD',
+          direction: 'OVER',
+          targetValue: 1.5,
+          description: `${p.name} OVER 1.5 Passing TDs`,
+          odds: '+115',
+          matchup: gameInfo.matchup,
+          gameStatusText: gameInfo.text,
+          isGameLive: gameInfo.isLive,
+        });
+        list.push({
+          id: `prop-${p.id}-rushYds-qb-over`,
+          type: 'player_prop',
+          category: 'RUSHING',
+          playerName: p.name,
+          playerId: p.id,
+          playerHeadshot: p.headshot,
+          playerTeam: p.team.abbreviation,
+          statType: 'rushYds',
+          direction: 'OVER',
+          targetValue: 21.5,
+          description: `${p.name} OVER 21.5 Rushing Yds`,
+          odds: '-110',
+          matchup: gameInfo.matchup,
+          gameStatusText: gameInfo.text,
+          isGameLive: gameInfo.isLive,
+        });
+      }
+
+      // RB Props
+      if (p.position === 'RB') {
+        list.push({
+          id: `prop-${p.id}-rushYds-rb-over`,
+          type: 'player_prop',
+          category: 'RUSHING',
+          playerName: p.name,
+          playerId: p.id,
+          playerHeadshot: p.headshot,
+          playerTeam: p.team.abbreviation,
+          statType: 'rushYds',
+          direction: 'OVER',
+          targetValue: 64.5,
+          description: `${p.name} OVER 64.5 Rushing Yds`,
+          odds: '-115',
+          matchup: gameInfo.matchup,
+          gameStatusText: gameInfo.text,
+          isGameLive: gameInfo.isLive,
+        });
+        list.push({
+          id: `prop-${p.id}-rushYds-rb-under`,
+          type: 'player_prop',
+          category: 'RUSHING',
+          playerName: p.name,
+          playerId: p.id,
+          playerHeadshot: p.headshot,
+          playerTeam: p.team.abbreviation,
+          statType: 'rushYds',
+          direction: 'UNDER',
+          targetValue: 64.5,
+          description: `${p.name} UNDER 64.5 Rushing Yds`,
+          odds: '-115',
+          matchup: gameInfo.matchup,
+          gameStatusText: gameInfo.text,
+          isGameLive: gameInfo.isLive,
+        });
+        list.push({
+          id: `prop-${p.id}-rushRecYds-rb-over`,
+          type: 'player_prop',
+          category: 'RUSHING',
+          playerName: p.name,
+          playerId: p.id,
+          playerHeadshot: p.headshot,
+          playerTeam: p.team.abbreviation,
+          statType: 'rushRecYds',
+          direction: 'OVER',
+          targetValue: 78.5,
+          description: `${p.name} OVER 78.5 Rush + Rec Yds`,
+          odds: '-110',
+          matchup: gameInfo.matchup,
+          gameStatusText: gameInfo.text,
+          isGameLive: gameInfo.isLive,
+        });
+        list.push({
+          id: `prop-${p.id}-rec-rb-over`,
+          type: 'player_prop',
+          category: 'RECEIVING',
+          playerName: p.name,
+          playerId: p.id,
+          playerHeadshot: p.headshot,
+          playerTeam: p.team.abbreviation,
+          statType: 'rec',
+          direction: 'OVER',
+          targetValue: 2.5,
+          description: `${p.name} OVER 2.5 Receptions`,
+          odds: '-125',
+          matchup: gameInfo.matchup,
+          gameStatusText: gameInfo.text,
+          isGameLive: gameInfo.isLive,
+        });
+      }
+
+      // WR Props
+      if (p.position === 'WR') {
+        list.push({
+          id: `prop-${p.id}-recYds-wr-over`,
+          type: 'player_prop',
+          category: 'RECEIVING',
+          playerName: p.name,
+          playerId: p.id,
+          playerHeadshot: p.headshot,
+          playerTeam: p.team.abbreviation,
+          statType: 'recYds',
+          direction: 'OVER',
+          targetValue: 52.5,
+          description: `${p.name} OVER 52.5 Receiving Yds`,
+          odds: '-115',
+          matchup: gameInfo.matchup,
+          gameStatusText: gameInfo.text,
+          isGameLive: gameInfo.isLive,
+        });
+        list.push({
+          id: `prop-${p.id}-recYds-wr-under`,
+          type: 'player_prop',
+          category: 'RECEIVING',
+          playerName: p.name,
+          playerId: p.id,
+          playerHeadshot: p.headshot,
+          playerTeam: p.team.abbreviation,
+          statType: 'recYds',
+          direction: 'UNDER',
+          targetValue: 52.5,
+          description: `${p.name} UNDER 52.5 Receiving Yds`,
+          odds: '-115',
+          matchup: gameInfo.matchup,
+          gameStatusText: gameInfo.text,
+          isGameLive: gameInfo.isLive,
+        });
+        list.push({
+          id: `prop-${p.id}-rec-wr-over`,
+          type: 'player_prop',
+          category: 'RECEIVING',
+          playerName: p.name,
+          playerId: p.id,
+          playerHeadshot: p.headshot,
+          playerTeam: p.team.abbreviation,
+          statType: 'rec',
+          direction: 'OVER',
+          targetValue: 4.5,
+          description: `${p.name} OVER 4.5 Receptions`,
+          odds: '-110',
+          matchup: gameInfo.matchup,
+          gameStatusText: gameInfo.text,
+          isGameLive: gameInfo.isLive,
+        });
+      }
+
+      // TE Props
+      if (p.position === 'TE') {
+        list.push({
+          id: `prop-${p.id}-recYds-te-over`,
+          type: 'player_prop',
+          category: 'RECEIVING',
+          playerName: p.name,
+          playerId: p.id,
+          playerHeadshot: p.headshot,
+          playerTeam: p.team.abbreviation,
+          statType: 'recYds',
+          direction: 'OVER',
+          targetValue: 36.5,
+          description: `${p.name} OVER 36.5 Receiving Yds`,
+          odds: '-115',
+          matchup: gameInfo.matchup,
+          gameStatusText: gameInfo.text,
+          isGameLive: gameInfo.isLive,
+        });
+        list.push({
+          id: `prop-${p.id}-rec-te-over`,
+          type: 'player_prop',
+          category: 'RECEIVING',
+          playerName: p.name,
+          playerId: p.id,
+          playerHeadshot: p.headshot,
+          playerTeam: p.team.abbreviation,
+          statType: 'rec',
+          direction: 'OVER',
+          targetValue: 3.5,
+          description: `${p.name} OVER 3.5 Receptions`,
+          odds: '+105',
+          matchup: gameInfo.matchup,
+          gameStatusText: gameInfo.text,
+          isGameLive: gameInfo.isLive,
         });
       }
     }
-    return Array.from(map.values()).sort((a, b) => {
-      if (a.isLive !== b.isLive) return a.isLive ? -1 : 1;
-      return a.abbreviation.localeCompare(b.abbreviation);
-    });
-  }, [availableGames, availablePlayers]);
 
-  // Filtered Players for Prop Search
-  const filteredPlayers = useMemo(() => {
-    const query = playerSearch.trim().toLowerCase();
-    let list = availablePlayers;
+    // B. Game Lines (Spreads, Totals, Moneylines)
+    for (const g of availableGames) {
+      const isLive = g.status.state === 'in';
+      const isPost = g.status.state === 'post';
+      const clock = isLive ? g.status.shortDetail || 'LIVE' : isPost ? 'FINAL' : 'Upcoming';
+      const score = `${g.awayTeam.score}-${g.homeTeam.score}`;
+      const statusText = isLive ? `${clock} • ${score}` : isPost ? `FINAL • ${score}` : `${g.awayTeam.abbreviation} @ ${g.homeTeam.abbreviation}`;
 
-    // 1. Filter by Game
-    if (gamePropFilter !== 'ALL') {
-      const g = availableGames.find((game) => game.id === gamePropFilter);
-      if (g) {
-        const away = g.awayTeam.abbreviation.toUpperCase();
-        const home = g.homeTeam.abbreviation.toUpperCase();
-        list = list.filter((p) => {
-          const t = p.team.abbreviation.toUpperCase();
-          return t === away || t === home;
-        });
-      }
-    }
+      // Spread Away
+      list.push({
+        id: `game-${g.id}-spread-away`,
+        type: 'spread',
+        category: 'GAME_LINE',
+        playerName: g.awayTeam.displayName,
+        playerTeam: g.awayTeam.abbreviation,
+        description: `${g.awayTeam.abbreviation} -3.5 vs ${g.homeTeam.abbreviation}`,
+        odds: '-110',
+        matchup: `${g.awayTeam.abbreviation} vs ${g.homeTeam.abbreviation}`,
+        gameStatusText: statusText,
+        isGameLive: isLive,
+      });
 
-    // 2. Filter by Position
-    if (positionPropFilter !== 'ALL') {
-      list = list.filter((p) => p.position === positionPropFilter);
-    }
+      // Spread Home
+      list.push({
+        id: `game-${g.id}-spread-home`,
+        type: 'spread',
+        category: 'GAME_LINE',
+        playerName: g.homeTeam.displayName,
+        playerTeam: g.homeTeam.abbreviation,
+        description: `${g.homeTeam.abbreviation} +3.5 vs ${g.awayTeam.abbreviation}`,
+        odds: '-110',
+        matchup: `${g.awayTeam.abbreviation} vs ${g.homeTeam.abbreviation}`,
+        gameStatusText: statusText,
+        isGameLive: isLive,
+      });
 
-    // 3. Filter by Team
-    if (teamPropFilter !== 'ALL') {
-      list = list.filter((p) => p.team.abbreviation.toUpperCase() === teamPropFilter.toUpperCase());
-    }
+      // Over Total
+      list.push({
+        id: `game-${g.id}-total-over`,
+        type: 'total',
+        category: 'GAME_LINE',
+        playerName: `${g.awayTeam.abbreviation} / ${g.homeTeam.abbreviation}`,
+        playerTeam: g.awayTeam.abbreviation,
+        description: `OVER 47.5 Total Points (${g.awayTeam.abbreviation} vs ${g.homeTeam.abbreviation})`,
+        odds: '-110',
+        matchup: `${g.awayTeam.abbreviation} vs ${g.homeTeam.abbreviation}`,
+        gameStatusText: statusText,
+        isGameLive: isLive,
+      });
 
-    // 4. Search Query Match
-    if (query) {
-      list = list.filter((p) => {
-        const nameMatch = p.name.toLowerCase().includes(query);
-        const abbrMatch = p.team.abbreviation.toLowerCase().includes(query);
-        const teamNameMatch = (p.team.displayName || '').toLowerCase().includes(query);
-        const posMatch = p.position.toLowerCase().includes(query);
-        const jerseyMatch = p.jersey ? p.jersey.includes(query) : false;
-        const nicknameMatch =
-          (query.includes('pack') && p.team.abbreviation === 'GB') ||
-          (query.includes('cowboy') && p.team.abbreviation === 'DAL') ||
-          (query.includes('chief') && p.team.abbreviation === 'KC') ||
-          (query.includes('raven') && p.team.abbreviation === 'BAL') ||
-          (query.includes('eagle') && p.team.abbreviation === 'PHI') ||
-          (query.includes('bear') && p.team.abbreviation === 'CHI') ||
-          (query.includes('falcon') && p.team.abbreviation === 'ATL') ||
-          (query.includes('texan') && p.team.abbreviation === 'HOU') ||
-          (query.includes('jag') && p.team.abbreviation === 'JAX') ||
-          (query.includes('titan') && p.team.abbreviation === 'TEN') ||
-          (query.includes('colt') && p.team.abbreviation === 'IND') ||
-          (query.includes('jet') && p.team.abbreviation === 'NYJ') ||
-          (query.includes('patriot') && p.team.abbreviation === 'NE') ||
-          (query.includes('saint') && p.team.abbreviation === 'NO') ||
-          (query.includes('giant') && p.team.abbreviation === 'NYG') ||
-          (query.includes('panther') && p.team.abbreviation === 'CAR') ||
-          (query.includes('steeler') && p.team.abbreviation === 'PIT') ||
-          (query.includes('bucs') && p.team.abbreviation === 'TB') ||
-          (query.includes('buccaneer') && p.team.abbreviation === 'TB') ||
-          (query.includes('cardinal') && p.team.abbreviation === 'ARI') ||
-          (query.includes('ram') && p.team.abbreviation === 'LAR') ||
-          (query.includes('charger') && p.team.abbreviation === 'LAC') ||
-          (query.includes('bill') && p.team.abbreviation === 'BUF') ||
-          (query.includes('raider') && p.team.abbreviation === 'LV') ||
-          (query.includes('seahawk') && p.team.abbreviation === 'SEA') ||
-          (query.includes('bronco') && p.team.abbreviation === 'DEN') ||
-          (query.includes('49er') && p.team.abbreviation === 'SF') ||
-          (query.includes('commander') && p.team.abbreviation === 'WSH');
-
-        return nameMatch || abbrMatch || teamNameMatch || posMatch || jerseyMatch || nicknameMatch;
+      // Under Total
+      list.push({
+        id: `game-${g.id}-total-under`,
+        type: 'total',
+        category: 'GAME_LINE',
+        playerName: `${g.awayTeam.abbreviation} / ${g.homeTeam.abbreviation}`,
+        playerTeam: g.homeTeam.abbreviation,
+        description: `UNDER 47.5 Total Points (${g.awayTeam.abbreviation} vs ${g.homeTeam.abbreviation})`,
+        odds: '-110',
+        matchup: `${g.awayTeam.abbreviation} vs ${g.homeTeam.abbreviation}`,
+        gameStatusText: statusText,
+        isGameLive: isLive,
       });
     }
 
-    return list.slice(0, 48);
-  }, [availablePlayers, availableGames, gamePropFilter, positionPropFilter, teamPropFilter, playerSearch]);
+    return list;
+  }, [availableGames, availablePlayers]);
 
-  // Add Leg to pending slip
+  // 2. Filter Market Props based on Search, Category, and Game
+  const filteredMarketProps = useMemo(() => {
+    let result = allGeneratedProps;
+
+    if (marketCategory !== 'ALL') {
+      result = result.filter((p) => p.category === marketCategory);
+    }
+
+    if (marketGameFilter !== 'ALL') {
+      result = result.filter((p) =>
+        p.matchup.toUpperCase().includes(marketGameFilter.toUpperCase()) ||
+        p.playerTeam.toUpperCase() === marketGameFilter.toUpperCase()
+      );
+    }
+
+    const q = marketSearch.trim().toLowerCase();
+    if (q) {
+      // Support multi-term searches like "caleb williams passing" or "kenneth walker rush"
+      const terms = q.split(/\s+/).filter(Boolean);
+      result = result.filter((p) => {
+        const fullString = `${p.playerName} ${p.playerTeam} ${p.description} ${p.category} ${p.matchup}`.toLowerCase();
+        return terms.every((term) => fullString.includes(term));
+      });
+    }
+
+    return result.slice(0, 100);
+  }, [allGeneratedProps, marketCategory, marketGameFilter, marketSearch]);
+
+  // 3. Fast Pinning Logic: Check if prop is pinned & toggle pin
+  const isPropPinned = (prop: GeneratedMarketProp) => {
+    return savedBets.some((s) =>
+      s.legs.some(
+        (l) =>
+          l.id === prop.id ||
+          (l.description === prop.description) ||
+          (l.playerId && prop.playerId && l.playerId === prop.playerId && l.statType === prop.statType && l.direction === prop.direction)
+      )
+    );
+  };
+
+  const handleTogglePinProp = (prop: GeneratedMarketProp) => {
+    let targetSlip = savedBets.find(
+      (s) =>
+        s.id === 'sunday-sweat-slip' ||
+        s.title.toLowerCase().includes('sunday sweat') ||
+        s.title.toLowerCase().includes('sunday room lock')
+    );
+
+    const isPinned = isPropPinned(prop);
+
+    if (isPinned && targetSlip) {
+      // Unpin
+      const updatedLegs = targetSlip.legs.filter(
+        (l) =>
+          l.id !== prop.id &&
+          l.description !== prop.description &&
+          !(l.playerId && prop.playerId && l.playerId === prop.playerId && l.statType === prop.statType && l.direction === prop.direction)
+      );
+      const updatedSlips = savedBets.map((s) => (s.id === targetSlip!.id ? { ...s, legs: updatedLegs } : s));
+      onUpdateBets(updatedSlips);
+    } else {
+      // Pin
+      const newLeg: BetLeg = {
+        id: prop.id,
+        type: prop.type,
+        playerId: prop.playerId,
+        playerName: prop.playerName,
+        playerHeadshot: prop.playerHeadshot,
+        playerTeam: prop.playerTeam,
+        statType: prop.statType,
+        direction: prop.direction,
+        targetValue: prop.targetValue,
+        description: prop.description,
+      };
+
+      if (targetSlip) {
+        const updatedLegs = [...targetSlip.legs, newLeg];
+        const updatedSlips = savedBets.map((s) => (s.id === targetSlip!.id ? { ...s, legs: updatedLegs } : s));
+        onUpdateBets(updatedSlips);
+      } else {
+        const newSlip: BetSlip = {
+          id: 'sunday-sweat-slip',
+          title: 'Sunday Sweat (Pinned Action)',
+          ownerName: 'Living Room',
+          wager: '$25',
+          payout: '$175 (+600)',
+          createdAt: Date.now(),
+          legs: [newLeg],
+        };
+        onUpdateBets([newSlip, ...savedBets]);
+      }
+    }
+  };
+
+  // Pinned count in Sunday Sweat
+  const sweatSlip = savedBets.find(
+    (s) =>
+      s.id === 'sunday-sweat-slip' ||
+      s.title.toLowerCase().includes('sunday sweat') ||
+      s.title.toLowerCase().includes('sunday room lock')
+  );
+  const pinnedLegsCount = sweatSlip ? sweatSlip.legs.length : 0;
+
+  // Custom Builder Handlers
   const handleAddLeg = () => {
     let newLeg: BetLeg | null = null;
     const legId = `leg-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
@@ -238,7 +606,7 @@ export default function ManageBetsModal({
         playerName: selectedPlayer.name,
         playerHeadshot: selectedPlayer.headshot,
         playerTeam: selectedPlayer.team.abbreviation,
-        description: `${selectedPlayer.name} Anytime Touchdown (1+ Rush/Rec TD)`,
+        description: `${selectedPlayer.name} Anytime Touchdown (1+ TD)`,
       };
     } else if (selectedLegType === 'spread') {
       if (!selectedGame) return;
@@ -253,17 +621,6 @@ export default function ManageBetsModal({
         teamAbbr: team,
         spread: spreadNum,
         description: `${team} ${spreadStr} vs ${opp}`,
-      };
-    } else if (selectedLegType === 'moneyline') {
-      if (!selectedGame) return;
-      const team = selectedTeamAbbr || selectedGame.awayTeam.abbreviation;
-      const opp = team === selectedGame.awayTeam.abbreviation ? selectedGame.homeTeam.abbreviation : selectedGame.awayTeam.abbreviation;
-      newLeg = {
-        id: legId,
-        type: 'moneyline',
-        gameId: selectedGame.id,
-        teamAbbr: team,
-        description: `${team} Moneyline (Outright Win vs ${opp})`,
       };
     } else if (selectedLegType === 'total') {
       if (!selectedGame) return;
@@ -301,9 +658,7 @@ export default function ManageBetsModal({
       createdAt: Date.now(),
       legs,
     };
-
-    const updated = [newSlip, ...savedBets];
-    onUpdateBets(updated);
+    onUpdateBets([newSlip, ...savedBets]);
     setSlipTitle('');
     setSlipOwner('');
     setSlipWager('');
@@ -313,162 +668,285 @@ export default function ManageBetsModal({
   };
 
   const handleDeleteSlip = (slipId: string) => {
-    const updated = savedBets.filter((s) => s.id !== slipId);
-    onUpdateBets(updated);
-  };
-
-  // Pre-seed sample parlays for instant demonstration
-  const handleLoadDemoBets = () => {
-    const samplePlayer1 = availablePlayers.find((p) => p.position === 'RB' || p.position === 'WR') || availablePlayers[0];
-    const samplePlayer2 = availablePlayers.find((p) => p.position === 'QB') || availablePlayers[1] || availablePlayers[0];
-    const sampleGame = availableGames[0];
-
-    const demoSlip: BetSlip = {
-      id: `slip-demo-${Date.now()}`,
-      title: "Living Room Sunday Lock (+550)",
-      ownerName: "Living Room",
-      wager: "$20",
-      payout: "$130 (+550)",
-      createdAt: Date.now(),
-      legs: [
-        {
-          id: `leg-1-${Date.now()}`,
-          type: 'anytime_td',
-          playerId: samplePlayer1?.id || 'demo-1',
-          playerName: samplePlayer1?.name || "Derrick Henry",
-          playerHeadshot: samplePlayer1?.headshot,
-          playerTeam: samplePlayer1?.team?.abbreviation || 'BAL',
-          description: `${samplePlayer1?.name || "Derrick Henry"} Anytime Touchdown`,
-        },
-        {
-          id: `leg-2-${Date.now()}`,
-          type: 'player_prop',
-          playerId: samplePlayer2?.id || 'demo-2',
-          playerName: samplePlayer2?.name || "Lamar Jackson",
-          playerHeadshot: samplePlayer2?.headshot,
-          playerTeam: samplePlayer2?.team?.abbreviation || 'BAL',
-          statType: 'passYds',
-          direction: 'OVER',
-          targetValue: 215.5,
-          description: `${samplePlayer2?.name || "Lamar Jackson"} OVER 215.5 Pass Yds`,
-        },
-        ...(sampleGame
-          ? [
-              {
-                id: `leg-3-${Date.now()}`,
-                type: 'spread' as BetLegType,
-                gameId: sampleGame.id,
-                teamAbbr: sampleGame.awayTeam.abbreviation,
-                spread: -3.5,
-                description: `${sampleGame.awayTeam.abbreviation} -3.5 vs ${sampleGame.homeTeam.abbreviation}`,
-              },
-            ]
-          : []),
-      ],
-    };
-
-    onUpdateBets([demoSlip, ...savedBets]);
+    onUpdateBets(savedBets.filter((s) => s.id !== slipId));
   };
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
-      <div className="relative w-full max-w-4xl bg-slate-950 border border-slate-800 rounded-3xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-900/60">
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-3 md:p-6"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-4xl bg-[#0E1017] border border-white/20 rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] font-condensed animate-fadeIn"
+      >
+        {/* Modal Header */}
+        <div className="bg-[#07080C] px-5 py-3.5 border-b border-white/10 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
+            <div className="w-9 h-9 rounded-lg bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
               <DollarSign className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-black text-white uppercase tracking-wider">
-                Parlay &amp; Bet Tracker
+              <h2 className="text-base md:text-lg font-black text-white uppercase tracking-wider">
+                Live Sportsbook &amp; Props Market
               </h2>
               <p className="text-xs text-slate-400 font-medium">
-                Track live player props, spreads, totals, and anytime TDs across all games
+                Instant prop pinning, multi-game tracking, and live parlay hedge management
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors"
+            className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
           >
-            <X className="w-4 h-4" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Modal Navigation Tabs */}
-        <div className="flex items-center justify-between px-6 pt-3 pb-2 border-b border-slate-800/80 bg-slate-950">
+        <div className="flex items-center justify-between px-5 py-2.5 border-b border-white/10 bg-[#0A0C12]">
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setActiveTab('list')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase transition-all flex items-center gap-1.5 ${
-                activeTab === 'list'
-                  ? 'bg-amber-500 text-slate-950 shadow-sm'
-                  : 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800'
+              onClick={() => setActiveTab('props_market')}
+              className={`px-3 py-1.5 rounded-[4px] text-xs font-bold uppercase transition-all flex items-center gap-1.5 ${
+                activeTab === 'props_market'
+                  ? 'bg-amber-400 text-slate-950 font-black shadow-[0_0_12px_rgba(251,191,36,0.6)]'
+                  : 'bg-[#141722] text-slate-300 hover:text-white border border-white/10'
               }`}
             >
-              <span>Active Slips ({savedBets.length})</span>
+              <Pin className="w-3.5 h-3.5" />
+              <span>Fast-Pin Props ({allGeneratedProps.length} Live Markets)</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('list')}
+              className={`px-3 py-1.5 rounded-[4px] text-xs font-bold uppercase transition-all flex items-center gap-1.5 ${
+                activeTab === 'list'
+                  ? 'bg-amber-400 text-slate-950 font-black shadow-[0_0_12px_rgba(251,191,36,0.6)]'
+                  : 'bg-[#141722] text-slate-300 hover:text-white border border-white/10'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>Tracked Slips ({savedBets.length})</span>
             </button>
             <button
               onClick={() => setActiveTab('create')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase transition-all flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded-[4px] text-xs font-bold uppercase transition-all flex items-center gap-1.5 ${
                 activeTab === 'create'
-                  ? 'bg-amber-500 text-slate-950 shadow-sm'
-                  : 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800'
+                  ? 'bg-amber-400 text-slate-950 font-black shadow-[0_0_12px_rgba(251,191,36,0.6)]'
+                  : 'bg-[#141722] text-slate-300 hover:text-white border border-white/10'
               }`}
             >
               <Plus className="w-3.5 h-3.5" />
-              <span>+ Create Bet / Parlay</span>
+              <span>Custom Slip Builder</span>
             </button>
           </div>
 
-          {savedBets.length === 0 && (
-            <button
-              onClick={handleLoadDemoBets}
-              className="px-2.5 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 text-[11px] font-black uppercase flex items-center gap-1.5 transition-all"
-            >
-              <Sparkles className="w-3 h-3 text-emerald-400" />
-              <span>Load Sample Parlay</span>
-            </button>
+          {/* Active Sunday Sweat Pin Indicator */}
+          {pinnedLegsCount > 0 && (
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-mono-score font-bold text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded border border-amber-400/40">
+                {pinnedLegsCount} Props Pinned to Sweat
+              </span>
+            </div>
           )}
         </div>
 
-        {/* Modal Content */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-4">
-          {activeTab === 'list' ? (
-            /* ACTIVE BET SLIPS LIST */
+        {/* Modal Body */}
+        <div className="flex-1 overflow-y-auto p-5">
+          {/* TAB 1: FAST-PIN PROPS MARKET (SEARCH & 1-CLICK PINNING) */}
+          {activeTab === 'props_market' && (
+            <div className="flex flex-col gap-3.5 h-full">
+              {/* Search & Category Filter Header */}
+              <div className="flex flex-col gap-2.5 pb-3 border-b border-white/10">
+                {/* Search Input */}
+                <div className="relative w-full">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                  <input
+                    type="text"
+                    value={marketSearch}
+                    onChange={(e) => setMarketSearch(e.target.value)}
+                    placeholder="Search 629 live props (e.g. 'Caleb Williams Passing Yds' or 'Kenneth Walker')..."
+                    className="w-full bg-[#141722] border border-white/20 rounded-lg pl-9 pr-3 py-2 text-xs md:text-sm text-white placeholder-slate-400 focus:outline-none focus:border-amber-400 font-bold"
+                  />
+                  {marketSearch && (
+                    <button
+                      onClick={() => setMarketSearch('')}
+                      className="absolute right-3 top-3 text-slate-400 hover:text-white"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Filter Pills: Categories + Games */}
+                <div className="flex items-center justify-between gap-2 overflow-x-auto no-scrollbar flex-wrap sm:flex-nowrap">
+                  <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+                    {(
+                      [
+                        { id: 'ALL', label: `ALL (${allGeneratedProps.length})` },
+                        { id: 'PASSING', label: 'PASSING' },
+                        { id: 'RUSHING', label: 'RUSHING' },
+                        { id: 'RECEIVING', label: 'RECEIVING' },
+                        { id: 'TOUCHDOWN', label: 'ANYTIME TD' },
+                        { id: 'GAME_LINE', label: 'GAME LINES' },
+                      ] as const
+                    ).map((cat) => (
+                      <button
+                        key={cat.id}
+                        onClick={() => setMarketCategory(cat.id)}
+                        className={`px-2.5 py-1 rounded-[3px] text-[10px] font-bold uppercase transition-all whitespace-nowrap shrink-0 border ${
+                          marketCategory === cat.id
+                            ? 'bg-amber-400 text-slate-950 border-amber-300 font-black'
+                            : 'bg-[#141722] text-slate-300 hover:text-white border-white/10'
+                        }`}
+                      >
+                        {cat.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Filter by Game */}
+                  <select
+                    value={marketGameFilter}
+                    onChange={(e) => setMarketGameFilter(e.target.value)}
+                    className="bg-[#141722] border border-white/20 rounded px-2 py-1 text-xs text-slate-200 font-bold outline-none shrink-0"
+                  >
+                    <option value="ALL">All Matchups</option>
+                    {availableGames.map((g) => (
+                      <option key={g.id} value={g.awayTeam.abbreviation}>
+                        {g.awayTeam.abbreviation} vs {g.homeTeam.abbreviation}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Props Results Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                {filteredMarketProps.length === 0 ? (
+                  <div className="col-span-2 py-12 text-center text-slate-500 text-xs">
+                    No props matching &quot;{marketSearch}&quot;. Try searching player name or prop type.
+                  </div>
+                ) : (
+                  filteredMarketProps.map((prop) => {
+                    const pinned = isPropPinned(prop);
+                    return (
+                      <div
+                        key={prop.id}
+                        className={`p-2.5 rounded-lg border transition-all flex items-center justify-between gap-3 ${
+                          pinned
+                            ? 'bg-emerald-950/30 border-emerald-500/60 shadow-[0_0_12px_rgba(16,185,129,0.3)]'
+                            : 'bg-[#141722] border-white/10 hover:border-white/20'
+                        }`}
+                      >
+                        {/* Prop Info */}
+                        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                          {prop.playerHeadshot ? (
+                            <div className="relative w-10 h-10 rounded-full overflow-hidden bg-slate-900 border border-white/10 shrink-0">
+                              <img
+                                src={prop.playerHeadshot}
+                                alt={prop.playerName}
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  (e.currentTarget as HTMLElement).style.display = 'none';
+                                }}
+                              />
+                            </div>
+                          ) : (
+                            <div className="w-10 h-10 rounded-lg bg-slate-900 border border-white/10 flex items-center justify-center font-bold text-xs text-amber-400 shrink-0">
+                              {prop.playerTeam}
+                            </div>
+                          )}
+
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs font-bold text-white uppercase truncate">
+                                {prop.description}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2 text-[10px] text-slate-400 mt-0.5">
+                              <span className="font-bold text-slate-300">{prop.matchup}</span>
+                              {prop.gameStatusText && (
+                                <>
+                                  <span>•</span>
+                                  <span
+                                    className={
+                                      prop.isGameLive
+                                        ? 'text-amber-400 font-bold flex items-center gap-1'
+                                        : 'text-slate-400'
+                                    }
+                                  >
+                                    {prop.isGameLive && (
+                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping inline-block" />
+                                    )}
+                                    {prop.gameStatusText}
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Odds & Pin Action */}
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="text-[11px] font-mono-score font-bold px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-slate-300">
+                            {prop.odds}
+                          </span>
+                          <button
+                            onClick={() => handleTogglePinProp(prop)}
+                            className={`px-3 py-1.5 rounded-[4px] text-xs font-bold uppercase transition-all flex items-center gap-1 ${
+                              pinned
+                                ? 'bg-emerald-500 text-black font-black shadow-[0_0_12px_rgba(16,185,129,0.7)] hover:bg-rose-600 hover:text-white'
+                                : 'bg-[#181C2A] text-white hover:bg-amber-400 hover:text-black border border-white/20'
+                            }`}
+                          >
+                            {pinned ? (
+                              <>
+                                <Check className="w-3.5 h-3.5" />
+                                <span>PINNED</span>
+                              </>
+                            ) : (
+                              <>
+                                <Plus className="w-3.5 h-3.5" />
+                                <span>+ PIN TO SWEAT</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* TAB 2: ACTIVE TRACKED SLIPS */}
+          {activeTab === 'list' && (
             <div className="space-y-3">
               {savedBets.length === 0 ? (
-                <div className="text-center py-12 px-4 rounded-2xl bg-slate-900/40 border border-dashed border-slate-800">
-                  <DollarSign className="w-10 h-10 text-slate-600 mx-auto mb-2" />
-                  <h3 className="text-sm font-black text-slate-300 uppercase tracking-wide">
+                <div className="text-center py-12 px-4 rounded-xl bg-[#141722] border border-dashed border-white/10">
+                  <DollarSign className="w-10 h-10 text-slate-500 mx-auto mb-2" />
+                  <h3 className="text-sm font-bold text-white uppercase tracking-wide">
                     No Bets or Parlays Saved Yet
                   </h3>
-                  <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1 mb-4 font-medium">
-                    Add your Sunday action! Track spreads, moneylines, totals, and player props live on the TV.
+                  <p className="text-xs text-slate-400 max-w-sm mx-auto mt-1 mb-4 font-medium">
+                    Use the Fast-Pin Props market to instantly add your Sunday action!
                   </p>
-                  <div className="flex items-center justify-center gap-3">
-                    <button
-                      onClick={() => setActiveTab('create')}
-                      className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs uppercase transition-all shadow-md"
-                    >
-                      + Create Your First Slip
-                    </button>
-                    <button
-                      onClick={handleLoadDemoBets}
-                      className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-black text-xs uppercase transition-all border border-slate-700"
-                    >
-                      Load Sample Slip
-                    </button>
-                  </div>
+                  <button
+                    onClick={() => setActiveTab('props_market')}
+                    className="px-4 py-2 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs uppercase transition-all shadow-md"
+                  >
+                    Browse &amp; Pin Props
+                  </button>
                 </div>
               ) : (
                 savedBets.map((slip) => (
                   <div
                     key={slip.id}
-                    className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 hover:border-slate-700 transition-all space-y-2.5"
+                    className="p-4 rounded-xl bg-[#141722] border border-white/10 hover:border-white/20 transition-all space-y-2.5"
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
@@ -485,18 +963,18 @@ export default function ManageBetsModal({
 
                       <div className="flex items-center gap-3">
                         {slip.wager && (
-                          <span className="text-xs font-black text-slate-300">
-                            Wager: <span className="text-white">{slip.wager}</span>
+                          <span className="text-xs font-mono-score font-bold text-slate-300">
+                            Stake: <span className="text-white">{slip.wager}</span>
                           </span>
                         )}
                         {slip.payout && (
-                          <span className="text-xs font-black text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-500/30">
+                          <span className="text-xs font-mono-score font-bold text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-500/30">
                             To Win: {slip.payout}
                           </span>
                         )}
                         <button
                           onClick={() => handleDeleteSlip(slip.id)}
-                          className="text-slate-500 hover:text-rose-400 transition-colors p-1"
+                          className="text-slate-400 hover:text-rose-400 transition-colors p-1"
                           title="Delete Slip"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -505,17 +983,19 @@ export default function ManageBetsModal({
                     </div>
 
                     {/* Legs list inside slip */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-1 border-t border-slate-800/60">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-1 border-t border-white/10">
                       {slip.legs.map((leg, idx) => (
                         <div
                           key={leg.id || idx}
-                          className="px-2.5 py-1.5 rounded-xl bg-slate-950/90 border border-slate-800/80 flex items-center justify-between text-xs"
+                          className="px-2.5 py-1.5 rounded-lg bg-[#0E1017] border border-white/10 flex items-center justify-between text-xs"
                         >
                           <div className="flex items-center gap-2 min-w-0">
-                            <span className="text-[10px] font-black text-slate-500">#{idx + 1}</span>
+                            <span className="text-[10px] font-mono-score font-bold text-slate-400">
+                              #{idx + 1}
+                            </span>
                             <span className="font-bold text-slate-200 truncate">{leg.description}</span>
                           </div>
-                          <span className="text-[10px] font-black uppercase px-1.5 py-0.2 rounded bg-slate-800 text-slate-400 shrink-0 ml-1">
+                          <span className="text-[9px] font-bold uppercase px-1.5 py-0.2 rounded bg-white/5 text-slate-400 shrink-0 ml-1">
                             {leg.type.replace('_', ' ')}
                           </span>
                         </div>
@@ -525,534 +1005,74 @@ export default function ManageBetsModal({
                 ))
               )}
             </div>
-          ) : (
-            /* CREATE BET SLIP FORM */
-            <div className="space-y-5">
-              {/* Slip Metadata */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-3 bg-slate-900/50 p-3.5 rounded-2xl border border-slate-800">
-                <div className="md:col-span-2">
-                  <label className="text-[10px] font-black uppercase text-slate-400 block mb-1">
-                    Slip Title / Nickname
+          )}
+
+          {/* TAB 3: CUSTOM SLIP BUILDER */}
+          {activeTab === 'create' && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-400 block mb-1 uppercase">
+                    Slip Title
                   </label>
                   <input
                     type="text"
                     value={slipTitle}
                     onChange={(e) => setSlipTitle(e.target.value)}
-                    placeholder="e.g. Alex's 4PM Lock, Room Parlay (+650)"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-amber-400 font-bold"
+                    placeholder="e.g. Sunday Room Lock (+600)"
+                    className="w-full bg-[#141722] border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:border-amber-400 outline-none"
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] font-black uppercase text-slate-400 block mb-1">
-                    Owner / Manager Tag
+                  <label className="text-xs font-bold text-slate-400 block mb-1 uppercase">
+                    Stake / Wager
                   </label>
                   <input
                     type="text"
-                    value={slipOwner}
-                    onChange={(e) => setSlipOwner(e.target.value)}
-                    placeholder="e.g. Alex, Room"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-amber-400 font-bold"
+                    value={slipWager}
+                    onChange={(e) => setSlipWager(e.target.value)}
+                    placeholder="$25"
+                    className="w-full bg-[#141722] border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:border-amber-400 outline-none font-mono-score"
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] font-black uppercase text-slate-400 block mb-1">
-                    Wager / Potential Payout
+                  <label className="text-xs font-bold text-slate-400 block mb-1 uppercase">
+                    Payout / Odds
                   </label>
                   <input
                     type="text"
                     value={slipPayout}
                     onChange={(e) => setSlipPayout(e.target.value)}
-                    placeholder="e.g. $10 -> $85"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-amber-400 font-bold"
+                    placeholder="$175 (+600)"
+                    className="w-full bg-[#141722] border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:border-amber-400 outline-none font-mono-score"
                   />
                 </div>
               </div>
 
-              {/* Add Leg Section */}
-              <div className="p-4 rounded-2xl bg-slate-900/70 border border-slate-800 space-y-3">
-                <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-                  <div className="flex items-center gap-2">
-                    <TrendingUp className="w-4 h-4 text-amber-400" />
-                    <h3 className="text-xs font-black uppercase tracking-wider text-white">
-                      Add a Leg to this Slip
-                    </h3>
-                  </div>
-
-                  {/* Leg Type Selector */}
-                  <div className="flex items-center gap-1">
-                    {(
-                      [
-                        { id: 'player_prop', label: 'Player Prop' },
-                        { id: 'anytime_td', label: 'Anytime TD' },
-                        { id: 'spread', label: 'Spread' },
-                        { id: 'moneyline', label: 'Moneyline' },
-                        { id: 'total', label: 'Total (O/U)' },
-                      ] as { id: BetLegType; label: string }[]
-                    ).map((t) => (
-                      <button
-                        key={t.id}
-                        type="button"
-                        onClick={() => setSelectedLegType(t.id)}
-                        className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase transition-all ${
-                          selectedLegType === t.id
-                            ? 'bg-amber-400 text-slate-950'
-                            : 'bg-slate-950 text-slate-400 hover:text-slate-200 border border-slate-800'
-                        }`}
-                      >
-                        {t.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Sub-Form for Player Prop & Anytime TD */}
-                {(selectedLegType === 'player_prop' || selectedLegType === 'anytime_td') && (
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div>
-                        <div className="flex items-center justify-between mb-1">
-                          <label className="text-[10px] font-black uppercase text-slate-400">
-                            Select Player
-                          </label>
-                          {(teamPropFilter !== 'ALL' || gamePropFilter !== 'ALL' || positionPropFilter !== 'ALL' || playerSearch) && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setTeamPropFilter('ALL');
-                                setGamePropFilter('ALL');
-                                setPositionPropFilter('ALL');
-                                setPlayerSearch('');
-                              }}
-                              className="text-[9px] font-black text-amber-400 hover:underline uppercase"
-                            >
-                              Reset Filters
-                            </button>
-                          )}
-                        </div>
-
-                        {/* 1. Position Filter Pills */}
-                        <div className="flex items-center gap-1 overflow-x-auto no-scrollbar pb-1 mb-1">
-                          {(['ALL', 'QB', 'RB', 'WR', 'TE', 'K'] as const).map((pos) => (
-                            <button
-                              key={pos}
-                              type="button"
-                              onClick={() => setPositionPropFilter(pos)}
-                              className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider shrink-0 transition-all ${
-                                positionPropFilter === pos
-                                  ? 'bg-cyan-400 text-slate-950 font-black'
-                                  : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
-                              }`}
-                            >
-                              {pos}
-                            </button>
-                          ))}
-                        </div>
-
-                        {/* 2. Game Filter Pills */}
-                        {availableGames.length > 0 && (
-                          <div className="flex items-center gap-1 overflow-x-auto no-scrollbar pb-1 mb-1">
-                            <button
-                              type="button"
-                              onClick={() => setGamePropFilter('ALL')}
-                              className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider shrink-0 transition-all ${
-                                gamePropFilter === 'ALL'
-                                  ? 'bg-amber-400 text-slate-950 font-black'
-                                  : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
-                              }`}
-                            >
-                              All Games
-                            </button>
-                            {availableGames.map((g) => {
-                              const isLive = g.status?.state === 'in';
-                              const active = gamePropFilter === g.id;
-                              return (
-                                <button
-                                  key={g.id}
-                                  type="button"
-                                  onClick={() => setGamePropFilter(g.id)}
-                                  className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider shrink-0 flex items-center gap-1 transition-all ${
-                                    active
-                                      ? 'bg-amber-400 text-slate-950 font-black'
-                                      : isLive
-                                      ? 'bg-emerald-950/80 border border-emerald-500/50 text-emerald-300 hover:border-emerald-400'
-                                      : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
-                                  }`}
-                                >
-                                  {isLive && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />}
-                                  {g.awayTeam.abbreviation} @ {g.homeTeam.abbreviation}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        )}
-
-                        {/* 3. Team Filter Bar */}
-                        <div className="flex items-center gap-1 overflow-x-auto no-scrollbar pb-1 mb-1.5">
-                          <button
-                            type="button"
-                            onClick={() => setTeamPropFilter('ALL')}
-                            className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider shrink-0 transition-all ${
-                              teamPropFilter === 'ALL'
-                                ? 'bg-amber-400 text-slate-950 font-black'
-                                : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
-                            }`}
-                          >
-                            All Teams
-                          </button>
-                          {uniqueTeams.map((t) => {
-                            const active = teamPropFilter === t.abbreviation;
-                            return (
-                              <button
-                                key={t.abbreviation}
-                                type="button"
-                                onClick={() => setTeamPropFilter(t.abbreviation)}
-                                className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider shrink-0 flex items-center gap-1 transition-all ${
-                                  active
-                                    ? 'bg-amber-400 text-slate-950 font-black'
-                                    : t.isLive
-                                    ? 'bg-emerald-950/80 border border-emerald-500/50 text-emerald-300 hover:border-emerald-400'
-                                    : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
-                                }`}
-                              >
-                                {t.isLive && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />}
-                                {t.abbreviation}
-                              </button>
-                            );
-                          })}
-                        </div>
-
-                        <div className="relative">
-                          <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-2.5" />
-                          <input
-                            type="text"
-                            value={playerSearch}
-                            onChange={(e) => setPlayerSearch(e.target.value)}
-                            placeholder="Search any NFL player, team, or position... e.g., Matthew Golden"
-                            className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-amber-400 font-bold"
-                          />
-                        </div>
-
-                        {/* Player Search Results Grid */}
-                        <div className="grid grid-cols-2 gap-1.5 mt-2 max-h-40 overflow-y-auto pr-1">
-                          {filteredPlayers.map((p) => {
-                            const isSelected = selectedPlayer?.id === p.id;
-                            const isLive = p.isGameLive || p.isLive;
-                            return (
-                              <button
-                                key={p.id}
-                                type="button"
-                                onClick={() => {
-                                  setSelectedPlayer(p);
-                                  setPlayerSearch(p.name);
-                                  let defaultStat: PropStatType = 'recYds';
-                                  if (p.position === 'QB') defaultStat = 'passYds';
-                                  else if (p.position === 'RB') defaultStat = 'rushYds';
-                                  else if (p.position === 'WR' || p.position === 'TE') defaultStat = 'recYds';
-                                  setPropStat(defaultStat);
-                                  setPropLine(getRealisticPropLine(p.position, defaultStat));
-                                }}
-                                className={`p-1.5 rounded-lg border text-left flex items-center gap-2 transition-all ${
-                                  isSelected
-                                    ? 'bg-amber-500/20 border-amber-400 text-amber-200'
-                                    : 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700'
-                                }`}
-                              >
-                                <img
-                                  src={p.headshot}
-                                  alt={p.name}
-                                  className="w-6 h-6 rounded-full object-cover bg-slate-900 border border-slate-700 shrink-0"
-                                  onError={(e) => {
-                                    (e.currentTarget as HTMLImageElement).src = p.team.logo;
-                                  }}
-                                />
-                                <div className="min-w-0 flex-1">
-                                  <span className="text-xs font-black block truncate">
-                                    {p.name} {p.jersey ? `#${p.jersey}` : ''}
-                                  </span>
-                                  <div className="flex items-center gap-1.5 text-[9px] text-slate-400 font-bold">
-                                    <span>{p.team.abbreviation} • {p.position}</span>
-                                    {isLive && (
-                                      <span className="text-emerald-400 font-black flex items-center gap-0.5">
-                                        <span className="w-1 h-1 rounded-full bg-emerald-400 animate-pulse" />
-                                        {p.rawStatLine || 'LIVE'}
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                                {isSelected && <Check className="w-3.5 h-3.5 text-amber-400 shrink-0" />}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      {/* Stat Type & Target Line (only for player_prop) */}
-                      {selectedLegType === 'player_prop' && (
-                        <div className="space-y-2">
-                          {selectedPlayer && (
-                            <div className="p-2 rounded-xl bg-slate-950 border border-slate-800/80 flex items-center justify-between">
-                              <div className="flex items-center gap-1.5 min-w-0">
-                                <img
-                                  src={selectedPlayer.headshot}
-                                  alt=""
-                                  className="w-5 h-5 rounded-full object-cover bg-slate-900 border border-slate-700 shrink-0"
-                                  onError={(e) => {
-                                    (e.currentTarget as HTMLImageElement).src = selectedPlayer.team.logo;
-                                  }}
-                                />
-                                <span className="text-xs font-black text-white truncate">
-                                  {selectedPlayer.name} {selectedPlayer.jersey ? `#${selectedPlayer.jersey}` : ''}
-                                </span>
-                                <span className="text-[10px] text-slate-400 font-bold">
-                                  ({selectedPlayer.team.abbreviation})
-                                </span>
-                              </div>
-                              <div className="text-right shrink-0">
-                                <span className="text-[10px] font-black text-amber-300 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/30">
-                                  {selectedPlayer.rawStatLine || '0 PTS'}
-                                </span>
-                              </div>
-                            </div>
-                          )}
-
-                          <div>
-                            <label className="text-[10px] font-black uppercase text-slate-400 block mb-1">
-                              Prop Stat Category
-                            </label>
-                            <div className="grid grid-cols-3 gap-1">
-                              {STAT_OPTIONS.map((st) => (
-                                <button
-                                  key={st.id}
-                                  type="button"
-                                  onClick={() => {
-                                    setPropStat(st.id);
-                                    if (selectedPlayer) {
-                                      setPropLine(getRealisticPropLine(selectedPlayer.position, st.id));
-                                    }
-                                  }}
-                                  className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase transition-all ${
-                                    propStat === st.id
-                                      ? 'bg-cyan-500 text-slate-950'
-                                      : 'bg-slate-950 text-slate-400 hover:text-slate-200 border border-slate-800'
-                                  }`}
-                                >
-                                  {st.label}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-2">
-                            <div>
-                              <label className="text-[10px] font-black uppercase text-slate-400 block mb-1">
-                                Direction
-                              </label>
-                              <div className="grid grid-cols-2 gap-1">
-                                <button
-                                  type="button"
-                                  onClick={() => setPropDirection('OVER')}
-                                  className={`py-1 rounded-lg text-xs font-black uppercase ${
-                                    propDirection === 'OVER'
-                                      ? 'bg-emerald-500 text-slate-950'
-                                      : 'bg-slate-950 text-slate-400 border border-slate-800'
-                                  }`}
-                                >
-                                  OVER
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setPropDirection('UNDER')}
-                                  className={`py-1 rounded-lg text-xs font-black uppercase ${
-                                    propDirection === 'UNDER'
-                                      ? 'bg-rose-500 text-white'
-                                      : 'bg-slate-950 text-slate-400 border border-slate-800'
-                                  }`}
-                                >
-                                  UNDER
-                                </button>
-                              </div>
-                            </div>
-                            <div>
-                              <label className="text-[10px] font-black uppercase text-slate-400 block mb-1">
-                                Target Line Number
-                              </label>
-                              <input
-                                type="number"
-                                step="0.5"
-                                value={propLine}
-                                onChange={(e) => setPropLine(e.target.value)}
-                                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1 text-xs text-white font-black focus:outline-none focus:border-amber-400"
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Sub-Form for Spread, Moneyline & Total */}
-                {(selectedLegType === 'spread' ||
-                  selectedLegType === 'moneyline' ||
-                  selectedLegType === 'total') && (
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div>
-                        <label className="text-[10px] font-black uppercase text-slate-400 block mb-1">
-                          Select Game
-                        </label>
-                        <select
-                          value={selectedGameId}
-                          onChange={(e) => {
-                            setSelectedGameId(e.target.value);
-                            const g = availableGames.find((game) => game.id === e.target.value);
-                            if (g) setSelectedTeamAbbr(g.awayTeam.abbreviation);
-                          }}
-                          className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-bold focus:outline-none focus:border-amber-400"
-                        >
-                          {availableGames.map((g) => (
-                            <option key={g.id} value={g.id}>
-                              {g.awayTeam.abbreviation} vs {g.homeTeam.abbreviation} ({g.status.shortDetail || 'Upcoming'})
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {/* Team selection for Spread and Moneyline */}
-                      {(selectedLegType === 'spread' || selectedLegType === 'moneyline') && selectedGame && (
-                        <div>
-                          <label className="text-[10px] font-black uppercase text-slate-400 block mb-1">
-                            Select Team
-                          </label>
-                          <div className="grid grid-cols-2 gap-2">
-                            {[selectedGame.awayTeam, selectedGame.homeTeam].map((tm) => {
-                              const isPicked =
-                                selectedTeamAbbr === tm.abbreviation ||
-                                (!selectedTeamAbbr && tm.abbreviation === selectedGame.awayTeam.abbreviation);
-                              return (
-                                <button
-                                  key={tm.abbreviation}
-                                  type="button"
-                                  onClick={() => setSelectedTeamAbbr(tm.abbreviation)}
-                                  className={`p-1.5 rounded-xl border flex items-center justify-center gap-2 transition-all ${
-                                    isPicked
-                                      ? 'bg-amber-500/20 border-amber-400 text-amber-200'
-                                      : 'bg-slate-950 border-slate-800 text-slate-300'
-                                  }`}
-                                >
-                                  <img src={tm.logo} alt={tm.abbreviation} className="w-5 h-5 object-contain" />
-                                  <span className="text-xs font-black">{tm.abbreviation}</span>
-                                </button>
-                              );
-                            })}
-                          </div>
-
-                          {selectedLegType === 'spread' && (
-                            <div className="mt-2">
-                              <label className="text-[10px] font-black uppercase text-slate-400 block mb-1">
-                                Spread Line (e.g. -3.5 or +4.5)
-                              </label>
-                              <input
-                                type="number"
-                                step="0.5"
-                                value={spreadValue}
-                                onChange={(e) => setSpreadValue(e.target.value)}
-                                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1 text-xs text-white font-black focus:outline-none focus:border-amber-400"
-                              />
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Total Points Over/Under */}
-                      {selectedLegType === 'total' && (
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-black uppercase text-slate-400 block mb-1">
-                            Game Total Points Line
-                          </label>
-                          <div className="grid grid-cols-2 gap-2">
-                            <div className="grid grid-cols-2 gap-1">
-                              <button
-                                type="button"
-                                onClick={() => setTotalDirection('OVER')}
-                                className={`py-1 rounded-lg text-xs font-black uppercase ${
-                                  totalDirection === 'OVER'
-                                    ? 'bg-emerald-500 text-slate-950'
-                                    : 'bg-slate-950 text-slate-400 border border-slate-800'
-                                }`}
-                              >
-                                OVER
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setTotalDirection('UNDER')}
-                                className={`py-1 rounded-lg text-xs font-black uppercase ${
-                                  totalDirection === 'UNDER'
-                                    ? 'bg-rose-500 text-white'
-                                    : 'bg-slate-950 text-slate-400 border border-slate-800'
-                                }`}
-                              >
-                                UNDER
-                              </button>
-                            </div>
-                            <input
-                              type="number"
-                              step="0.5"
-                              value={totalLine}
-                              onChange={(e) => setTotalLine(e.target.value)}
-                              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1 text-xs text-white font-black focus:outline-none focus:border-amber-400"
-                            />
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                <div className="flex justify-end pt-1">
-                  <button
-                    type="button"
-                    onClick={handleAddLeg}
-                    className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs uppercase transition-all shadow flex items-center gap-1.5"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Add Leg to Slip</span>
-                  </button>
-                </div>
-              </div>
-
               {/* Legs added so far */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-black text-slate-300 uppercase">
-                    Legs in this Slip ({legs.length})
-                  </h4>
-                  {legs.length > 0 && (
-                    <span className="text-[10px] font-black text-amber-400">
-                      {legs.length > 1 ? `${legs.length}-Leg Parlay` : 'Single Bet'}
-                    </span>
-                  )}
-                </div>
-
+              <div className="p-3 rounded-lg bg-[#141722] border border-white/10">
+                <span className="text-xs font-bold text-slate-300 uppercase block mb-2">
+                  Legs Added to this Slip ({legs.length})
+                </span>
                 {legs.length === 0 ? (
-                  <p className="text-xs text-slate-500 italic py-2">
-                    No legs added yet. Choose a type above and click &quot;Add Leg to Slip&quot;.
-                  </p>
+                  <p className="text-xs text-slate-500 italic">No legs added yet.</p>
                 ) : (
                   <div className="space-y-1.5">
                     {legs.map((leg, idx) => (
                       <div
                         key={leg.id}
-                        className="px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between"
+                        className="px-3 py-2 rounded-lg bg-[#0E1017] border border-white/10 flex items-center justify-between"
                       >
                         <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-black text-amber-400">#{idx + 1}</span>
+                          <span className="text-[10px] font-mono-score font-bold text-amber-400">
+                            #{idx + 1}
+                          </span>
                           <span className="text-xs font-bold text-white">{leg.description}</span>
                         </div>
                         <button
                           type="button"
                           onClick={() => handleRemoveLeg(leg.id)}
-                          className="text-slate-500 hover:text-rose-400 transition-colors"
+                          className="text-slate-400 hover:text-rose-400 transition-colors"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -1062,12 +1082,60 @@ export default function ManageBetsModal({
                 )}
               </div>
 
+              {/* Add Leg Form Controls */}
+              <div className="p-3 rounded-lg bg-[#141722] border border-white/10 flex flex-col gap-2.5">
+                <span className="text-xs font-bold text-amber-300 uppercase">
+                  Add a New Leg
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <select
+                    value={selectedLegType}
+                    onChange={(e) => setSelectedLegType(e.target.value as BetLegType)}
+                    className="bg-[#0E1017] border border-white/10 rounded px-2.5 py-1.5 text-xs text-white font-bold outline-none"
+                  >
+                    <option value="player_prop">Player Prop (Over / Under)</option>
+                    <option value="anytime_td">Anytime Touchdown</option>
+                    <option value="spread">Game Spread</option>
+                    <option value="total">Game Total (Over / Under)</option>
+                  </select>
+
+                  {(selectedLegType === 'player_prop' || selectedLegType === 'anytime_td') && (
+                    <select
+                      onChange={(e) => {
+                        const p = availablePlayers.find((pl) => pl.id === e.target.value);
+                        setSelectedPlayer(p || null);
+                      }}
+                      className="bg-[#0E1017] border border-white/10 rounded px-2.5 py-1.5 text-xs text-white font-bold outline-none"
+                    >
+                      <option value="">Select Player...</option>
+                      {availablePlayers
+                        .filter((p) => p.position !== 'DEF')
+                        .map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name} ({p.team.abbreviation} - {p.position})
+                          </option>
+                        ))}
+                    </select>
+                  )}
+                </div>
+
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={handleAddLeg}
+                    className="px-4 py-1.5 rounded-[4px] bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs uppercase"
+                  >
+                    + Add Leg
+                  </button>
+                </div>
+              </div>
+
               {/* Save Slip Button */}
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-white/10">
                 <button
                   type="button"
-                  onClick={() => setActiveTab('list')}
-                  className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 font-bold text-xs uppercase"
+                  onClick={() => setActiveTab('props_market')}
+                  className="px-4 py-2 rounded-lg bg-[#141722] hover:bg-[#1A1E2C] text-slate-300 font-bold text-xs uppercase"
                 >
                   Cancel
                 </button>
@@ -1075,7 +1143,7 @@ export default function ManageBetsModal({
                   type="button"
                   disabled={legs.length === 0}
                   onClick={handleSaveSlip}
-                  className="px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed text-slate-950 font-black text-xs uppercase shadow-[0_0_15px_rgba(16,185,129,0.5)] transition-all"
+                  className="px-5 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed text-slate-950 font-black text-xs uppercase shadow-[0_0_15px_rgba(16,185,129,0.5)] transition-all"
                 >
                   Save Slip ({legs.length} {legs.length === 1 ? 'Leg' : 'Legs'})
                 </button>
