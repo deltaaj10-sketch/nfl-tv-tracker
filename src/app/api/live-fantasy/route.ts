@@ -390,14 +390,20 @@ function buildRawStatLine(stats: PlayerStats, position: FantasyPosition): string
 
   if ((stats.rushingAttempts || 0) > 0 || (stats.rushingYards || 0) !== 0) {
     let rStr = '';
-    if ((stats.rushingAttempts || 0) > 0) rStr += `${stats.rushingAttempts} CAR, `;
-    rStr += `${stats.rushingYards || 0} RUSH`;
-    if ((stats.rushingTouchdowns || 0) > 0) rStr += `, ${stats.rushingTouchdowns} TD`;
+    if (position === 'WR' || position === 'TE') {
+      rStr = `${stats.rushingAttempts || 0} CAR, ${stats.rushingYards || 0} YDS`;
+      if ((stats.rushingTouchdowns || 0) > 0) rStr += `, ${stats.rushingTouchdowns} TD`;
+    } else {
+      if ((stats.rushingAttempts || 0) > 0) rStr += `${stats.rushingAttempts} CAR, `;
+      rStr += `${stats.rushingYards || 0} RUSH`;
+      if ((stats.rushingTouchdowns || 0) > 0) rStr += `, ${stats.rushingTouchdowns} TD`;
+    }
     parts.push(rStr);
   }
 
   if ((stats.receptions || 0) > 0 || (stats.receivingYards || 0) !== 0 || (stats.receivingTargets || 0) > 0) {
-    let recStr = `${stats.receptions || 0} REC`;
+    const tgt = stats.receivingTargets;
+    let recStr = tgt && tgt > 0 ? `${stats.receptions || 0}/${tgt} REC` : `${stats.receptions || 0} REC`;
     recStr += `, ${stats.receivingYards || 0} YDS`;
     if ((stats.receivingTouchdowns || 0) > 0) recStr += `, ${stats.receivingTouchdowns} TD`;
     parts.push(recStr);

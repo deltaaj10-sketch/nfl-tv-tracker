@@ -46,6 +46,7 @@ import {
 } from '@/types/leagues';
 import ManageLeaguesModal from '@/components/ManageLeaguesModal';
 import ManageBetsModal from '@/components/ManageBetsModal';
+import PlayerDetailModal from '@/components/PlayerDetailModal';
 
 const NFL_TEAM_COLORS: Record<string, string> = {
   ARI: '#97233F',
@@ -119,6 +120,11 @@ function getStatSegmentClasses(segment: string, position?: string): string {
     }
   }
 
+  // 2b. Negative yardage (e.g. -1 RUSH, -2 YDS, -5 REC, -1 CAR)
+  if (/(?:^|\s)-[0-9]+(?:\s*(?:YDS?|RUSH|REC|PASS|CAR))?/.test(s)) {
+    return 'text-rose-400 font-semibold bg-rose-950/80 border-rose-500/40 shadow-sm';
+  }
+
   // Defensive takeaways (INT, FR, SAFETY) for DEF are positive
   if (position === 'DEF') {
     if (/\bINT\b|\bFR\b|\bSAFETY\b/.test(s)) {
@@ -151,6 +157,100 @@ function getStatSegmentClasses(segment: string, position?: string): string {
   }
 
   return 'text-slate-300 bg-[#141722] border-white/10';
+}
+
+/**
+ * Format clean stat pills for a player:
+ * - Consolidates secondary rushing stats on WR/TE into a single pill ("2 CAR, 13 YDS")
+ * - Includes targets on receptions when available ("9/11 REC")
+ * - Keeps pills compact and single-line friendly
+ */
+function formatPlayerStatPills(player: FantasyPlayer): string[] {
+  const pills: string[] = [];
+  const s = player.stats;
+  const pos = player.position;
+
+  if (pos === 'DEF') {
+    if (s) {
+      const pts = s.pointsAllowed ?? 0;
+      pills.push(`${pts} PA`);
+      if ((s.sacks ?? 0) > 0) pills.push(`${s.sacks} SCK`);
+      if ((s.defensiveInterceptions ?? 0) > 0) pills.push(`${s.defensiveInterceptions} INT`);
+      if ((s.fumblesRecovered ?? 0) > 0) pills.push(`${s.fumblesRecovered} FR`);
+      if ((s.defensiveTouchdowns ?? 0) > 0) pills.push(`${s.defensiveTouchdowns} TD`);
+      if ((s.safeties ?? 0) > 0) pills.push(`${s.safeties} SF`);
+      if (pills.length > 0) return pills;
+    }
+  }
+
+  if (pos === 'K') {
+    if (s) {
+      const fgMade = s.fgMade || 0;
+      const fgAtt = s.fgAttempts || 0;
+      const xpMade = s.xpMade || 0;
+      const xpAtt = s.xpAttempts || 0;
+      const longFg = s.longFg || 0;
+      let fgStr = `${fgMade}/${fgAtt} FG`;
+      if (longFg > 0) fgStr += ` (LG ${longFg})`;
+      pills.push(fgStr);
+      pills.push(`${xpMade}/${xpAtt} XP`);
+      return pills;
+    }
+  }
+
+  if (s) {
+    // 1. Passing
+    if ((s.passingAttempts || 0) > 0 || (s.passingYards || 0) !== 0) {
+      if ((s.completions || 0) > 0 || (s.passingAttempts || 0) > 0) {
+        pills.push(`${s.completions || 0}/${s.passingAttempts || 0}`);
+      }
+      pills.push(`${s.passingYards || 0} PASS`);
+      if ((s.passingTouchdowns || 0) > 0) pills.push(`${s.passingTouchdowns} TD`);
+      if ((s.interceptions || 0) > 0) pills.push(`${s.interceptions} INT`);
+    }
+
+    // 2. Rushing
+    if ((s.rushingAttempts || 0) > 0 || (s.rushingYards || 0) !== 0) {
+      if (pos === 'WR' || pos === 'TE') {
+        let wrRush = `${s.rushingAttempts || 0} CAR, ${s.rushingYards || 0} YDS`;
+        if ((s.rushingTouchdowns || 0) > 0) wrRush += `, ${s.rushingTouchdowns} TD`;
+        pills.push(wrRush);
+      } else {
+        if ((s.rushingAttempts || 0) > 0) pills.push(`${s.rushingAttempts} CAR`);
+        pills.push(`${s.rushingYards || 0} RUSH`);
+        if ((s.rushingTouchdowns || 0) > 0) pills.push(`${s.rushingTouchdowns} TD`);
+      }
+    }
+
+    // 3. Receiving
+    if ((s.receptions || 0) > 0 || (s.receivingYards || 0) !== 0 || (s.receivingTargets || 0) > 0) {
+      if ((s.receivingTargets || 0) > 0) {
+        pills.push(`${s.receptions || 0}/${s.receivingTargets} REC`);
+      } else {
+        pills.push(`${s.receptions || 0} REC`);
+      }
+      pills.push(`${s.receivingYards || 0} YDS`);
+      if ((s.receivingTouchdowns || 0) > 0) pills.push(`${s.receivingTouchdowns} TD`);
+    }
+
+    // 4. Turnovers
+    if ((s.fumblesLost || 0) > 0) {
+      pills.push(`${s.fumblesLost} FUM`);
+    }
+
+    if (pills.length > 0) return pills;
+  }
+
+  // Fallback: split rawStatLine by • or ,
+  if (player.rawStatLine) {
+    const rawSegments = player.rawStatLine
+      .split(/[•,]/)
+      .map((seg) => seg.trim())
+      .filter((seg) => seg.length > 0);
+    if (rawSegments.length > 0) return rawSegments;
+  }
+
+  return ['--'];
 }
 
 /**
@@ -1058,6 +1158,7 @@ export default function TVCommandCenter() {
   const [isManageModalOpen, setIsManageModalOpen] = useState(false);
   const [isBetsModalOpen, setIsBetsModalOpen] = useState(false);
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
+  const [selectedDetailPlayer, setSelectedDetailPlayer] = useState<FantasyPlayer | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
 
   // Web Audio Alert Sound Settings & Cashed Bet Tracking
@@ -2308,6 +2409,10 @@ export default function TVCommandCenter() {
     const isLive = game.status?.state === 'in' || (game as unknown as { status: string }).status === 'in' || Boolean((game as unknown as { isLive: boolean }).isLive);
     const isRedZone = isLive && Boolean(game.isRedZone || game.situation?.isRedZone);
     const isPost = game.status?.state === 'post';
+    const awayScore = parseInt(String(game.awayTeam.score)) || 0;
+    const homeScore = parseInt(String(game.homeTeam.score)) || 0;
+    const isAwayLoser = isPost && awayScore < homeScore;
+    const isHomeLoser = isPost && homeScore < awayScore;
     const isSelected = selectedTickerGameId === game.id;
     const possessionAbbr = game.possessionTeamAbbr || game.situation?.possessionTeamAbbr;
     const hasPossessionAway = isLive && possessionAbbr === game.awayTeam.abbreviation;
@@ -2389,16 +2494,18 @@ export default function TVCommandCenter() {
         {/* Away Team */}
         <div
           className={`flex flex-col items-center gap-0.5 w-11 py-0.5 px-1 rounded-lg transition-all ${
+            isAwayLoser ? 'opacity-45' : ''
+          } ${
             hasPossessionAway
               ? 'bg-amber-500/20 border border-amber-400/60 shadow-[0_0_10px_rgba(245,158,11,0.35)]'
               : ''
           }`}
         >
-          <div className="relative">
+          <div className="relative w-7 h-7 flex items-center justify-center rounded-full bg-white/10 p-1 border border-white/10 shrink-0">
             <img
               src={game.awayTeam.logo}
               alt={game.awayTeam.abbreviation}
-              className="w-5 h-5 object-contain team-logo-contrast"
+              className="w-full h-full object-contain team-logo-contrast"
               style={{ filter: 'drop-shadow(0 0 3px rgba(255, 255, 255, 0.75))' }}
               onError={(e) => {
                 (e.currentTarget as HTMLElement).style.display = 'none';
@@ -2408,7 +2515,7 @@ export default function TVCommandCenter() {
           <div className="flex items-center gap-0.5">
             <span
               className={`text-[10px] font-bold ${
-                hasPossessionAway ? 'text-amber-300 font-black' : 'text-slate-300'
+                hasPossessionAway ? 'text-amber-300 font-black' : isAwayLoser ? 'text-slate-400' : 'text-slate-200'
               }`}
             >
               {game.awayTeam.abbreviation}
@@ -2417,7 +2524,7 @@ export default function TVCommandCenter() {
               <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 shadow-[0_0_6px_#fbbf24]" />
             )}
           </div>
-          <span className="text-sm font-black tv-tabular text-white leading-none">
+          <span className={`text-sm font-black tv-tabular leading-none ${isAwayLoser ? 'text-slate-400' : 'text-white'}`}>
             {game.awayTeam.score}
           </span>
         </div>
@@ -2450,16 +2557,18 @@ export default function TVCommandCenter() {
         {/* Home Team */}
         <div
           className={`flex flex-col items-center gap-0.5 w-11 py-0.5 px-1 rounded-lg transition-all ${
+            isHomeLoser ? 'opacity-45' : ''
+          } ${
             hasPossessionHome
               ? 'bg-amber-500/20 border border-amber-400/60 shadow-[0_0_10px_rgba(245,158,11,0.35)]'
               : ''
           }`}
         >
-          <div className="relative">
+          <div className="relative w-7 h-7 flex items-center justify-center rounded-full bg-white/10 p-1 border border-white/10 shrink-0">
             <img
               src={game.homeTeam.logo}
               alt={game.homeTeam.abbreviation}
-              className="w-5 h-5 object-contain team-logo-contrast"
+              className="w-full h-full object-contain team-logo-contrast"
               style={{ filter: 'drop-shadow(0 0 3px rgba(255, 255, 255, 0.75))' }}
               onError={(e) => {
                 (e.currentTarget as HTMLElement).style.display = 'none';
@@ -2469,7 +2578,7 @@ export default function TVCommandCenter() {
           <div className="flex items-center gap-0.5">
             <span
               className={`text-[10px] font-bold ${
-                hasPossessionHome ? 'text-amber-300 font-black' : 'text-slate-300'
+                hasPossessionHome ? 'text-amber-300 font-black' : isHomeLoser ? 'text-slate-400' : 'text-slate-200'
               }`}
             >
               {game.homeTeam.abbreviation}
@@ -2478,7 +2587,7 @@ export default function TVCommandCenter() {
               <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 shadow-[0_0_6px_#fbbf24]" />
             )}
           </div>
-          <span className="text-sm font-black tv-tabular text-white leading-none">
+          <span className={`text-sm font-black tv-tabular leading-none ${isHomeLoser ? 'text-slate-400' : 'text-white'}`}>
             {game.homeTeam.score}
           </span>
         </div>
@@ -2873,22 +2982,21 @@ export default function TVCommandCenter() {
                   const pts = player.points[scoringFormat] ?? 0;
                   const isBoosted = boostedPlayers[player.id];
                   const owners = getOwnershipTags(player);
+                  const isGameOver = player.gameStatus.state === 'post' || player.gameStatus.detail?.toLowerCase().includes('final');
+                  const isStaleInjury = isGameOver && (player.injuryStatus === 'Questionable' || player.injuryStatus === 'Doubtful');
+                  const showInjury = Boolean(player.injuryStatus && player.injuryStatus !== 'NA' && !isStaleInjury);
 
-                  // Split raw stat line by , or • into individual crisp pills
-                  const statPills = player.rawStatLine
-                    ? player.rawStatLine
-                        .split(/[,•]/)
-                        .map((s) => s.trim())
-                        .filter((s) => s.length > 0)
-                    : [];
+                  // Consolidate secondary stats & targets into crisp pills
+                  const statPills = formatPlayerStatPills(player);
 
                   return (
                     <div
                       key={player.id}
-                      className={`relative p-2.5 md:p-3 rounded-[4px] border flex flex-col justify-between transition-all ${
+                      onClick={() => setSelectedDetailPlayer(player)}
+                      className={`relative p-2.5 md:p-3 rounded-[4px] border flex flex-col justify-between transition-all cursor-pointer ${
                         isBoosted
                           ? 'border-[#00E676] shadow-[0_0_20px_rgba(0,230,118,0.8)] bg-[#00E676]/10 scale-[1.01]'
-                          : 'bg-[#141722] border-white/10 hover:border-white/20'
+                          : 'bg-[#141722] border-white/10 hover:border-emerald-500/40 hover:bg-[#181C2A]'
                       }`}
                     >
                       {/* Top Row: Position badge, larger headshot, Name, Clock, Matchup, and massive glowing Points */}
@@ -2909,7 +3017,7 @@ export default function TVCommandCenter() {
                             </div>
                             {/* Miniature Team Logo in Corner - Hidden on DEF cards */}
                             {player.position !== 'DEF' && (
-                              <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-zinc-900 ring-1 ring-zinc-700 p-0.5 z-10 flex items-center justify-center shadow-md">
+                              <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-zinc-900 ring-1 ring-zinc-700 p-0.5 z-20 flex items-center justify-center shadow-md">
                                 <img
                                   src={player.team.logo}
                                   alt={player.team.abbreviation}
@@ -2948,7 +3056,7 @@ export default function TVCommandCenter() {
                               <h3 className="text-sm md:text-base font-condensed font-bold text-white truncate leading-tight uppercase">
                                 {player.name}
                               </h3>
-                              {player.injuryStatus && player.injuryStatus !== 'NA' && (
+                              {showInjury && (
                                 <span
                                   className={`px-1.5 py-0.2 rounded-[2px] text-[9px] font-black uppercase tracking-wider shrink-0 ${
                                     player.injuryStatus === 'Out' || player.injuryStatus === 'IR' || player.injuryStatus === 'PUP'
@@ -2957,9 +3065,9 @@ export default function TVCommandCenter() {
                                       ? 'bg-orange-600 text-white border border-orange-500'
                                       : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
                                   }`}
-                                  title={player.injuryNotes ? `${player.injuryStatus}: ${player.injuryNotes}` : player.injuryStatus}
+                                  title={player.injuryNotes ? `${player.injuryStatus}: ${player.injuryNotes}` : player.injuryStatus || undefined}
                                 >
-                                  {player.injuryStatus === 'Questionable' ? 'Q' : player.injuryStatus === 'Doubtful' ? 'D' : player.injuryStatus.toUpperCase()}
+                                  {player.injuryStatus === 'Questionable' ? 'Q' : player.injuryStatus === 'Doubtful' ? 'D' : player.injuryStatus?.toUpperCase()}
                                 </span>
                               )}
                             </div>
@@ -2978,14 +3086,14 @@ export default function TVCommandCenter() {
                       </div>
 
                       {/* Bottom Stat Pills Area: Individual Crisp High-Contrast Pills (Never truncated!) */}
-                      <div className="flex flex-wrap gap-1.5 mt-2 pt-2 border-t border-white/10">
+                      <div className="flex items-center gap-1.5 mt-2 pt-2 border-t border-white/10 overflow-x-auto no-scrollbar flex-nowrap py-0.5">
                         {statPills.length > 0 ? (
                           statPills.map((pill, pIdx) => {
                             const pillClass = getStatSegmentClasses(pill, player.position);
                             return (
                               <span
                                 key={`pill-${player.id}-${pIdx}`}
-                                className={`px-2 py-0.5 rounded-[2px] text-[10px] md:text-[11px] font-mono-score tracking-wide uppercase border ${pillClass}`}
+                                className={`px-2 py-0.5 rounded-[2px] text-[10px] md:text-[11px] font-mono-score tracking-wide uppercase border shrink-0 whitespace-nowrap ${pillClass}`}
                               >
                                 {pill}
                               </span>
@@ -3918,7 +4026,8 @@ export default function TVCommandCenter() {
                         entry.rankDisplay,
                         scoringFormat,
                         boostedPlayers[entry.player.id],
-                        owners
+                        owners,
+                        setSelectedDetailPlayer
                       );
                     })}
                 </div>
@@ -3935,7 +4044,8 @@ export default function TVCommandCenter() {
                         entry.rankDisplay,
                         scoringFormat,
                         boostedPlayers[entry.player.id],
-                        owners
+                        owners,
+                        setSelectedDetailPlayer
                       );
                     })}
                 </div>
@@ -4286,6 +4396,14 @@ export default function TVCommandCenter() {
           </div>
         </div>
       )}
+
+      {/* 7d. INTERACTIVE PLAYER DETAIL & PLAY LOG MODAL */}
+      <PlayerDetailModal
+        player={selectedDetailPlayer}
+        scoringFormat={scoringFormat}
+        liveUpdates={data?.liveUpdates || []}
+        onClose={() => setSelectedDetailPlayer(null)}
+      />
     </div>
   );
 }
@@ -4300,11 +4418,16 @@ function renderLeaderboardCard(
   rankDisplay: string,
   scoringFormat: ScoringFormat,
   boosted?: { delta: number; timestamp: number },
-  ownershipTags?: PlayerOwnerTag[]
+  ownershipTags?: PlayerOwnerTag[],
+  onSelectPlayer?: (player: FantasyPlayer) => void
 ) {
   const pts = player.points[scoringFormat] ?? 0;
   const isBoosted = Boolean(boosted && Date.now() - boosted.timestamp < 6000);
   const owners = ownershipTags || [];
+
+  const isPost = player.gameStatus.state === 'post' || player.gameStatus.detail?.toLowerCase().includes('final');
+  const isStaleInjury = isPost && (player.injuryStatus === 'Questionable' || player.injuryStatus === 'Doubtful');
+  const showInjuryBadge = Boolean(player.injuryStatus && player.injuryStatus !== 'NA' && !isStaleInjury);
 
   // Rank Accent Color: Gold (1), Silver (2), Bronze (3), or NFL Team Primary Color (4-10)
   const accentColor =
@@ -4325,14 +4448,17 @@ function renderLeaderboardCard(
     rankBadgeStyle = 'bg-[#CD7F32] text-white font-black border border-[#CD7F32] shadow-[0_0_8px_rgba(205,127,50,0.5)]';
   }
 
+  const statPills = formatPlayerStatPills(player);
+
   return (
     <div
       key={`${player.id}-${rankDisplay}`}
+      onClick={() => onSelectPlayer?.(player)}
       style={{ borderLeftColor: accentColor }}
-      className={`relative flex items-center justify-between px-3 py-1.5 rounded-[4px] border-l-[3px] border-y border-r border-white/10 transition-all flex-1 min-h-0 ${
+      className={`relative flex items-center justify-between px-3 py-1.5 rounded-[4px] border-l-[3px] border-y border-r border-white/10 transition-all h-[98px] max-h-[98px] min-h-[98px] shrink-0 cursor-pointer ${
         isBoosted
           ? 'bg-[#00E676]/10 border-r-[#00E676] border-y-[#00E676] shadow-[0_0_20px_rgba(0,230,118,0.7)] animate-burst'
-          : 'bg-[#0E1017] hover:bg-[#141722] hover:border-white/20'
+          : 'bg-[#0E1017] hover:bg-[#141722] hover:border-emerald-500/40'
       }`}
     >
       {/* Floating Delta Badge when points increase */}
@@ -4351,13 +4477,13 @@ function renderLeaderboardCard(
           <span>{rankDisplay}</span>
         </div>
 
-        {/* Headshot / Team Logo Container */}
-        <div className="relative w-10 h-10 shrink-0">
-          <div className="w-full h-full rounded-[2px] overflow-hidden bg-[#07080C] border border-white/10">
+        {/* Headshot / Team Logo Container: Circular Headshot with Unclipped Corner Team Badge */}
+        <div className="relative w-12 h-12 shrink-0">
+          <div className="w-full h-full rounded-full overflow-hidden bg-[#07080C] border border-white/10 shadow-md">
             <img
               src={player.headshot}
               alt={player.name}
-              className={`w-full h-full ${player.position === 'DEF' ? 'object-contain p-1 team-logo-contrast' : 'object-cover'}`}
+              className={`w-full h-full ${player.position === 'DEF' ? 'object-contain p-1.5 team-logo-contrast' : 'object-cover'}`}
               style={player.position === 'DEF' ? { filter: 'drop-shadow(0 0 2.5px rgba(255, 255, 255, 0.45))' } : undefined}
               onError={(e) => {
                 (e.currentTarget as HTMLImageElement).src = player.team.logo;
@@ -4366,7 +4492,7 @@ function renderLeaderboardCard(
           </div>
           {/* Miniature Team Logo in Corner - Hidden on DEF cards since primary avatar is already the team logo */}
           {player.position !== 'DEF' && (
-            <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-zinc-900 ring-1 ring-zinc-700 p-0.5 z-10 flex items-center justify-center shadow-md">
+            <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-zinc-900 ring-1 ring-zinc-700 p-0.5 z-20 flex items-center justify-center shadow-md">
               <img
                 src={player.team.logo}
                 alt={player.team.abbreviation}
@@ -4385,7 +4511,7 @@ function renderLeaderboardCard(
             </h3>
 
             {/* Live Injury Badge */}
-            {player.injuryStatus && player.injuryStatus !== 'NA' && (
+            {showInjuryBadge && (
               <span
                 className={`px-1.5 py-0.2 rounded-[2px] text-[8px] font-black uppercase tracking-wider shrink-0 ${
                   player.injuryStatus === 'Out' || player.injuryStatus === 'IR' || player.injuryStatus === 'PUP'
@@ -4394,9 +4520,9 @@ function renderLeaderboardCard(
                     ? 'bg-orange-600 text-white border border-orange-500'
                     : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
                 }`}
-                title={player.injuryNotes ? `${player.injuryStatus}: ${player.injuryNotes}` : player.injuryStatus}
+                title={player.injuryNotes ? `${player.injuryStatus}: ${player.injuryNotes}` : player.injuryStatus || undefined}
               >
-                {player.injuryStatus === 'Questionable' ? 'Q' : player.injuryStatus === 'Doubtful' ? 'D' : player.injuryStatus.toUpperCase()}
+                {player.injuryStatus === 'Questionable' ? 'Q' : player.injuryStatus === 'Doubtful' ? 'D' : player.injuryStatus?.toUpperCase()}
               </span>
             )}
 
@@ -4445,26 +4571,22 @@ function renderLeaderboardCard(
             </span>
           </div>
 
-          {/* Crisp Badges of Real-World Stats with High-Impact Highlighting */}
-          <div className="mt-0.5 flex flex-wrap gap-1">
-            {player.rawStatLine ? (
-              player.rawStatLine
-                .split(/[,•]/)
-                .map((s) => s.trim())
-                .filter((s) => s.length > 0)
-                .map((seg, sIdx) => {
-                  const segClass = getStatSegmentClasses(seg, player.position);
-                  return (
-                    <span
-                      key={`stat-${player.id}-${sIdx}`}
-                      className={`inline-block px-1.5 py-0.2 rounded-[2px] border text-[10px] md:text-[11px] font-mono-score whitespace-nowrap ${segClass}`}
-                    >
-                      {seg}
-                    </span>
-                  );
-                })
+          {/* Crisp Badges of Real-World Stats with Single-Line Horizontal Non-Wrapping Flow */}
+          <div className="mt-1 flex items-center gap-1 overflow-x-auto no-scrollbar flex-nowrap py-0.5">
+            {statPills.length > 0 ? (
+              statPills.map((seg, sIdx) => {
+                const segClass = getStatSegmentClasses(seg, player.position);
+                return (
+                  <span
+                    key={`stat-${player.id}-${sIdx}`}
+                    className={`inline-block px-1.5 py-0.5 rounded-[2px] border text-[10px] md:text-[11px] font-mono-score whitespace-nowrap shrink-0 ${segClass}`}
+                  >
+                    {seg}
+                  </span>
+                );
+              })
             ) : (
-              <span className="inline-block px-1.5 py-0.2 rounded-[2px] bg-[#141722] border border-white/10 text-[10px] md:text-[11px] font-mono-score font-bold text-slate-400 whitespace-nowrap">
+              <span className="inline-block px-1.5 py-0.5 rounded-[2px] bg-[#141722] border border-white/10 text-[10px] md:text-[11px] font-mono-score font-bold text-slate-400 whitespace-nowrap">
                 --
               </span>
             )}
