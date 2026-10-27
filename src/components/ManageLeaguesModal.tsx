@@ -212,10 +212,10 @@ export default function ManageLeaguesModal({
     : availablePlayers.slice(0, 20);
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-      <div className="bg-[#0e1422] border border-slate-700/80 rounded-2xl w-full max-w-3xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 font-condensed">
+      <div className="bg-[#0e1015] border border-zinc-800 rounded-xl w-full max-w-3xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         {/* Header */}
-        <div className="px-6 py-4 bg-slate-950/80 border-b border-slate-800 flex items-center justify-between">
+        <div className="px-6 py-4 bg-[#0a0b0e] border-b border-zinc-800 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <Users className="w-5 h-5 text-emerald-400" />
             <h2 className="text-lg font-black uppercase text-white tracking-wide">
@@ -224,20 +224,20 @@ export default function ManageLeaguesModal({
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Modal Tabs */}
-        <div className="flex items-center bg-slate-950 px-6 border-b border-slate-800 gap-2">
+        <div className="flex items-center bg-[#0a0b0e] px-6 border-b border-zinc-800 gap-2">
           <button
             onClick={() => setActiveTab('sleeper')}
             className={`py-3 px-4 text-xs font-black uppercase tracking-wider border-b-2 transition-all ${
               activeTab === 'sleeper'
                 ? 'border-emerald-400 text-emerald-400'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
+                : 'border-transparent text-zinc-400 hover:text-zinc-200'
             }`}
           >
             Sleeper Leagues ({syncedLeagues.filter((l) => l.type === 'sleeper').length})
@@ -248,7 +248,7 @@ export default function ManageLeaguesModal({
             className={`py-3 px-4 text-xs font-black uppercase tracking-wider border-b-2 transition-all ${
               activeTab === 'espn'
                 ? 'border-cyan-400 text-cyan-400'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
+                : 'border-transparent text-zinc-400 hover:text-zinc-200'
             }`}
           >
             ESPN Fantasy ({syncedLeagues.filter((l) => l.type === 'espn').length})
@@ -259,7 +259,7 @@ export default function ManageLeaguesModal({
             className={`py-3 px-4 text-xs font-black uppercase tracking-wider border-b-2 transition-all ${
               activeTab === 'guests'
                 ? 'border-amber-400 text-amber-400'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
+                : 'border-transparent text-zinc-400 hover:text-zinc-200'
             }`}
           >
             Living Room Friends ({guestTags.length})
@@ -267,23 +267,23 @@ export default function ManageLeaguesModal({
         </div>
 
         {/* Modal Body */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-[#0e1015]">
           {/* TAB 1: SLEEPER LEAGUE SYNC */}
           {activeTab === 'sleeper' && (
             <div className="space-y-5">
-              <div className="bg-slate-900/80 p-4 rounded-xl border border-slate-800 space-y-3">
+              <div className="bg-[#13151f] p-4 rounded-xl border border-zinc-800 space-y-3">
                 <h3 className="text-sm font-black text-white uppercase tracking-wide flex items-center gap-2">
                   <Plus className="w-4 h-4 text-emerald-400" />
                   Connect Sleeper League
                 </h3>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-zinc-400">
                   Enter your public or private Sleeper League ID. Sleeper IDs can be found in your browser URL:
                   <code className="ml-1 text-emerald-400 font-mono">sleeper.com/leagues/[LEAGUE_ID]</code>
                 </p>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div className="sm:col-span-2">
-                    <label className="text-[11px] font-bold text-slate-400 uppercase block mb-1">
+                    <label className="text-[11px] font-bold text-zinc-400 uppercase block mb-1">
                       Sleeper League ID
                     </label>
                     <input
@@ -291,12 +291,12 @@ export default function ManageLeaguesModal({
                       placeholder="e.g. 112345678901234567"
                       value={sleeperId}
                       onChange={(e) => setSleeperId(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-emerald-400"
+                      className="w-full px-3 py-2 bg-[#0a0b0e] border border-zinc-800 rounded-lg text-sm text-white focus:outline-none focus:border-emerald-400"
                     />
                   </div>
 
                   <div>
-                    <label className="text-[11px] font-bold text-slate-400 uppercase block mb-1">
+                    <label className="text-[11px] font-bold text-zinc-400 uppercase block mb-1">
                       Custom Label
                     </label>
                     <input
@@ -304,7 +304,7 @@ export default function ManageLeaguesModal({
                       placeholder="e.g. Frat League"
                       value={sleeperName}
                       onChange={(e) => setSleeperName(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-emerald-400"
+                      className="w-full px-3 py-2 bg-[#0a0b0e] border border-zinc-800 rounded-lg text-sm text-white focus:outline-none focus:border-emerald-400"
                     />
                   </div>
                 </div>
@@ -319,7 +319,7 @@ export default function ManageLeaguesModal({
                 <button
                   onClick={handleAddSleeper}
                   disabled={sleeperLoading || !sleeperId.trim()}
-                  className="w-full py-2.5 rounded-[4px] bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-black font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 border border-emerald-400/50"
+                  className="w-full py-2.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-black font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 border border-emerald-400/50"
                 >
                   {sleeperLoading ? (
                     <RefreshCw className="w-4 h-4 animate-spin" />
@@ -332,19 +332,19 @@ export default function ManageLeaguesModal({
 
               {/* Connected Sleeper Leagues List */}
               <div className="space-y-3">
-                <h4 className="text-xs font-black uppercase text-slate-400 tracking-wider">
+                <h4 className="text-xs font-black uppercase text-zinc-400 tracking-wider">
                   Connected Sleeper Leagues ({syncedLeagues.filter((l) => l.type === 'sleeper').length})
                 </h4>
 
                 {syncedLeagues.filter((l) => l.type === 'sleeper').length === 0 ? (
-                  <p className="text-xs text-slate-500 italic">No Sleeper leagues connected yet.</p>
+                  <p className="text-xs text-zinc-500 italic">No Sleeper leagues connected yet.</p>
                 ) : (
                   syncedLeagues
                     .filter((l) => l.type === 'sleeper')
                     .map((league) => (
                       <div
                         key={league.id}
-                        className="flex items-center justify-between p-3 rounded-xl bg-slate-900 border border-slate-800"
+                        className="flex items-center justify-between p-3 rounded-lg bg-[#13151f] border border-zinc-800"
                       >
                         <div>
                           <div className="flex items-center gap-2">
@@ -353,12 +353,12 @@ export default function ManageLeaguesModal({
                             </span>
                             <span className="text-sm font-bold text-white">{league.name}</span>
                           </div>
-                          <p className="text-[11px] text-slate-400 mt-1">ID: {league.leagueId}</p>
+                          <p className="text-[11px] text-zinc-500 mt-1">ID: {league.leagueId}</p>
                         </div>
 
                         <button
                           onClick={() => onUpdateLeagues(syncedLeagues.filter((l) => l.id !== league.id))}
-                          className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-950/50 transition-colors"
+                          className="p-1.5 rounded-lg text-zinc-500 hover:text-rose-400 hover:bg-rose-950/50 transition-colors"
                           title="Remove League"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -373,12 +373,12 @@ export default function ManageLeaguesModal({
           {/* TAB 2: ESPN FANTASY SYNC */}
           {activeTab === 'espn' && (
             <div className="space-y-5">
-              <div className="bg-slate-900/80 p-4 rounded-xl border border-slate-800 space-y-3">
+              <div className="bg-[#13151f] p-4 rounded-xl border border-zinc-800 space-y-3">
                 <h3 className="text-sm font-black text-white uppercase tracking-wide flex items-center gap-2">
                   <Plus className="w-4 h-4 text-cyan-400" />
                   Connect ESPN Fantasy League
                 </h3>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-zinc-400">
                   Enter your ESPN League ID from your browser URL:
                   <code className="ml-1 text-cyan-400 font-mono">
                     fantasy.espn.com/football/league?leagueId=[LEAGUE_ID]
@@ -387,7 +387,7 @@ export default function ManageLeaguesModal({
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div className="sm:col-span-2">
-                    <label className="text-[11px] font-bold text-slate-400 uppercase block mb-1">
+                    <label className="text-[11px] font-bold text-zinc-400 uppercase block mb-1">
                       ESPN League ID
                     </label>
                     <input
@@ -395,12 +395,12 @@ export default function ManageLeaguesModal({
                       placeholder="e.g. 12345678"
                       value={espnId}
                       onChange={(e) => setEspnId(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-cyan-400"
+                      className="w-full px-3 py-2 bg-[#0a0b0e] border border-zinc-800 rounded-lg text-sm text-white focus:outline-none focus:border-cyan-400"
                     />
                   </div>
 
                   <div>
-                    <label className="text-[11px] font-bold text-slate-400 uppercase block mb-1">
+                    <label className="text-[11px] font-bold text-zinc-400 uppercase block mb-1">
                       Custom Label
                     </label>
                     <input
@@ -408,17 +408,17 @@ export default function ManageLeaguesModal({
                       placeholder="e.g. Home League"
                       value={espnName}
                       onChange={(e) => setEspnName(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-cyan-400"
+                      className="w-full px-3 py-2 bg-[#0a0b0e] border border-zinc-800 rounded-lg text-sm text-white focus:outline-none focus:border-cyan-400"
                     />
                   </div>
                 </div>
 
                 {/* Optional SWID / espn_s2 for private ESPN leagues */}
-                <div className="p-3 rounded-lg bg-slate-950/60 border border-slate-800/80 space-y-2">
-                  <span className="text-[11px] font-black text-slate-300 uppercase tracking-wide block">
+                <div className="p-3 rounded-lg bg-[#0a0b0e] border border-zinc-800 space-y-2">
+                  <span className="text-[11px] font-black text-zinc-300 uppercase tracking-wide block">
                     Optional: Private ESPN League Credentials
                   </span>
-                  <p className="text-[11px] text-slate-500">
+                  <p className="text-[11px] text-zinc-500">
                     If your ESPN league is set to private, enter your cookies from browser Developer Tools:
                   </p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -427,14 +427,14 @@ export default function ManageLeaguesModal({
                       placeholder="SWID (e.g. {ABCD-1234-...})"
                       value={espnSwid}
                       onChange={(e) => setEspnSwid(e.target.value)}
-                      className="w-full px-2.5 py-1.5 bg-slate-900 border border-slate-800 rounded text-xs text-white"
+                      className="w-full px-2.5 py-1.5 bg-[#13151f] border border-zinc-800 rounded text-xs text-white"
                     />
                     <input
                       type="password"
                       placeholder="espn_s2 cookie string"
                       value={espnS2}
                       onChange={(e) => setEspnS2(e.target.value)}
-                      className="w-full px-2.5 py-1.5 bg-slate-900 border border-slate-800 rounded text-xs text-white"
+                      className="w-full px-2.5 py-1.5 bg-[#13151f] border border-zinc-800 rounded text-xs text-white"
                     />
                   </div>
                 </div>
@@ -449,7 +449,7 @@ export default function ManageLeaguesModal({
                 <button
                   onClick={handleAddEspn}
                   disabled={espnLoading || !espnId.trim()}
-                  className="w-full py-2.5 rounded-[4px] bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 text-black font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 border border-cyan-400/50"
+                  className="w-full py-2.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 text-black font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 border border-cyan-400/50"
                 >
                   {espnLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                   <span>Connect & Sync ESPN League</span>
@@ -458,19 +458,19 @@ export default function ManageLeaguesModal({
 
               {/* Connected ESPN Leagues List */}
               <div className="space-y-3">
-                <h4 className="text-xs font-black uppercase text-slate-400 tracking-wider">
+                <h4 className="text-xs font-black uppercase text-zinc-400 tracking-wider">
                   Connected ESPN Leagues ({syncedLeagues.filter((l) => l.type === 'espn').length})
                 </h4>
 
                 {syncedLeagues.filter((l) => l.type === 'espn').length === 0 ? (
-                  <p className="text-xs text-slate-500 italic">No ESPN leagues connected yet.</p>
+                  <p className="text-xs text-zinc-500 italic">No ESPN leagues connected yet.</p>
                 ) : (
                   syncedLeagues
                     .filter((l) => l.type === 'espn')
                     .map((league) => (
                       <div
                         key={league.id}
-                        className="flex items-center justify-between p-3 rounded-xl bg-slate-900 border border-slate-800"
+                        className="flex items-center justify-between p-3 rounded-lg bg-[#13151f] border border-zinc-800"
                       >
                         <div>
                           <div className="flex items-center gap-2">
@@ -479,12 +479,12 @@ export default function ManageLeaguesModal({
                             </span>
                             <span className="text-sm font-bold text-white">{league.name}</span>
                           </div>
-                          <p className="text-[11px] text-slate-400 mt-1">ID: {league.leagueId}</p>
+                          <p className="text-[11px] text-zinc-500 mt-1">ID: {league.leagueId}</p>
                         </div>
 
                         <button
                           onClick={() => onUpdateLeagues(syncedLeagues.filter((l) => l.id !== league.id))}
-                          className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-950/50 transition-colors"
+                          className="p-1.5 rounded-lg text-zinc-500 hover:text-rose-400 hover:bg-rose-950/50 transition-colors"
                           title="Remove League"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -500,12 +500,12 @@ export default function ManageLeaguesModal({
           {activeTab === 'guests' && (
             <div className="space-y-5">
               <div className="flex items-center justify-between">
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-zinc-400">
                   Tag friends in the living room and assign players from Yahoo, DraftKings, or any custom league.
                 </p>
                 <button
                   onClick={handleLoadDemo}
-                  className="px-3 py-1.5 rounded-[4px] bg-amber-500/10 border border-amber-500/40 text-amber-300 hover:bg-amber-500/20 text-xs font-black uppercase flex items-center gap-1.5 transition-all"
+                  className="px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 hover:bg-amber-500/20 text-xs font-black uppercase flex items-center gap-1.5 transition-all"
                 >
                   <Sparkles className="w-3.5 h-3.5" />
                   <span>Load Demo Preset (3 Friends)</span>
@@ -513,7 +513,7 @@ export default function ManageLeaguesModal({
               </div>
 
               {/* Add New Guest Form */}
-              <div className="bg-slate-900/80 p-4 rounded-xl border border-slate-800 space-y-3">
+              <div className="bg-[#13151f] p-4 rounded-xl border border-zinc-800 space-y-3">
                 <h3 className="text-sm font-black text-white uppercase tracking-wide flex items-center gap-2">
                   <Plus className="w-4 h-4 text-amber-400" />
                   Tag a Friend in the Living Room
@@ -521,7 +521,7 @@ export default function ManageLeaguesModal({
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="text-[11px] font-bold text-slate-400 uppercase block mb-1">
+                    <label className="text-[11px] font-bold text-zinc-400 uppercase block mb-1">
                       Friend Name
                     </label>
                     <input
@@ -529,12 +529,12 @@ export default function ManageLeaguesModal({
                       placeholder="e.g. Alex"
                       value={guestName}
                       onChange={(e) => setGuestName(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-amber-400"
+                      className="w-full px-3 py-2 bg-[#0a0b0e] border border-zinc-800 rounded-lg text-sm text-white focus:outline-none focus:border-amber-400"
                     />
                   </div>
 
                   <div>
-                    <label className="text-[11px] font-bold text-slate-400 uppercase block mb-1">
+                    <label className="text-[11px] font-bold text-zinc-400 uppercase block mb-1">
                       Fantasy Team Name (Optional)
                     </label>
                     <input
@@ -542,7 +542,7 @@ export default function ManageLeaguesModal({
                       placeholder="e.g. Alex's Squad"
                       value={guestTeamName}
                       onChange={(e) => setGuestTeamName(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-amber-400"
+                      className="w-full px-3 py-2 bg-[#0a0b0e] border border-zinc-800 rounded-lg text-sm text-white focus:outline-none focus:border-amber-400"
                     />
                   </div>
                 </div>
@@ -550,14 +550,14 @@ export default function ManageLeaguesModal({
                 {/* Selected Players for this guest */}
                 {selectedGuestPlayers.length > 0 && (
                   <div>
-                    <label className="text-[11px] font-bold text-slate-400 uppercase block mb-1">
+                    <label className="text-[11px] font-bold text-zinc-400 uppercase block mb-1">
                       Assigned Players ({selectedGuestPlayers.length}):
                     </label>
                     <div className="flex flex-wrap gap-2">
                       {selectedGuestPlayers.map((p) => (
                         <span
                           key={p.name}
-                          className="px-2.5 py-1 rounded-md bg-amber-950/60 border border-amber-500/50 text-amber-300 text-xs font-bold flex items-center gap-1.5"
+                          className="px-2.5 py-1 rounded-md bg-amber-950/40 border border-amber-500/40 text-amber-300 text-xs font-bold flex items-center gap-1.5"
                         >
                           <span>{p.name}</span>
                           <span className="text-[10px] text-amber-400/80">({p.position || p.team})</span>
@@ -579,11 +579,11 @@ export default function ManageLeaguesModal({
 
                 {/* Player Autocomplete / Search */}
                 <div>
-                  <label className="text-[11px] font-bold text-slate-400 uppercase block mb-1">
+                  <label className="text-[11px] font-bold text-zinc-400 uppercase block mb-1">
                     Search & Add Players to Roster
                   </label>
                   <div className="relative">
-                    <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
+                    <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-2.5" />
                     <input
                       type="text"
                       placeholder="Type player name (e.g. Caleb Williams, Bijan Robinson)..."
@@ -603,7 +603,7 @@ export default function ManageLeaguesModal({
                           setGuestSearch('');
                         }
                       }}
-                      className="w-full pl-9 pr-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-amber-400"
+                      className="w-full pl-9 pr-3 py-2 bg-[#0a0b0e] border border-zinc-800 rounded-lg text-sm text-white focus:outline-none focus:border-amber-400"
                     />
                   </div>
 
@@ -628,10 +628,10 @@ export default function ManageLeaguesModal({
                               );
                             }
                           }}
-                          className={`px-2 py-0.5 rounded text-[11px] font-semibold transition-colors ${
+                          className={`px-2 py-0.5 rounded-md text-[11px] font-semibold transition-colors ${
                             isSelected
-                              ? 'bg-amber-400 text-slate-950 font-black'
-                              : 'bg-slate-950 text-slate-300 hover:bg-slate-800'
+                              ? 'bg-amber-400 text-black font-black'
+                              : 'bg-[#0a0b0e] text-zinc-300 hover:bg-zinc-800 border border-zinc-800'
                           }`}
                         >
                           + {p.name} ({p.position})
@@ -644,7 +644,7 @@ export default function ManageLeaguesModal({
                 <button
                   onClick={handleAddGuest}
                   disabled={!guestName.trim()}
-                  className="w-full py-2.5 rounded-[4px] bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 border border-amber-400/50"
+                  className="w-full py-2.5 rounded-lg bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 border border-amber-400/50"
                 >
                   <Plus className="w-4 h-4" />
                   <span>Add Friend to Living Room</span>
@@ -653,17 +653,17 @@ export default function ManageLeaguesModal({
 
               {/* Tagged Friends List */}
               <div className="space-y-3">
-                <h4 className="text-xs font-black uppercase text-slate-400 tracking-wider">
+                <h4 className="text-xs font-black uppercase text-zinc-400 tracking-wider">
                   Tagged Friends in Room ({guestTags.length})
                 </h4>
 
                 {guestTags.length === 0 ? (
-                  <p className="text-xs text-slate-500 italic">No friends tagged yet.</p>
+                  <p className="text-xs text-zinc-500 italic">No friends tagged yet.</p>
                 ) : (
                   guestTags.map((guest) => (
                     <div
                       key={guest.id}
-                      className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 space-y-2"
+                      className="p-3.5 rounded-xl bg-[#13151f] border border-zinc-800 space-y-2"
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
@@ -673,7 +673,7 @@ export default function ManageLeaguesModal({
 
                         <button
                           onClick={() => onUpdateGuests(guestTags.filter((g) => g.id !== guest.id))}
-                          className="p-1 rounded text-slate-500 hover:text-rose-400 hover:bg-rose-950/50 transition-colors"
+                          className="p-1 rounded text-zinc-500 hover:text-rose-400 hover:bg-rose-950/50 transition-colors"
                           title="Remove Friend"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -682,12 +682,12 @@ export default function ManageLeaguesModal({
 
                       <div className="flex flex-wrap gap-1.5">
                         {guest.players.length === 0 ? (
-                          <span className="text-[11px] text-slate-500">No players assigned yet</span>
+                          <span className="text-[11px] text-zinc-500">No players assigned yet</span>
                         ) : (
                           guest.players.map((p) => (
                             <span
                               key={p.name}
-                              className="px-2 py-0.5 rounded bg-slate-950 border border-slate-800 text-[11px] text-slate-300 font-medium"
+                              className="px-2 py-0.5 rounded-md bg-[#0a0b0e] border border-zinc-800 text-[11px] text-zinc-300 font-medium"
                             >
                               {p.name}
                             </span>
@@ -703,13 +703,13 @@ export default function ManageLeaguesModal({
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-3.5 bg-slate-950/90 border-t border-slate-800 flex items-center justify-between">
-          <span className="text-xs text-slate-500">
+        <div className="px-6 py-3.5 bg-[#0a0b0e] border-t border-zinc-800 flex items-center justify-between">
+          <span className="text-xs text-zinc-500">
             All leagues & guests are automatically saved to your TV browser storage.
           </span>
           <button
             onClick={onClose}
-            className="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs uppercase tracking-wider transition-colors"
+            className="px-5 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-xs uppercase tracking-wider transition-colors"
           >
             Close & View on TV
           </button>

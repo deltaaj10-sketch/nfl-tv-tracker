@@ -29,7 +29,7 @@ export default function RootLayout({
       lang="en"
       className={`${barlowCondensed.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-[#08090C] text-[#F4F4F6]">
+      <body className="min-h-full flex flex-col bg-[#0a0b0e] text-[#F4F4F6]">
         {children}
       </body>
     </html>

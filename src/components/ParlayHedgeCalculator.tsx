@@ -119,7 +119,7 @@ export default function ParlayHedgeCalculator({ slip, gradedLegs }: ParlayHedgeC
             Live Parlay Payout &amp; Hedge Calculator
           </span>
         </div>
-        <span className="text-[10px] font-mono-score font-bold px-2 py-0.5 rounded-[2px] bg-amber-500/20 text-amber-300 border border-amber-400/40">
+        <span className="text-[10px] font-mono-score font-bold px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-300 border border-amber-500/30">
           Stake: ${wagerNum.toFixed(2)} • Payout: ${payoutNum.toFixed(2)}
         </span>
       </div>
@@ -127,8 +127,8 @@ export default function ParlayHedgeCalculator({ slip, gradedLegs }: ParlayHedgeC
       {/* Row 1: Real-time Cashout & Paraly Equity */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
         {/* Estimated Cashout */}
-        <div className="p-2.5 rounded bg-[#141722] border border-white/10 flex flex-col justify-between">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">
+        <div className="p-2.5 rounded-lg bg-[#13151f] border border-zinc-800 flex flex-col justify-between">
+          <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wide">
             Real-Time Cash-Out Offer
           </span>
           <div className="flex items-baseline gap-1.5 mt-1">
@@ -149,7 +149,7 @@ export default function ParlayHedgeCalculator({ slip, gradedLegs }: ParlayHedgeC
               </span>
             )}
           </div>
-          <span className="text-[9px] font-bold text-slate-400 uppercase mt-0.5">
+          <span className="text-[9px] font-bold text-zinc-500 uppercase mt-0.5">
             {chalkedCount > 0
               ? 'Slip Chalked (Busted)'
               : cashedCount === total
@@ -159,8 +159,8 @@ export default function ParlayHedgeCalculator({ slip, gradedLegs }: ParlayHedgeC
         </div>
 
         {/* Legs Progress */}
-        <div className="p-2.5 rounded bg-[#141722] border border-white/10 flex flex-col justify-between">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">
+        <div className="p-2.5 rounded-lg bg-[#13151f] border border-zinc-800 flex flex-col justify-between">
+          <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wide">
             Legs In Flight
           </span>
           <div className="flex items-baseline gap-1.5 mt-1">
@@ -171,14 +171,14 @@ export default function ParlayHedgeCalculator({ slip, gradedLegs }: ParlayHedgeC
               {remainingCount} REMAINING
             </span>
           </div>
-          <span className="text-[9px] font-bold text-slate-400 uppercase mt-0.5">
+          <span className="text-[9px] font-bold text-zinc-500 uppercase mt-0.5">
             {remainingCount === 1 ? '1 Leg Remaining (Hedge Opportunity)' : `${remainingCount} Legs to Settle`}
           </span>
         </div>
 
         {/* Potential Net Profit */}
-        <div className="p-2.5 rounded bg-[#141722] border border-white/10 flex flex-col justify-between col-span-2 sm:col-span-1">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">
+        <div className="p-2.5 rounded-lg bg-[#13151f] border border-zinc-800 flex flex-col justify-between col-span-2 sm:col-span-1">
+          <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wide">
             Full Win Net Profit
           </span>
           <div className="flex items-baseline gap-1 mt-1">
@@ -186,7 +186,7 @@ export default function ParlayHedgeCalculator({ slip, gradedLegs }: ParlayHedgeC
               +${(payoutNum - wagerNum).toFixed(2)}
             </span>
           </div>
-          <span className="text-[9px] font-bold text-slate-400 uppercase mt-0.5">
+          <span className="text-[9px] font-bold text-zinc-500 uppercase mt-0.5">
             If all {total} legs hit cleanly
           </span>
         </div>
@@ -194,20 +194,20 @@ export default function ParlayHedgeCalculator({ slip, gradedLegs }: ParlayHedgeC
 
       {/* Row 2: Final Leg Sweating & Recommended Hedge Engine */}
       {chalkedCount === 0 && (
-        <div className="p-3 rounded bg-[#0E1017] border border-amber-500/40 flex flex-col gap-2.5 shadow-sm">
+        <div className="p-3 rounded-lg bg-[#0e1015] border border-amber-500/30 flex flex-col gap-2.5 shadow-sm">
           {remainingCount === 1 && sweatLeg ? (
             <>
               {/* Sweat Header */}
-              <div className="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-white/10">
+              <div className="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-zinc-800">
                 <div className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping inline-block" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping inline-block" />
                   <span className="text-xs font-bold text-amber-300 uppercase tracking-wider">
                     SWEATING THE FINAL LEG:
                   </span>
                   <span className="text-xs font-black text-white">{sweatLeg.leg.description}</span>
                 </div>
                 {sweatLeg.result.gameStatusText && (
-                  <span className="text-[10px] font-mono-score font-bold text-slate-400">
+                  <span className="text-[10px] font-mono-score font-bold text-zinc-500">
                     {sweatLeg.result.gameStatusText}
                   </span>
                 )}
@@ -216,23 +216,23 @@ export default function ParlayHedgeCalculator({ slip, gradedLegs }: ParlayHedgeC
               {/* Hedge Controls: Odds & Strategy */}
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase">
+                  <span className="text-[10px] font-bold text-zinc-500 uppercase">
                     Hedge Line:
                   </span>
-                  <span className="text-xs font-mono-score font-bold text-white bg-slate-900 px-2 py-0.5 rounded border border-white/10">
+                  <span className="text-xs font-mono-score font-bold text-white bg-[#13151f] px-2 py-0.5 rounded border border-zinc-800">
                     {hedgeSideName}
                   </span>
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase">
+                  <span className="text-[10px] font-bold text-zinc-500 uppercase">
                     Hedge Odds:
                   </span>
                   <input
                     type="number"
                     value={hedgeOdds}
                     onChange={(e) => setHedgeOdds(parseInt(e.target.value) || -110)}
-                    className="w-20 bg-slate-950 border border-slate-700 rounded px-2 py-0.5 text-xs text-white font-mono-score font-bold text-center focus:border-amber-400 outline-none"
+                    className="w-20 bg-[#0a0b0e] border border-zinc-800 rounded px-2 py-0.5 text-xs text-white font-mono-score font-bold text-center focus:border-amber-400 outline-none"
                     placeholder="-110"
                   />
                 </div>
@@ -242,7 +242,7 @@ export default function ParlayHedgeCalculator({ slip, gradedLegs }: ParlayHedgeC
               <div className="grid grid-cols-3 gap-1.5 pt-1">
                 <button
                   onClick={() => setActiveStrategy('equal')}
-                  className={`px-2 py-1.5 rounded-[4px] text-[10px] font-bold uppercase transition-all flex flex-col items-center justify-center border ${
+                  className={`px-2 py-1.5 rounded-md text-[10px] font-bold uppercase transition-all flex flex-col items-center justify-center border ${
                     activeStrategy === 'equal'
                       ? 'bg-amber-400 text-black border-amber-300 font-black'
                       : 'bg-zinc-900 text-zinc-300 border-zinc-800 hover:border-zinc-700'
@@ -256,7 +256,7 @@ export default function ParlayHedgeCalculator({ slip, gradedLegs }: ParlayHedgeC
 
                 <button
                   onClick={() => setActiveStrategy('freeroll')}
-                  className={`px-2 py-1.5 rounded-[4px] text-[10px] font-bold uppercase transition-all flex flex-col items-center justify-center border ${
+                  className={`px-2 py-1.5 rounded-md text-[10px] font-bold uppercase transition-all flex flex-col items-center justify-center border ${
                     activeStrategy === 'freeroll'
                       ? 'bg-amber-400 text-black border-amber-300 font-black'
                       : 'bg-zinc-900 text-zinc-300 border-zinc-800 hover:border-zinc-700'
@@ -270,7 +270,7 @@ export default function ParlayHedgeCalculator({ slip, gradedLegs }: ParlayHedgeC
 
                 <button
                   onClick={() => setActiveStrategy('aggressive')}
-                  className={`px-2 py-1.5 rounded-[4px] text-[10px] font-bold uppercase transition-all flex flex-col items-center justify-center border ${
+                  className={`px-2 py-1.5 rounded-md text-[10px] font-bold uppercase transition-all flex flex-col items-center justify-center border ${
                     activeStrategy === 'aggressive'
                       ? 'bg-amber-400 text-black border-amber-300 font-black'
                       : 'bg-zinc-900 text-zinc-300 border-zinc-800 hover:border-zinc-700'
@@ -284,7 +284,7 @@ export default function ParlayHedgeCalculator({ slip, gradedLegs }: ParlayHedgeC
               </div>
 
               {/* Guaranteed Result Callout Box */}
-              <div className="p-2.5 rounded bg-emerald-950/30 border border-emerald-500/50 flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
+              <div className="p-2.5 rounded-lg bg-emerald-950/30 border border-emerald-500/40 flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
                 <div className="flex items-center gap-2.5">
                   <div className="w-8 h-8 rounded-full bg-emerald-500/20 border border-emerald-400/50 flex items-center justify-center text-emerald-400 shrink-0">
                     <CheckCircle2 className="w-4 h-4" />
@@ -297,7 +297,7 @@ export default function ParlayHedgeCalculator({ slip, gradedLegs }: ParlayHedgeC
                       </span>{' '}
                       on {hedgeSideName} ({hedgeOdds > 0 ? `+${hedgeOdds}` : hedgeOdds})
                     </span>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase mt-0.5 block">
+                    <span className="text-[10px] font-bold text-zinc-400 uppercase mt-0.5 block">
                       Guaranteed profit regardless of who wins!
                     </span>
                   </div>
@@ -305,7 +305,7 @@ export default function ParlayHedgeCalculator({ slip, gradedLegs }: ParlayHedgeC
 
                 <div className="flex items-center gap-3 shrink-0">
                   <div className="text-right">
-                    <span className="text-[9px] font-bold text-slate-400 uppercase block">
+                    <span className="text-[9px] font-bold text-zinc-500 uppercase block">
                       Parlay Hits:
                     </span>
                     <span className="text-xs font-mono-score font-bold text-emerald-400">
@@ -313,7 +313,7 @@ export default function ParlayHedgeCalculator({ slip, gradedLegs }: ParlayHedgeC
                     </span>
                   </div>
                   <div className="text-right">
-                    <span className="text-[9px] font-bold text-slate-400 uppercase block">
+                    <span className="text-[9px] font-bold text-zinc-500 uppercase block">
                       Hedge Hits:
                     </span>
                     <span className="text-xs font-mono-score font-bold text-emerald-400">
@@ -324,12 +324,12 @@ export default function ParlayHedgeCalculator({ slip, gradedLegs }: ParlayHedgeC
               </div>
             </>
           ) : remainingCount > 1 ? (
-            <div className="py-2 text-center text-slate-400 flex flex-col items-center gap-1.5">
+            <div className="py-2 text-center text-zinc-400 flex flex-col items-center gap-1.5">
               <div className="flex items-center gap-1.5 text-xs font-bold uppercase text-amber-300">
                 <TrendingUp className="w-4 h-4 text-amber-400" />
                 <span>Multi-Leg Hedge Road Map</span>
               </div>
-              <p className="text-[11px] font-medium max-w-md text-slate-300">
+              <p className="text-[11px] font-medium max-w-md text-zinc-400">
                 {remainingCount} legs still in flight. When {remainingCount - 1} more leg hits, this calculator will automatically suggest your exact hedge size to guarantee ~${Math.round((payoutNum / 2.1) - wagerNum)} in risk-free profit.
               </p>
             </div>

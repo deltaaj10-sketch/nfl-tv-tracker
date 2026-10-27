@@ -680,37 +680,37 @@ export default function ManageBetsModal({
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-4xl bg-[#0E1017] border border-white/20 rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] font-condensed animate-fadeIn"
+        className="w-full max-w-4xl bg-[#0e1015] border border-zinc-800 rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] font-condensed animate-fadeIn"
       >
         {/* Modal Header */}
-        <div className="bg-[#07080C] px-5 py-3.5 border-b border-white/10 flex items-center justify-between">
+        <div className="bg-[#0a0b0e] px-5 py-3.5 border-b border-zinc-800 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
+            <div className="w-9 h-9 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
               <DollarSign className="w-5 h-5" />
             </div>
             <div>
               <h2 className="text-base md:text-lg font-black text-white uppercase tracking-wider">
                 Live Sportsbook &amp; Props Market
               </h2>
-              <p className="text-xs text-slate-400 font-medium">
+              <p className="text-xs text-zinc-500 font-medium">
                 Instant prop pinning, multi-game tracking, and live parlay hedge management
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
+            className="p-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Modal Navigation Tabs */}
-        <div className="flex items-center justify-between px-5 py-2.5 border-b border-white/10 bg-[#0A0C12]">
+        <div className="flex items-center justify-between px-5 py-2.5 border-b border-zinc-800 bg-[#0a0b0e]">
           <div className="flex items-center gap-2">
             <button
               onClick={() => setActiveTab('props_market')}
-              className={`px-3 py-1.5 rounded-[4px] text-xs font-bold uppercase transition-all flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded-md text-xs font-bold uppercase transition-all flex items-center gap-1.5 ${
                 activeTab === 'props_market'
                   ? 'bg-amber-400 text-black font-black'
                   : 'bg-zinc-900 text-zinc-300 hover:text-white border border-zinc-800'
@@ -721,7 +721,7 @@ export default function ManageBetsModal({
             </button>
             <button
               onClick={() => setActiveTab('list')}
-              className={`px-3 py-1.5 rounded-[4px] text-xs font-bold uppercase transition-all flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded-md text-xs font-bold uppercase transition-all flex items-center gap-1.5 ${
                 activeTab === 'list'
                   ? 'bg-amber-400 text-black font-black'
                   : 'bg-zinc-900 text-zinc-300 hover:text-white border border-zinc-800'
@@ -732,7 +732,7 @@ export default function ManageBetsModal({
             </button>
             <button
               onClick={() => setActiveTab('create')}
-              className={`px-3 py-1.5 rounded-[4px] text-xs font-bold uppercase transition-all flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded-md text-xs font-bold uppercase transition-all flex items-center gap-1.5 ${
                 activeTab === 'create'
                   ? 'bg-amber-400 text-black font-black'
                   : 'bg-zinc-900 text-zinc-300 hover:text-white border border-zinc-800'
@@ -746,7 +746,7 @@ export default function ManageBetsModal({
           {/* Active Sunday Sweat Pin Indicator */}
           {pinnedLegsCount > 0 && (
             <div className="flex items-center gap-2">
-              <span className="text-[11px] font-mono-score font-bold text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded border border-amber-400/40">
+              <span className="text-[11px] font-mono-score font-bold text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/30">
                 {pinnedLegsCount} Props Pinned to Sweat
               </span>
             </div>
@@ -754,26 +754,26 @@ export default function ManageBetsModal({
         </div>
 
         {/* Modal Body */}
-        <div className="flex-1 overflow-y-auto p-5">
+        <div className="flex-1 overflow-y-auto p-5 bg-[#0e1015]">
           {/* TAB 1: FAST-PIN PROPS MARKET (SEARCH & 1-CLICK PINNING) */}
           {activeTab === 'props_market' && (
             <div className="flex flex-col gap-3.5 h-full">
               {/* Search & Category Filter Header */}
-              <div className="flex flex-col gap-2.5 pb-3 border-b border-white/10">
+              <div className="flex flex-col gap-2.5 pb-3 border-b border-zinc-800">
                 {/* Search Input */}
                 <div className="relative w-full">
-                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                  <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-3" />
                   <input
                     type="text"
                     value={marketSearch}
                     onChange={(e) => setMarketSearch(e.target.value)}
                     placeholder="Search 629 live props (e.g. 'Caleb Williams Passing Yds' or 'Kenneth Walker')..."
-                    className="w-full bg-[#141722] border border-white/20 rounded-lg pl-9 pr-3 py-2 text-xs md:text-sm text-white placeholder-slate-400 focus:outline-none focus:border-amber-400 font-bold"
+                    className="w-full bg-[#13151f] border border-zinc-800 rounded-lg pl-9 pr-3 py-2 text-xs md:text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-amber-400 font-bold"
                   />
                   {marketSearch && (
                     <button
                       onClick={() => setMarketSearch('')}
-                      className="absolute right-3 top-3 text-slate-400 hover:text-white"
+                      className="absolute right-3 top-3 text-zinc-500 hover:text-white"
                     >
                       <X className="w-4 h-4" />
                     </button>
@@ -796,10 +796,10 @@ export default function ManageBetsModal({
                       <button
                         key={cat.id}
                         onClick={() => setMarketCategory(cat.id)}
-                        className={`px-2.5 py-1 rounded-[3px] text-[10px] font-bold uppercase transition-all whitespace-nowrap shrink-0 border ${
+                        className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase transition-all whitespace-nowrap shrink-0 border ${
                           marketCategory === cat.id
-                            ? 'bg-amber-400 text-slate-950 border-amber-300 font-black'
-                            : 'bg-[#141722] text-slate-300 hover:text-white border-white/10'
+                            ? 'bg-amber-400 text-black border-amber-300 font-black'
+                            : 'bg-[#13151f] text-zinc-300 hover:text-white border-zinc-800'
                         }`}
                       >
                         {cat.label}
@@ -811,7 +811,7 @@ export default function ManageBetsModal({
                   <select
                     value={marketGameFilter}
                     onChange={(e) => setMarketGameFilter(e.target.value)}
-                    className="bg-[#141722] border border-white/20 rounded px-2 py-1 text-xs text-slate-200 font-bold outline-none shrink-0"
+                    className="bg-[#13151f] border border-zinc-800 rounded px-2 py-1 text-xs text-zinc-200 font-bold outline-none shrink-0"
                   >
                     <option value="ALL">All Matchups</option>
                     {availableGames.map((g) => (
@@ -826,7 +826,7 @@ export default function ManageBetsModal({
               {/* Props Results Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
                 {filteredMarketProps.length === 0 ? (
-                  <div className="col-span-2 py-12 text-center text-slate-500 text-xs">
+                  <div className="col-span-2 py-12 text-center text-zinc-500 text-xs">
                     No props matching &quot;{marketSearch}&quot;. Try searching player name or prop type.
                   </div>
                 ) : (
@@ -835,16 +835,16 @@ export default function ManageBetsModal({
                     return (
                       <div
                         key={prop.id}
-                        className={`p-2.5 rounded-[4px] border transition-all flex items-center justify-between gap-3 ${
+                        className={`p-2.5 rounded-lg border transition-all flex items-center justify-between gap-3 ${
                           pinned
-                            ? 'bg-[#101512] border-emerald-500/50 border-l-[3px] border-l-emerald-400'
-                            : 'bg-zinc-900 border-zinc-800 hover:border-zinc-700'
+                            ? 'bg-[#0f1914] border-emerald-500/50 border-l-4 border-l-emerald-400'
+                            : 'bg-[#13151f] border-zinc-800 hover:border-zinc-700'
                         }`}
                       >
                         {/* Prop Info */}
                         <div className="flex items-center gap-2.5 min-w-0 flex-1">
                           {prop.playerHeadshot ? (
-                            <div className="relative w-10 h-10 rounded-full overflow-hidden bg-slate-900 border border-white/10 shrink-0">
+                            <div className="relative w-10 h-10 rounded-full overflow-hidden bg-zinc-900 border border-zinc-800 shrink-0">
                               <img
                                 src={prop.playerHeadshot}
                                 alt={prop.playerName}
@@ -855,7 +855,7 @@ export default function ManageBetsModal({
                               />
                             </div>
                           ) : (
-                            <div className="w-10 h-10 rounded-lg bg-slate-900 border border-white/10 flex items-center justify-center font-bold text-xs text-amber-400 shrink-0">
+                            <div className="w-10 h-10 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center font-bold text-xs text-amber-400 shrink-0">
                               {prop.playerTeam}
                             </div>
                           )}
@@ -866,8 +866,8 @@ export default function ManageBetsModal({
                                 {prop.description}
                               </span>
                             </div>
-                            <div className="flex items-center gap-2 text-[10px] text-slate-400 mt-0.5">
-                              <span className="font-bold text-slate-300">{prop.matchup}</span>
+                            <div className="flex items-center gap-2 text-[10px] text-zinc-500 mt-0.5">
+                              <span className="font-bold text-zinc-400">{prop.matchup}</span>
                               {prop.gameStatusText && (
                                 <>
                                   <span>•</span>
@@ -875,7 +875,7 @@ export default function ManageBetsModal({
                                     className={
                                       prop.isGameLive
                                         ? 'text-amber-400 font-bold flex items-center gap-1'
-                                        : 'text-slate-400'
+                                        : 'text-zinc-500'
                                     }
                                   >
                                     {prop.isGameLive && (
@@ -891,12 +891,12 @@ export default function ManageBetsModal({
 
                         {/* Odds & Pin Action */}
                         <div className="flex items-center gap-2 shrink-0">
-                          <span className="text-[11px] font-mono-score font-bold px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-slate-300">
+                          <span className="text-[11px] font-mono-score font-bold px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-300">
                             {prop.odds}
                           </span>
                           <button
                             onClick={() => handleTogglePinProp(prop)}
-                            className={`px-3 py-1.5 rounded-[4px] text-xs font-bold uppercase transition-all flex items-center gap-1 ${
+                            className={`px-3 py-1.5 rounded-md text-xs font-bold uppercase transition-all flex items-center gap-1 ${
                               pinned
                                 ? 'bg-emerald-400 text-black font-black hover:bg-rose-600 hover:text-white'
                                 : 'bg-zinc-800 text-white hover:bg-amber-400 hover:text-black border border-zinc-700'
@@ -927,17 +927,17 @@ export default function ManageBetsModal({
           {activeTab === 'list' && (
             <div className="space-y-3">
               {savedBets.length === 0 ? (
-                <div className="text-center py-12 px-4 rounded-xl bg-[#141722] border border-dashed border-white/10">
-                  <DollarSign className="w-10 h-10 text-slate-500 mx-auto mb-2" />
+                <div className="text-center py-12 px-4 rounded-xl bg-[#13151f] border border-dashed border-zinc-800">
+                  <DollarSign className="w-10 h-10 text-zinc-600 mx-auto mb-2" />
                   <h3 className="text-sm font-bold text-white uppercase tracking-wide">
                     No Bets or Parlays Saved Yet
                   </h3>
-                  <p className="text-xs text-slate-400 max-w-sm mx-auto mt-1 mb-4 font-medium">
+                  <p className="text-xs text-zinc-500 max-w-sm mx-auto mt-1 mb-4 font-medium">
                     Use the Fast-Pin Props market to instantly add your Sunday action!
                   </p>
                   <button
                     onClick={() => setActiveTab('props_market')}
-                    className="px-4 py-2 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs uppercase transition-all shadow-md"
+                    className="px-4 py-2 rounded-lg bg-amber-400 hover:bg-amber-300 text-black font-black text-xs uppercase transition-all shadow-md"
                   >
                     Browse &amp; Pin Props
                   </button>
@@ -946,16 +946,16 @@ export default function ManageBetsModal({
                 savedBets.map((slip) => (
                   <div
                     key={slip.id}
-                    className="p-4 rounded-xl bg-[#141722] border border-white/10 hover:border-white/20 transition-all space-y-2.5"
+                    className="p-4 rounded-xl bg-[#13151f] border border-zinc-800 hover:border-zinc-700 transition-all space-y-2.5"
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-black uppercase">
+                        <span className="px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-300 border border-amber-500/30 text-[10px] font-black uppercase">
                           {slip.legs.length > 1 ? `${slip.legs.length}-LEG PARLAY` : 'SINGLE BET'}
                         </span>
                         <h4 className="text-sm font-black text-white">{slip.title}</h4>
                         {slip.ownerName && (
-                          <span className="text-xs text-slate-400 font-bold">
+                          <span className="text-xs text-zinc-500 font-bold">
                             • Tag: <span className="text-amber-400">{slip.ownerName}</span>
                           </span>
                         )}
@@ -963,18 +963,18 @@ export default function ManageBetsModal({
 
                       <div className="flex items-center gap-3">
                         {slip.wager && (
-                          <span className="text-xs font-mono-score font-bold text-slate-300">
+                          <span className="text-xs font-mono-score font-bold text-zinc-400">
                             Stake: <span className="text-white">{slip.wager}</span>
                           </span>
                         )}
                         {slip.payout && (
-                          <span className="text-xs font-mono-score font-bold text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-500/30">
+                          <span className="text-xs font-mono-score font-bold text-emerald-400 bg-emerald-950/40 px-2 py-0.5 rounded-md border border-emerald-500/30">
                             To Win: {slip.payout}
                           </span>
                         )}
                         <button
                           onClick={() => handleDeleteSlip(slip.id)}
-                          className="text-slate-400 hover:text-rose-400 transition-colors p-1"
+                          className="text-zinc-500 hover:text-rose-400 transition-colors p-1"
                           title="Delete Slip"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -983,19 +983,19 @@ export default function ManageBetsModal({
                     </div>
 
                     {/* Legs list inside slip */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-1 border-t border-white/10">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-1 border-t border-zinc-800">
                       {slip.legs.map((leg, idx) => (
                         <div
                           key={leg.id || idx}
-                          className="px-2.5 py-1.5 rounded-lg bg-[#0E1017] border border-white/10 flex items-center justify-between text-xs"
+                          className="px-2.5 py-1.5 rounded-lg bg-[#0e1015] border border-zinc-800 flex items-center justify-between text-xs"
                         >
                           <div className="flex items-center gap-2 min-w-0">
-                            <span className="text-[10px] font-mono-score font-bold text-slate-400">
+                            <span className="text-[10px] font-mono-score font-bold text-zinc-500">
                               #{idx + 1}
                             </span>
-                            <span className="font-bold text-slate-200 truncate">{leg.description}</span>
+                            <span className="font-bold text-zinc-200 truncate">{leg.description}</span>
                           </div>
-                          <span className="text-[9px] font-bold uppercase px-1.5 py-0.2 rounded bg-white/5 text-slate-400 shrink-0 ml-1">
+                          <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-md bg-zinc-900 border border-zinc-800 text-zinc-400 shrink-0 ml-1">
                             {leg.type.replace('_', ' ')}
                           </span>
                         </div>
@@ -1012,7 +1012,7 @@ export default function ManageBetsModal({
             <div className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
-                  <label className="text-xs font-bold text-slate-400 block mb-1 uppercase">
+                  <label className="text-xs font-bold text-zinc-400 block mb-1 uppercase">
                     Slip Title
                   </label>
                   <input
@@ -1020,11 +1020,11 @@ export default function ManageBetsModal({
                     value={slipTitle}
                     onChange={(e) => setSlipTitle(e.target.value)}
                     placeholder="e.g. Sunday Room Lock (+600)"
-                    className="w-full bg-[#141722] border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:border-amber-400 outline-none"
+                    className="w-full bg-[#13151f] border border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-white placeholder-zinc-500 focus:border-amber-400 outline-none"
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-slate-400 block mb-1 uppercase">
+                  <label className="text-xs font-bold text-zinc-400 block mb-1 uppercase">
                     Stake / Wager
                   </label>
                   <input
@@ -1032,11 +1032,11 @@ export default function ManageBetsModal({
                     value={slipWager}
                     onChange={(e) => setSlipWager(e.target.value)}
                     placeholder="$25"
-                    className="w-full bg-[#141722] border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:border-amber-400 outline-none font-mono-score"
+                    className="w-full bg-[#13151f] border border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-white placeholder-zinc-500 focus:border-amber-400 outline-none font-mono-score"
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-slate-400 block mb-1 uppercase">
+                  <label className="text-xs font-bold text-zinc-400 block mb-1 uppercase">
                     Payout / Odds
                   </label>
                   <input
@@ -1044,24 +1044,24 @@ export default function ManageBetsModal({
                     value={slipPayout}
                     onChange={(e) => setSlipPayout(e.target.value)}
                     placeholder="$175 (+600)"
-                    className="w-full bg-[#141722] border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:border-amber-400 outline-none font-mono-score"
+                    className="w-full bg-[#13151f] border border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-white placeholder-zinc-500 focus:border-amber-400 outline-none font-mono-score"
                   />
                 </div>
               </div>
 
               {/* Legs added so far */}
-              <div className="p-3 rounded-lg bg-[#141722] border border-white/10">
-                <span className="text-xs font-bold text-slate-300 uppercase block mb-2">
+              <div className="p-3 rounded-lg bg-[#13151f] border border-zinc-800">
+                <span className="text-xs font-bold text-zinc-300 uppercase block mb-2">
                   Legs Added to this Slip ({legs.length})
                 </span>
                 {legs.length === 0 ? (
-                  <p className="text-xs text-slate-500 italic">No legs added yet.</p>
+                  <p className="text-xs text-zinc-500 italic">No legs added yet.</p>
                 ) : (
                   <div className="space-y-1.5">
                     {legs.map((leg, idx) => (
                       <div
                         key={leg.id}
-                        className="px-3 py-2 rounded-lg bg-[#0E1017] border border-white/10 flex items-center justify-between"
+                        className="px-3 py-2 rounded-lg bg-[#0e1015] border border-zinc-800 flex items-center justify-between"
                       >
                         <div className="flex items-center gap-2">
                           <span className="text-[10px] font-mono-score font-bold text-amber-400">
@@ -1072,7 +1072,7 @@ export default function ManageBetsModal({
                         <button
                           type="button"
                           onClick={() => handleRemoveLeg(leg.id)}
-                          className="text-slate-400 hover:text-rose-400 transition-colors"
+                          className="text-zinc-500 hover:text-rose-400 transition-colors"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -1083,7 +1083,7 @@ export default function ManageBetsModal({
               </div>
 
               {/* Add Leg Form Controls */}
-              <div className="p-3 rounded-lg bg-[#141722] border border-white/10 flex flex-col gap-2.5">
+              <div className="p-3 rounded-lg bg-[#13151f] border border-zinc-800 flex flex-col gap-2.5">
                 <span className="text-xs font-bold text-amber-300 uppercase">
                   Add a New Leg
                 </span>
@@ -1091,7 +1091,7 @@ export default function ManageBetsModal({
                   <select
                     value={selectedLegType}
                     onChange={(e) => setSelectedLegType(e.target.value as BetLegType)}
-                    className="bg-[#0E1017] border border-white/10 rounded px-2.5 py-1.5 text-xs text-white font-bold outline-none"
+                    className="bg-[#0e1015] border border-zinc-800 rounded px-2.5 py-1.5 text-xs text-white font-bold outline-none"
                   >
                     <option value="player_prop">Player Prop (Over / Under)</option>
                     <option value="anytime_td">Anytime Touchdown</option>
@@ -1105,7 +1105,7 @@ export default function ManageBetsModal({
                         const p = availablePlayers.find((pl) => pl.id === e.target.value);
                         setSelectedPlayer(p || null);
                       }}
-                      className="bg-[#0E1017] border border-white/10 rounded px-2.5 py-1.5 text-xs text-white font-bold outline-none"
+                      className="bg-[#0e1015] border border-zinc-800 rounded px-2.5 py-1.5 text-xs text-white font-bold outline-none"
                     >
                       <option value="">Select Player...</option>
                       {availablePlayers
@@ -1123,7 +1123,7 @@ export default function ManageBetsModal({
                   <button
                     type="button"
                     onClick={handleAddLeg}
-                    className="px-4 py-1.5 rounded-[4px] bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs uppercase"
+                    className="px-4 py-1.5 rounded-md bg-amber-400 hover:bg-amber-300 text-black font-bold text-xs uppercase"
                   >
                     + Add Leg
                   </button>
@@ -1131,11 +1131,11 @@ export default function ManageBetsModal({
               </div>
 
               {/* Save Slip Button */}
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-white/10">
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-zinc-800">
                 <button
                   type="button"
                   onClick={() => setActiveTab('props_market')}
-                  className="px-4 py-2 rounded-lg bg-[#141722] hover:bg-[#1A1E2C] text-slate-300 font-bold text-xs uppercase"
+                  className="px-4 py-2 rounded-lg bg-[#13151f] hover:bg-zinc-800 text-zinc-300 font-bold text-xs uppercase"
                 >
                   Cancel
                 </button>
@@ -1143,7 +1143,7 @@ export default function ManageBetsModal({
                   type="button"
                   disabled={legs.length === 0}
                   onClick={handleSaveSlip}
-                  className="px-5 py-2 rounded-[4px] bg-emerald-400 hover:bg-emerald-300 disabled:opacity-40 disabled:cursor-not-allowed text-black font-black text-xs uppercase transition-colors"
+                  className="px-5 py-2 rounded-md bg-emerald-400 hover:bg-emerald-300 disabled:opacity-40 disabled:cursor-not-allowed text-black font-black text-xs uppercase transition-colors"
                 >
                   Save Slip ({legs.length} {legs.length === 1 ? 'Leg' : 'Legs'})
                 </button>
