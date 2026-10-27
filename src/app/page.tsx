@@ -98,26 +98,107 @@ const TABS: { id: MainTab; label: string }[] = [
 ];
 
 /**
- * Detect high-impact stat segments (TDs, INTs, FRs, 300+ PASS, 100+ RUSH/REC/YDS)
+ * Detect high-impact and negative stat segments:
+ * - TD -> text-emerald-400 font-bold
+ * - 100+ YDS or 300+ YDS -> text-amber-300 font-semibold
+ * - Negative stats (FUM, INT for QB/offense) -> text-rose-400
  */
-function getHighImpactStatType(segment: string): 'emerald' | 'gold' | null {
+function getStatSegmentClasses(segment: string, position?: string): string {
   const s = segment.toUpperCase().trim();
-  // Any TD (e.g. 2 PASS TD, 1 RUSH TD, 3 TD, TOUCHDOWN)
-  if (/\b\d*\s*TD\b|\bTOUCHDOWN\b/.test(s)) return 'emerald';
-  // Turnovers / Defensive big plays (INT, FR, FUM REC, SAFETY, D/ST TD)
-  if (/\bINT\b|\bFR\b|\bFUM\b|\bSAFETY\b/.test(s)) return 'emerald';
-  // Big yardage: 300+ PASS or 300+ YDS
-  const passYdsMatch = s.match(/(\d+)\s*(?:PASS(?:ING)?(?:\s*YDS?)?|YDS?\s*PASS)/);
-  if (passYdsMatch && parseInt(passYdsMatch[1], 10) >= 300) return 'gold';
-  // 100+ RUSH or 100+ REC or standalone 100+ YDS
+  if (!s) return 'text-slate-300 bg-[#141722] border-white/10';
+
+  // 1. Any segment containing TD
+  if (/\b\d*\s*TD\b|\bTOUCHDOWN\b/.test(s)) {
+    return 'text-emerald-400 font-bold bg-emerald-950/80 border-emerald-500/40 shadow-sm';
+  }
+
+  // 2. Negative stat: FUM for offensive players, INT for QB (or offensive players)
+  if (position !== 'DEF') {
+    if (/\bFUM\b/.test(s) || (position === 'QB' && /\bINT\b/.test(s)) || (/\bINT\b/.test(s) && !/\bPOINT\b/.test(s))) {
+      return 'text-rose-400 font-semibold bg-rose-950/80 border-rose-500/40 shadow-sm';
+    }
+  }
+
+  // Defensive takeaways (INT, FR, SAFETY) for DEF are positive
+  if (position === 'DEF') {
+    if (/\bINT\b|\bFR\b|\bSAFETY\b/.test(s)) {
+      return 'text-emerald-400 font-bold bg-emerald-950/80 border-emerald-500/40 shadow-sm';
+    }
+  }
+
+  // 3. 300+ PASS YDS
+  const passMatch = s.match(/(\d+)\s*(?:PASS(?:ING)?(?:\s*YDS?)?|YDS?\s*PASS)/);
+  if (passMatch && parseInt(passMatch[1], 10) >= 300) {
+    return 'text-amber-300 font-semibold bg-amber-950/80 border-amber-500/40 shadow-sm';
+  }
+
+  // 100+ RUSH YDS
   const rushMatch = s.match(/(\d+)\s*(?:RUSH(?:ING)?(?:\s*YDS?)?|YDS?\s*RUSH)/);
-  if (rushMatch && parseInt(rushMatch[1], 10) >= 100) return 'gold';
+  if (rushMatch && parseInt(rushMatch[1], 10) >= 100) {
+    return 'text-amber-300 font-semibold bg-amber-950/80 border-amber-500/40 shadow-sm';
+  }
+
+  // 100+ REC YDS
   const recMatch = s.match(/(\d+)\s*(?:REC(?:EIVING)?(?:\s*YDS?)?|YDS?\s*REC)/);
-  if (recMatch && parseInt(recMatch[1], 10) >= 100) return 'gold';
-  // Standalone general yardage (e.g. 124 YDS)
+  if (recMatch && parseInt(recMatch[1], 10) >= 100) {
+    return 'text-amber-300 font-semibold bg-amber-950/80 border-amber-500/40 shadow-sm';
+  }
+
+  // Standalone 100+ YDS (e.g. 115 YDS or 100+ YDS)
   const genYdsMatch = s.match(/(\d+)\s*YDS?/);
-  if (genYdsMatch && parseInt(genYdsMatch[1], 10) >= 100) return 'gold';
-  return null;
+  if (genYdsMatch && parseInt(genYdsMatch[1], 10) >= 100) {
+    return 'text-amber-300 font-semibold bg-amber-950/80 border-amber-500/40 shadow-sm';
+  }
+
+  return 'text-slate-300 bg-[#141722] border-white/10';
+}
+
+/**
+ * Helper to compute offensive turnovers (interceptions + fumbles lost) for tie-breaking
+ */
+function getOffensiveTurnovers(p: FantasyPlayer): number {
+  let to = (p.stats?.interceptions ?? 0) + (p.stats?.fumblesLost ?? 0);
+  if (to === 0 && p.rawStatLine) {
+    const intMatch = p.rawStatLine.match(/(\d+)\s*INT/i);
+    if (intMatch && p.position === 'QB') to += parseInt(intMatch[1], 10);
+    const fumMatch = p.rawStatLine.match(/(\d+)\s*FUM/i);
+    if (fumMatch && p.position !== 'DEF') to += parseInt(fumMatch[1], 10);
+  }
+  return to;
+}
+
+/**
+ * Helper to compute offensive total touchdowns for tie-breaking
+ */
+function getOffensiveTotalTD(p: FantasyPlayer): number {
+  let td = (p.stats?.passingTouchdowns ?? 0) + (p.stats?.rushingTouchdowns ?? 0) + (p.stats?.receivingTouchdowns ?? 0) + (p.playerRawStats?.rushTD ?? 0) + (p.playerRawStats?.recTD ?? 0);
+  if (td === 0 && p.rawStatLine) {
+    const tdMatches = p.rawStatLine.match(/(\d+)\s*(?:PASS\s*TD|RUSH\s*TD|REC\s*TD|TD)/gi);
+    if (tdMatches) {
+      for (const m of tdMatches) {
+        const num = parseInt(m, 10);
+        if (!isNaN(num)) td += num;
+      }
+    }
+  }
+  return td;
+}
+
+/**
+ * Helper to compute offensive total yards for tie-breaking
+ */
+function getOffensiveTotalYards(p: FantasyPlayer): number {
+  let yds = (p.stats?.passingYards ?? 0) + (p.stats?.rushingYards ?? 0) + (p.stats?.receivingYards ?? 0) + (p.playerRawStats?.rushYds ?? 0) + (p.playerRawStats?.recYds ?? 0);
+  if (yds === 0 && p.rawStatLine) {
+    const ydsMatches = p.rawStatLine.match(/(\d+)\s*(?:PASS(?:ING)?\s*YDS?|RUSH(?:ING)?\s*YDS?|REC(?:EIVING)?\s*YDS?|YDS?)/gi);
+    if (ydsMatches) {
+      for (const m of ydsMatches) {
+        const num = parseInt(m, 10);
+        if (!isNaN(num)) yds += num;
+      }
+    }
+  }
+  return yds;
 }
 
 /**
@@ -1916,14 +1997,19 @@ export default function TVCommandCenter() {
           const sckB = b.stats?.sacks ?? 0;
           if (sckB !== sckA) return sckB - sckA;
         } else {
-          // Offensive Tie-breaker 1: Total touchdowns
-          const tdA = (a.stats?.passingTouchdowns ?? 0) + (a.stats?.rushingTouchdowns ?? 0) + (a.stats?.receivingTouchdowns ?? 0) + (a.playerRawStats?.rushTD ?? 0) + (a.playerRawStats?.recTD ?? 0);
-          const tdB = (b.stats?.passingTouchdowns ?? 0) + (b.stats?.rushingTouchdowns ?? 0) + (b.stats?.receivingTouchdowns ?? 0) + (b.playerRawStats?.rushTD ?? 0) + (b.playerRawStats?.recTD ?? 0);
+          // Offensive Tie-breaker 1: Total touchdowns (more TDs rank higher)
+          const tdA = getOffensiveTotalTD(a);
+          const tdB = getOffensiveTotalTD(b);
           if (tdB !== tdA) return tdB - tdA;
 
-          // Offensive Tie-breaker 2: Total yardage
-          const ydsA = (a.stats?.passingYards ?? 0) + (a.stats?.rushingYards ?? 0) + (a.stats?.receivingYards ?? 0) + (a.playerRawStats?.rushYds ?? 0) + (a.playerRawStats?.recYds ?? 0);
-          const ydsB = (b.stats?.passingYards ?? 0) + (b.stats?.rushingYards ?? 0) + (b.stats?.receivingYards ?? 0) + (b.playerRawStats?.rushYds ?? 0) + (b.playerRawStats?.recYds ?? 0);
+          // Offensive Tie-breaker 2: Fewer fumbles/interceptions (fewer turnovers rank higher)
+          const toA = getOffensiveTurnovers(a);
+          const toB = getOffensiveTurnovers(b);
+          if (toA !== toB) return toA - toB;
+
+          // Offensive Tie-breaker 3: Total yardage (more yards rank higher)
+          const ydsA = getOffensiveTotalYards(a);
+          const ydsB = getOffensiveTotalYards(b);
           if (ydsB !== ydsA) return ydsB - ydsA;
         }
 
@@ -1951,11 +2037,13 @@ export default function TVCommandCenter() {
             const sckPrev = prev.stats?.sacks ?? 0;
             tiedWithPrev = curPts === prevPts && paCur === paPrev && toCur === toPrev && sckCur === sckPrev;
           } else {
-            const tdCur = (cur.stats?.passingTouchdowns ?? 0) + (cur.stats?.rushingTouchdowns ?? 0) + (cur.stats?.receivingTouchdowns ?? 0) + (cur.playerRawStats?.rushTD ?? 0) + (cur.playerRawStats?.recTD ?? 0);
-            const tdPrev = (prev.stats?.passingTouchdowns ?? 0) + (prev.stats?.rushingTouchdowns ?? 0) + (prev.stats?.receivingTouchdowns ?? 0) + (prev.playerRawStats?.rushTD ?? 0) + (prev.playerRawStats?.recTD ?? 0);
-            const ydsCur = (cur.stats?.passingYards ?? 0) + (cur.stats?.rushingYards ?? 0) + (cur.stats?.receivingYards ?? 0) + (cur.playerRawStats?.rushYds ?? 0) + (cur.playerRawStats?.recYds ?? 0);
-            const ydsPrev = (prev.stats?.passingYards ?? 0) + (prev.stats?.rushingYards ?? 0) + (prev.stats?.receivingYards ?? 0) + (prev.playerRawStats?.rushYds ?? 0) + (prev.playerRawStats?.recYds ?? 0);
-            tiedWithPrev = curPts === prevPts && tdCur === tdPrev && ydsCur === ydsPrev;
+            const tdCur = getOffensiveTotalTD(cur);
+            const tdPrev = getOffensiveTotalTD(prev);
+            const toCur = getOffensiveTurnovers(cur);
+            const toPrev = getOffensiveTurnovers(prev);
+            const ydsCur = getOffensiveTotalYards(cur);
+            const ydsPrev = getOffensiveTotalYards(prev);
+            tiedWithPrev = curPts === prevPts && tdCur === tdPrev && toCur === toPrev && ydsCur === ydsPrev;
           }
         }
 
@@ -1972,11 +2060,13 @@ export default function TVCommandCenter() {
             const sckNext = next.stats?.sacks ?? 0;
             tiedWithNext = curPts === nextPts && paCur === paNext && toCur === toNext && sckCur === sckNext;
           } else {
-            const tdCur = (cur.stats?.passingTouchdowns ?? 0) + (cur.stats?.rushingTouchdowns ?? 0) + (cur.stats?.receivingTouchdowns ?? 0) + (cur.playerRawStats?.rushTD ?? 0) + (cur.playerRawStats?.recTD ?? 0);
-            const tdNext = (next.stats?.passingTouchdowns ?? 0) + (next.stats?.rushingTouchdowns ?? 0) + (next.stats?.receivingTouchdowns ?? 0) + (next.playerRawStats?.rushTD ?? 0) + (next.playerRawStats?.recTD ?? 0);
-            const ydsCur = (cur.stats?.passingYards ?? 0) + (cur.stats?.rushingYards ?? 0) + (cur.stats?.receivingYards ?? 0) + (cur.playerRawStats?.rushYds ?? 0) + (cur.playerRawStats?.recYds ?? 0);
-            const ydsNext = (next.stats?.passingYards ?? 0) + (next.stats?.rushingYards ?? 0) + (next.stats?.receivingYards ?? 0) + (next.playerRawStats?.rushYds ?? 0) + (next.playerRawStats?.recYds ?? 0);
-            tiedWithNext = curPts === nextPts && tdCur === tdNext && ydsCur === ydsNext;
+            const tdCur = getOffensiveTotalTD(cur);
+            const tdNext = getOffensiveTotalTD(next);
+            const toCur = getOffensiveTurnovers(cur);
+            const toNext = getOffensiveTurnovers(next);
+            const ydsCur = getOffensiveTotalYards(cur);
+            const ydsNext = getOffensiveTotalYards(next);
+            tiedWithNext = curPts === nextPts && tdCur === tdNext && toCur === toNext && ydsCur === ydsNext;
           }
         }
 
@@ -2309,7 +2399,7 @@ export default function TVCommandCenter() {
               src={game.awayTeam.logo}
               alt={game.awayTeam.abbreviation}
               className="w-5 h-5 object-contain team-logo-contrast"
-              style={{ filter: 'drop-shadow(0 0 2.5px rgba(255, 255, 255, 0.45))' }}
+              style={{ filter: 'drop-shadow(0 0 3px rgba(255, 255, 255, 0.75))' }}
               onError={(e) => {
                 (e.currentTarget as HTMLElement).style.display = 'none';
               }}
@@ -2370,7 +2460,7 @@ export default function TVCommandCenter() {
               src={game.homeTeam.logo}
               alt={game.homeTeam.abbreviation}
               className="w-5 h-5 object-contain team-logo-contrast"
-              style={{ filter: 'drop-shadow(0 0 2.5px rgba(255, 255, 255, 0.45))' }}
+              style={{ filter: 'drop-shadow(0 0 3px rgba(255, 255, 255, 0.75))' }}
               onError={(e) => {
                 (e.currentTarget as HTMLElement).style.display = 'none';
               }}
@@ -2784,10 +2874,10 @@ export default function TVCommandCenter() {
                   const isBoosted = boostedPlayers[player.id];
                   const owners = getOwnershipTags(player);
 
-                  // Split raw stat line by • or , into individual crisp pills
+                  // Split raw stat line by , or • into individual crisp pills
                   const statPills = player.rawStatLine
                     ? player.rawStatLine
-                        .split(/[•,]/)
+                        .split(/[,•]/)
                         .map((s) => s.trim())
                         .filter((s) => s.length > 0)
                     : [];
@@ -2804,17 +2894,30 @@ export default function TVCommandCenter() {
                       {/* Top Row: Position badge, larger headshot, Name, Clock, Matchup, and massive glowing Points */}
                       <div className="flex items-center justify-between gap-2.5">
                         <div className="flex items-center gap-3 min-w-0 flex-1">
-                          {/* Larger Player Headshot */}
-                          <div className="relative w-14 h-14 md:w-16 md:h-16 rounded-[4px] overflow-hidden bg-[#07080C] border border-white/10 shadow-md shrink-0">
-                            <img
-                              src={player.headshot}
-                              alt={player.name}
-                              className={`w-full h-full ${player.position === 'DEF' ? 'object-contain p-1.5 team-logo-contrast' : 'object-cover'}`}
-                              style={player.position === 'DEF' ? { filter: 'drop-shadow(0 0 2.5px rgba(255, 255, 255, 0.45))' } : undefined}
-                              onError={(e) => {
-                                (e.currentTarget as HTMLImageElement).src = player.team.logo;
-                              }}
-                            />
+                          {/* Larger Player Headshot Container */}
+                          <div className="relative w-14 h-14 md:w-16 md:h-16 shrink-0">
+                            <div className="w-full h-full rounded-[4px] overflow-hidden bg-[#07080C] border border-white/10 shadow-md">
+                              <img
+                                src={player.headshot}
+                                alt={player.name}
+                                className={`w-full h-full ${player.position === 'DEF' ? 'object-contain p-1.5 team-logo-contrast' : 'object-cover'}`}
+                                style={player.position === 'DEF' ? { filter: 'drop-shadow(0 0 2.5px rgba(255, 255, 255, 0.45))' } : undefined}
+                                onError={(e) => {
+                                  (e.currentTarget as HTMLImageElement).src = player.team.logo;
+                                }}
+                              />
+                            </div>
+                            {/* Miniature Team Logo in Corner - Hidden on DEF cards */}
+                            {player.position !== 'DEF' && (
+                              <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-zinc-900 ring-1 ring-zinc-700 p-0.5 z-10 flex items-center justify-center shadow-md">
+                                <img
+                                  src={player.team.logo}
+                                  alt={player.team.abbreviation}
+                                  className="w-full h-full object-contain team-logo-contrast"
+                                  style={{ filter: 'drop-shadow(0 0 2.5px rgba(255, 255, 255, 0.45))' }}
+                                />
+                              </div>
+                            )}
                           </div>
 
                           <div className="min-w-0 flex-1 flex flex-col justify-center gap-0.5">
@@ -2878,16 +2981,11 @@ export default function TVCommandCenter() {
                       <div className="flex flex-wrap gap-1.5 mt-2 pt-2 border-t border-white/10">
                         {statPills.length > 0 ? (
                           statPills.map((pill, pIdx) => {
-                            const impact = getHighImpactStatType(pill);
-                            const pillClass = impact === 'emerald'
-                              ? 'bg-emerald-950/80 text-emerald-400 border-emerald-500/50 font-semibold shadow-sm'
-                              : impact === 'gold'
-                              ? 'bg-amber-950/80 text-amber-300 border-amber-500/40 font-semibold shadow-sm'
-                              : 'bg-[#0E1017] text-slate-300 border-white/10';
+                            const pillClass = getStatSegmentClasses(pill, player.position);
                             return (
                               <span
                                 key={`pill-${player.id}-${pIdx}`}
-                                className={`px-2 py-0.5 rounded-[2px] text-[10px] md:text-[11px] font-mono-score font-bold tracking-wide uppercase border ${pillClass}`}
+                                className={`px-2 py-0.5 rounded-[2px] text-[10px] md:text-[11px] font-mono-score tracking-wide uppercase border ${pillClass}`}
                               >
                                 {pill}
                               </span>
@@ -4253,20 +4351,22 @@ function renderLeaderboardCard(
           <span>{rankDisplay}</span>
         </div>
 
-        {/* Headshot / Team Logo */}
-        <div className="relative w-10 h-10 rounded-[2px] overflow-hidden bg-[#07080C] border border-white/10 shrink-0">
-          <img
-            src={player.headshot}
-            alt={player.name}
-            className={`w-full h-full ${player.position === 'DEF' ? 'object-contain p-1 team-logo-contrast' : 'object-cover'}`}
-            style={player.position === 'DEF' ? { filter: 'drop-shadow(0 0 2.5px rgba(255, 255, 255, 0.45))' } : undefined}
-            onError={(e) => {
-              (e.currentTarget as HTMLImageElement).src = player.team.logo;
-            }}
-          />
+        {/* Headshot / Team Logo Container */}
+        <div className="relative w-10 h-10 shrink-0">
+          <div className="w-full h-full rounded-[2px] overflow-hidden bg-[#07080C] border border-white/10">
+            <img
+              src={player.headshot}
+              alt={player.name}
+              className={`w-full h-full ${player.position === 'DEF' ? 'object-contain p-1 team-logo-contrast' : 'object-cover'}`}
+              style={player.position === 'DEF' ? { filter: 'drop-shadow(0 0 2.5px rgba(255, 255, 255, 0.45))' } : undefined}
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).src = player.team.logo;
+              }}
+            />
+          </div>
           {/* Miniature Team Logo in Corner - Hidden on DEF cards since primary avatar is already the team logo */}
           {player.position !== 'DEF' && (
-            <div className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-[2px] bg-[#07080C] p-0.5 border border-white/10">
+            <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-zinc-900 ring-1 ring-zinc-700 p-0.5 z-10 flex items-center justify-center shadow-md">
               <img
                 src={player.team.logo}
                 alt={player.team.abbreviation}
@@ -4349,20 +4449,15 @@ function renderLeaderboardCard(
           <div className="mt-0.5 flex flex-wrap gap-1">
             {player.rawStatLine ? (
               player.rawStatLine
-                .split(/[•,]/)
+                .split(/[,•]/)
                 .map((s) => s.trim())
                 .filter((s) => s.length > 0)
                 .map((seg, sIdx) => {
-                  const impact = getHighImpactStatType(seg);
-                  const segClass = impact === 'emerald'
-                    ? 'text-emerald-400 font-semibold bg-emerald-950/80 border-emerald-500/40'
-                    : impact === 'gold'
-                    ? 'text-amber-300 font-semibold bg-amber-950/80 border-amber-500/40'
-                    : 'text-slate-300 bg-[#141722] border-white/10';
+                  const segClass = getStatSegmentClasses(seg, player.position);
                   return (
                     <span
                       key={`stat-${player.id}-${sIdx}`}
-                      className={`inline-block px-1.5 py-0.2 rounded-[2px] border text-[10px] md:text-[11px] font-mono-score font-bold whitespace-nowrap ${segClass}`}
+                      className={`inline-block px-1.5 py-0.2 rounded-[2px] border text-[10px] md:text-[11px] font-mono-score whitespace-nowrap ${segClass}`}
                     >
                       {seg}
                     </span>
