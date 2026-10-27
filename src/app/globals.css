@@ -23,6 +23,10 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+.team-logo-contrast {
+  filter: drop-shadow(0 0 2.5px rgba(255, 255, 255, 0.45));
+}
+
 /* Custom scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
@@ -118,6 +122,10 @@ body {
   transform: translate3d(0, 0, 0);
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
+}
+
+.scoreboard-ticker-track:hover {
+  animation-play-state: paused;
 }
 
 @keyframes marquee-scroll {

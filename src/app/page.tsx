@@ -97,6 +97,89 @@ const TABS: { id: MainTab; label: string }[] = [
   { id: 'bets', label: 'SPORTSBOOK' },
 ];
 
+/**
+ * Detect high-impact stat segments (TDs, INTs, FRs, 300+ PASS, 100+ RUSH/REC/YDS)
+ */
+function getHighImpactStatType(segment: string): 'emerald' | 'gold' | null {
+  const s = segment.toUpperCase().trim();
+  // Any TD (e.g. 2 PASS TD, 1 RUSH TD, 3 TD, TOUCHDOWN)
+  if (/\b\d*\s*TD\b|\bTOUCHDOWN\b/.test(s)) return 'emerald';
+  // Turnovers / Defensive big plays (INT, FR, FUM REC, SAFETY, D/ST TD)
+  if (/\bINT\b|\bFR\b|\bFUM\b|\bSAFETY\b/.test(s)) return 'emerald';
+  // Big yardage: 300+ PASS or 300+ YDS
+  const passYdsMatch = s.match(/(\d+)\s*(?:PASS(?:ING)?(?:\s*YDS?)?|YDS?\s*PASS)/);
+  if (passYdsMatch && parseInt(passYdsMatch[1], 10) >= 300) return 'gold';
+  // 100+ RUSH or 100+ REC or standalone 100+ YDS
+  const rushMatch = s.match(/(\d+)\s*(?:RUSH(?:ING)?(?:\s*YDS?)?|YDS?\s*RUSH)/);
+  if (rushMatch && parseInt(rushMatch[1], 10) >= 100) return 'gold';
+  const recMatch = s.match(/(\d+)\s*(?:REC(?:EIVING)?(?:\s*YDS?)?|YDS?\s*REC)/);
+  if (recMatch && parseInt(recMatch[1], 10) >= 100) return 'gold';
+  // Standalone general yardage (e.g. 124 YDS)
+  const genYdsMatch = s.match(/(\d+)\s*YDS?/);
+  if (genYdsMatch && parseInt(genYdsMatch[1], 10) >= 100) return 'gold';
+  return null;
+}
+
+/**
+ * Returns dynamic scoring unit label (PPR PTS, HALF PTS, STD PTS) with DEF & K locked to STD PTS
+ */
+function getScoringUnitLabel(pos: FantasyPosition, format: ScoringFormat, isProjection?: boolean): string {
+  const prefix = isProjection ? 'PROJ ' : '';
+  if (pos === 'DEF' || pos === 'K') {
+    return `${prefix}STD PTS`;
+  }
+  if (format === 'ppr') return `${prefix}PPR PTS`;
+  if (format === 'halfPpr') return `${prefix}HALF PTS`;
+  return `${prefix}STD PTS`;
+}
+
+/**
+ * Clean play description: strip noisy formation tags ((Shotgun), (No Huddle))
+ * and bold player names, yardage gains, and TOUCHDOWN
+ */
+function renderCleanPlayDescription(raw: string): React.ReactNode {
+  if (!raw) return null;
+  const cleaned = raw.replace(/\((?:No Huddle, Shotgun|Shotgun, No Huddle|Shotgun|No Huddle)\)\s*/gi, '').trim();
+  const regex = /(\b[A-Z]\.[A-Za-z'-]+\b|\b\d+ yards?\b|TOUCHDOWN)/g;
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  let keyIdx = 0;
+
+  while ((match = regex.exec(cleaned)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(cleaned.slice(lastIndex, match.index));
+    }
+    const val = match[0];
+    if (val === 'TOUCHDOWN') {
+      parts.push(
+        <span key={`td-${keyIdx++}`} className="font-extrabold text-emerald-400 tracking-wide">
+          TOUCHDOWN
+        </span>
+      );
+    } else if (/\b\d+ yards?\b/.test(val)) {
+      parts.push(
+        <span key={`yd-${keyIdx++}`} className="font-bold text-amber-300 font-mono-score">
+          {val}
+        </span>
+      );
+    } else {
+      parts.push(
+        <span key={`p-${keyIdx++}`} className="font-bold text-white">
+          {val}
+        </span>
+      );
+    }
+    lastIndex = regex.lastIndex;
+  }
+
+  if (lastIndex < cleaned.length) {
+    parts.push(cleaned.slice(lastIndex));
+  }
+
+  return parts;
+}
+
 interface PointBurstAlert {
   id: string;
   playerName: string;
@@ -883,6 +966,13 @@ export default function TVCommandCenter() {
   const [gameFilterMode, setGameFilterMode] = useState<'live' | 'all'>('live');
   const [hasUserToggledFilter, setHasUserToggledFilter] = useState(false);
 
+  // Interactive Game Filter: clicking a game card in top ticker filters feed & leaderboards
+  const [selectedTickerGameId, setSelectedTickerGameId] = useState<string | null>(null);
+  // Quick play-type filter pills in the Live Scoring Feed header
+  const [playTypeFilter, setPlayTypeFilter] = useState<'ALL' | 'TDs' | 'BIG PLAYS' | 'TURNOVERS' | 'REDZONE'>('ALL');
+  // Auto-pause cycle on hover
+  const [isHoveringMain, setIsHoveringMain] = useState(false);
+
   // Modal State
   const [isManageModalOpen, setIsManageModalOpen] = useState(false);
   const [isBetsModalOpen, setIsBetsModalOpen] = useState(false);
@@ -1593,16 +1683,16 @@ export default function TVCommandCenter() {
     return () => clearInterval(cleaner);
   }, []);
 
-  // Auto-Cycle TV Mode (cycles every 18 seconds)
+  // Auto-Cycle TV Mode (cycles every 18 seconds, pauses while hovering main area)
   useEffect(() => {
-    if (!autoCycle) {
-      setCycleProgress(0);
+    if (!autoCycle || isHoveringMain) {
+      if (!autoCycle) setCycleProgress(0);
       return;
     }
 
     const stepMs = 200;
     const totalSteps = (CYCLE_DURATION_SEC * 1000) / stepMs;
-    let stepCount = 0;
+    let stepCount = Math.round((cycleProgress / 100) * totalSteps);
 
     const cycleInterval = setInterval(() => {
       stepCount++;
@@ -1622,7 +1712,7 @@ export default function TVCommandCenter() {
     }, stepMs);
 
     return () => clearInterval(cycleInterval);
-  }, [autoCycle, savedBets]);
+  }, [autoCycle, isHoveringMain, savedBets]);
 
   // Live Games Count across all scoreboard events
   const liveGamesCount = useMemo(() => {
@@ -1766,10 +1856,20 @@ export default function TVCommandCenter() {
     return list.slice(0, 100);
   }, [allActivePlayers, data?.games, bettingSearch, bettingGameFilter, bettingPosFilter]);
 
-  // Sort leaderboards by active scoring format and filter by game state
+  // Interactive Game Filter toggle from Scoreboard Ticker
+  const handleToggleTickerGame = useCallback((gameId: string) => {
+    setSelectedTickerGameId((prev) => (prev === gameId ? null : gameId));
+  }, []);
+
+  const selectedTickerGame = useMemo(() => {
+    if (!selectedTickerGameId || !data?.games) return null;
+    return data.games.find((g) => g.id === selectedTickerGameId) || null;
+  }, [selectedTickerGameId, data?.games]);
+
+  // Sort leaderboards by active scoring format, game filter, and tie-breakers
   const sortedLeaderboards = useMemo(() => {
     if (!data?.leaderboards) return null;
-    const result: Record<FantasyPosition, FantasyPlayer[]> = {
+    const result: Record<FantasyPosition, Array<{ player: FantasyPlayer; nominalRank: number; rankDisplay: string; isTied: boolean }>> = {
       QB: [],
       RB: [],
       WR: [],
@@ -1784,25 +1884,165 @@ export default function TVCommandCenter() {
       if (gameFilterMode === 'live' && !data?.isProjectionsMode) {
         list = list.filter((p) => p.isGameLive === true || p.isLive === true);
       }
+      // If interactive game filter is active, filter by that specific game
+      if (selectedTickerGame) {
+        const away = selectedTickerGame.awayTeam.abbreviation.toUpperCase();
+        const home = selectedTickerGame.homeTeam.abbreviation.toUpperCase();
+        list = list.filter((p) => {
+          const pTeam = p.team?.abbreviation?.toUpperCase();
+          const pOpp = p.opponent?.abbreviation?.toUpperCase();
+          return pTeam === away || pTeam === home || pOpp === away || pOpp === home;
+        });
+      }
+
       list.sort((a, b) => {
         const ptsB = b.points[scoringFormat] ?? 0;
         const ptsA = a.points[scoringFormat] ?? 0;
         if (ptsB !== ptsA) return ptsB - ptsA;
+
+        if (pos === 'DEF') {
+          // DEF Tie-breaker 1: Fewest points allowed
+          const paA = a.stats?.pointsAllowed ?? 999;
+          const paB = b.stats?.pointsAllowed ?? 999;
+          if (paA !== paB) return paA - paB;
+
+          // DEF Tie-breaker 2: Most Turnovers
+          const toA = (a.stats?.defensiveInterceptions ?? 0) + (a.stats?.fumblesRecovered ?? 0);
+          const toB = (b.stats?.defensiveInterceptions ?? 0) + (b.stats?.fumblesRecovered ?? 0);
+          if (toB !== toA) return toB - toA;
+
+          // DEF Tie-breaker 3: Most Sacks
+          const sckA = a.stats?.sacks ?? 0;
+          const sckB = b.stats?.sacks ?? 0;
+          if (sckB !== sckA) return sckB - sckA;
+        } else {
+          // Offensive Tie-breaker 1: Total touchdowns
+          const tdA = (a.stats?.passingTouchdowns ?? 0) + (a.stats?.rushingTouchdowns ?? 0) + (a.stats?.receivingTouchdowns ?? 0) + (a.playerRawStats?.rushTD ?? 0) + (a.playerRawStats?.recTD ?? 0);
+          const tdB = (b.stats?.passingTouchdowns ?? 0) + (b.stats?.rushingTouchdowns ?? 0) + (b.stats?.receivingTouchdowns ?? 0) + (b.playerRawStats?.rushTD ?? 0) + (b.playerRawStats?.recTD ?? 0);
+          if (tdB !== tdA) return tdB - tdA;
+
+          // Offensive Tie-breaker 2: Total yardage
+          const ydsA = (a.stats?.passingYards ?? 0) + (a.stats?.rushingYards ?? 0) + (a.stats?.receivingYards ?? 0) + (a.playerRawStats?.rushYds ?? 0) + (a.playerRawStats?.recYds ?? 0);
+          const ydsB = (b.stats?.passingYards ?? 0) + (b.stats?.rushingYards ?? 0) + (b.stats?.receivingYards ?? 0) + (b.playerRawStats?.rushYds ?? 0) + (b.playerRawStats?.recYds ?? 0);
+          if (ydsB !== ydsA) return ydsB - ydsA;
+        }
+
         return a.name.localeCompare(b.name);
       });
-      result[pos] = list.slice(0, 10); // Strictly Top 10 for TV View
+
+      // Compute tied ranks
+      const top10 = list.slice(0, 10);
+      const ranked: Array<{ player: FantasyPlayer; nominalRank: number; rankDisplay: string; isTied: boolean }> = [];
+
+      for (let i = 0; i < top10.length; i++) {
+        const cur = top10[i];
+        const curPts = cur.points?.[scoringFormat] ?? 0;
+
+        let tiedWithPrev = false;
+        if (i > 0) {
+          const prev = top10[i - 1];
+          const prevPts = prev.points?.[scoringFormat] ?? 0;
+          if (pos === 'DEF') {
+            const paCur = cur.stats?.pointsAllowed ?? 999;
+            const paPrev = prev.stats?.pointsAllowed ?? 999;
+            const toCur = (cur.stats?.defensiveInterceptions ?? 0) + (cur.stats?.fumblesRecovered ?? 0);
+            const toPrev = (prev.stats?.defensiveInterceptions ?? 0) + (prev.stats?.fumblesRecovered ?? 0);
+            const sckCur = cur.stats?.sacks ?? 0;
+            const sckPrev = prev.stats?.sacks ?? 0;
+            tiedWithPrev = curPts === prevPts && paCur === paPrev && toCur === toPrev && sckCur === sckPrev;
+          } else {
+            const tdCur = (cur.stats?.passingTouchdowns ?? 0) + (cur.stats?.rushingTouchdowns ?? 0) + (cur.stats?.receivingTouchdowns ?? 0) + (cur.playerRawStats?.rushTD ?? 0) + (cur.playerRawStats?.recTD ?? 0);
+            const tdPrev = (prev.stats?.passingTouchdowns ?? 0) + (prev.stats?.rushingTouchdowns ?? 0) + (prev.stats?.receivingTouchdowns ?? 0) + (prev.playerRawStats?.rushTD ?? 0) + (prev.playerRawStats?.recTD ?? 0);
+            const ydsCur = (cur.stats?.passingYards ?? 0) + (cur.stats?.rushingYards ?? 0) + (cur.stats?.receivingYards ?? 0) + (cur.playerRawStats?.rushYds ?? 0) + (cur.playerRawStats?.recYds ?? 0);
+            const ydsPrev = (prev.stats?.passingYards ?? 0) + (prev.stats?.rushingYards ?? 0) + (prev.stats?.receivingYards ?? 0) + (prev.playerRawStats?.rushYds ?? 0) + (prev.playerRawStats?.recYds ?? 0);
+            tiedWithPrev = curPts === prevPts && tdCur === tdPrev && ydsCur === ydsPrev;
+          }
+        }
+
+        let tiedWithNext = false;
+        if (i < top10.length - 1) {
+          const next = top10[i + 1];
+          const nextPts = next.points?.[scoringFormat] ?? 0;
+          if (pos === 'DEF') {
+            const paCur = cur.stats?.pointsAllowed ?? 999;
+            const paNext = next.stats?.pointsAllowed ?? 999;
+            const toCur = (cur.stats?.defensiveInterceptions ?? 0) + (cur.stats?.fumblesRecovered ?? 0);
+            const toNext = (next.stats?.defensiveInterceptions ?? 0) + (next.stats?.fumblesRecovered ?? 0);
+            const sckCur = cur.stats?.sacks ?? 0;
+            const sckNext = next.stats?.sacks ?? 0;
+            tiedWithNext = curPts === nextPts && paCur === paNext && toCur === toNext && sckCur === sckNext;
+          } else {
+            const tdCur = (cur.stats?.passingTouchdowns ?? 0) + (cur.stats?.rushingTouchdowns ?? 0) + (cur.stats?.receivingTouchdowns ?? 0) + (cur.playerRawStats?.rushTD ?? 0) + (cur.playerRawStats?.recTD ?? 0);
+            const tdNext = (next.stats?.passingTouchdowns ?? 0) + (next.stats?.rushingTouchdowns ?? 0) + (next.stats?.receivingTouchdowns ?? 0) + (next.playerRawStats?.rushTD ?? 0) + (next.playerRawStats?.recTD ?? 0);
+            const ydsCur = (cur.stats?.passingYards ?? 0) + (cur.stats?.rushingYards ?? 0) + (cur.stats?.receivingYards ?? 0) + (cur.playerRawStats?.rushYds ?? 0) + (cur.playerRawStats?.recYds ?? 0);
+            const ydsNext = (next.stats?.passingYards ?? 0) + (next.stats?.rushingYards ?? 0) + (next.stats?.receivingYards ?? 0) + (next.playerRawStats?.rushYds ?? 0) + (next.playerRawStats?.recYds ?? 0);
+            tiedWithNext = curPts === nextPts && tdCur === tdNext && ydsCur === ydsNext;
+          }
+        }
+
+        let nominalRank = i + 1;
+        if (tiedWithPrev && ranked.length > 0) {
+          nominalRank = ranked[i - 1].nominalRank;
+        }
+
+        const isTied = tiedWithPrev || tiedWithNext;
+        const rankDisplay = isTied ? `T-${nominalRank}` : String(nominalRank);
+
+        ranked.push({
+          player: cur,
+          nominalRank,
+          rankDisplay,
+          isTied,
+        });
+      }
+
+      result[pos] = ranked;
     }
     return result;
-  }, [data, scoringFormat, gameFilterMode]);
+  }, [data, scoringFormat, gameFilterMode, selectedTickerGame]);
 
-  // Filter Live Updates feed by game state
+  // Filter Live Updates feed by game state, interactive selected game, and play type
   const filteredLiveUpdates = useMemo(() => {
     if (!data?.liveUpdates) return [];
+    let list = data.liveUpdates;
     if (gameFilterMode === 'live') {
-      return data.liveUpdates.filter((u) => u.isGameLive === true);
+      list = list.filter((u) => u.isGameLive === true);
     }
-    return data.liveUpdates;
-  }, [data?.liveUpdates, gameFilterMode]);
+    if (selectedTickerGame) {
+      const away = selectedTickerGame.awayTeam.abbreviation.toUpperCase();
+      const home = selectedTickerGame.homeTeam.abbreviation.toUpperCase();
+      list = list.filter((u) => {
+        const teamAbbr = u.team?.abbreviation?.toUpperCase();
+        if (teamAbbr === away || teamAbbr === home) return true;
+        if (u.possessionTeamAbbr && (u.possessionTeamAbbr.toUpperCase() === away || u.possessionTeamAbbr.toUpperCase() === home)) return true;
+        if (u.gameName) {
+          const gn = u.gameName.toUpperCase();
+          if (gn.includes(away) || gn.includes(home)) return true;
+        }
+        return false;
+      });
+    }
+    if (playTypeFilter !== 'ALL') {
+      list = list.filter((u) => {
+        const headlineUpper = u.headline?.toUpperCase() || '';
+        const descUpper = u.description?.toUpperCase() || '';
+        if (playTypeFilter === 'TDs') {
+          return u.type === 'touchdown' || headlineUpper.includes('TD') || headlineUpper.includes('TOUCHDOWN');
+        }
+        if (playTypeFilter === 'BIG PLAYS') {
+          return u.type === 'big-play' || headlineUpper.includes('BIG PLAY') || headlineUpper.includes('LONG') || descUpper.includes('BIG PLAY');
+        }
+        if (playTypeFilter === 'TURNOVERS') {
+          return u.type === 'turnover' || headlineUpper.includes('TURNOVER') || headlineUpper.includes('INT') || headlineUpper.includes('FUMBLE') || descUpper.includes('INTERCEPTED') || descUpper.includes('FUMBLES');
+        }
+        if (playTypeFilter === 'REDZONE') {
+          return headlineUpper.includes('RED ZONE') || descUpper.includes('RED ZONE') || (u.downDistanceText && u.downDistanceText.toUpperCase().includes('RZ'));
+        }
+        return true;
+      });
+    }
+    return list;
+  }, [data?.liveUpdates, gameFilterMode, selectedTickerGame, playTypeFilter]);
 
   // Living Room Friends Leaderboard (Tab 8)
   const roomFriendsLeaderboard = useMemo(() => {
@@ -1953,6 +2193,13 @@ export default function TVCommandCenter() {
       return 0;
     });
 
+    // Sort non-live games: upcoming ('pre') games first, followed by completed ('post') games
+    nonLive.sort((a, b) => {
+      const aPre = a.status.state === 'pre' ? 0 : 1;
+      const bPre = b.status.state === 'pre' ? 0 : 1;
+      return aPre - bPre;
+    });
+
     return { pinnedLiveGames: live, scrollingGames: nonLive, hasActiveRedZone: rzFound };
   }, [data?.games]);
 
@@ -1971,6 +2218,7 @@ export default function TVCommandCenter() {
     const isLive = game.status?.state === 'in' || (game as unknown as { status: string }).status === 'in' || Boolean((game as unknown as { isLive: boolean }).isLive);
     const isRedZone = isLive && Boolean(game.isRedZone || game.situation?.isRedZone);
     const isPost = game.status?.state === 'post';
+    const isSelected = selectedTickerGameId === game.id;
     const possessionAbbr = game.possessionTeamAbbr || game.situation?.possessionTeamAbbr;
     const hasPossessionAway = isLive && possessionAbbr === game.awayTeam.abbreviation;
     const hasPossessionHome = isLive && possessionAbbr === game.homeTeam.abbreviation;
@@ -2014,12 +2262,16 @@ export default function TVCommandCenter() {
 
     return (
       <div
-        className={`relative flex items-center gap-2 px-2 py-1 rounded-xl bg-slate-900/90 border transition-all shrink-0 min-w-[200px] ${
-          isRedZone
-            ? 'border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.7)] animate-redzone bg-gradient-to-r from-red-950/40 to-slate-900'
+        onClick={() => handleToggleTickerGame(game.id)}
+        title={isSelected ? 'Active Filter: Click to reset to ALL GAMES' : `Click to filter: ${game.awayTeam.abbreviation} vs ${game.homeTeam.abbreviation}`}
+        className={`relative flex items-center gap-2 px-2 py-1 rounded-xl bg-slate-900/90 border transition-all shrink-0 min-w-[200px] cursor-pointer select-none ${
+          isSelected
+            ? 'border-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.65)] ring-2 ring-amber-400/80 bg-gradient-to-r from-amber-950/40 via-slate-900 to-amber-950/30'
+            : isRedZone
+            ? 'border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.7)] animate-redzone bg-gradient-to-r from-red-950/40 to-slate-900 hover:border-red-400'
             : isLive
-            ? 'border-emerald-500/60 shadow-[0_0_12px_rgba(16,185,129,0.35)] bg-gradient-to-r from-emerald-950/30 via-slate-900 to-amber-950/20'
-            : 'border-slate-800/80'
+            ? 'border-emerald-500/60 shadow-[0_0_12px_rgba(16,185,129,0.35)] bg-gradient-to-r from-emerald-950/30 via-slate-900 to-amber-950/20 hover:border-emerald-400'
+            : 'border-slate-800/80 hover:border-slate-600 hover:bg-slate-800/40'
         }`}
       >
         {/* Red Zone Badge Alert on card */}
@@ -2056,7 +2308,8 @@ export default function TVCommandCenter() {
             <img
               src={game.awayTeam.logo}
               alt={game.awayTeam.abbreviation}
-              className="w-5 h-5 object-contain"
+              className="w-5 h-5 object-contain team-logo-contrast"
+              style={{ filter: 'drop-shadow(0 0 2.5px rgba(255, 255, 255, 0.45))' }}
               onError={(e) => {
                 (e.currentTarget as HTMLElement).style.display = 'none';
               }}
@@ -2116,7 +2369,8 @@ export default function TVCommandCenter() {
             <img
               src={game.homeTeam.logo}
               alt={game.homeTeam.abbreviation}
-              className="w-5 h-5 object-contain"
+              className="w-5 h-5 object-contain team-logo-contrast"
+              style={{ filter: 'drop-shadow(0 0 2.5px rgba(255, 255, 255, 0.45))' }}
               onError={(e) => {
                 (e.currentTarget as HTMLElement).style.display = 'none';
               }}
@@ -2140,7 +2394,7 @@ export default function TVCommandCenter() {
         </div>
       </div>
     );
-  }, []);
+  }, [selectedTickerGameId, handleToggleTickerGame]);
 
   return (
     <div className="flex flex-col h-screen max-h-screen w-screen bg-[#07080C] text-slate-100 select-none overflow-hidden font-condensed justify-between pb-14">
@@ -2288,12 +2542,15 @@ export default function TVCommandCenter() {
             onClick={() => setAutoCycle(!autoCycle)}
             className={`flex items-center gap-1.5 px-2.5 py-1 rounded-[4px] text-xs font-condensed font-bold uppercase transition-colors border ${
               autoCycle
-                ? 'bg-cyan-500/15 border-cyan-500/40 text-cyan-300'
+                ? isHoveringMain
+                  ? 'bg-amber-500/15 border-amber-500/40 text-amber-300'
+                  : 'bg-cyan-500/15 border-cyan-500/40 text-cyan-300'
                 : 'bg-[#141722] border-white/10 text-slate-400 hover:text-slate-200'
             }`}
+            title={autoCycle ? (isHoveringMain ? 'Cycle paused while hovering content' : 'Cycle is active') : 'Cycle is paused'}
           >
-            <Tv className={`w-3.5 h-3.5 ${autoCycle ? 'text-cyan-400' : 'text-slate-500'}`} />
-            <span>CYCLE: {autoCycle ? 'ON' : 'PAUSED'}</span>
+            <Tv className={`w-3.5 h-3.5 ${autoCycle ? (isHoveringMain ? 'text-amber-400' : 'text-cyan-400') : 'text-slate-500'}`} />
+            <span>CYCLE: {autoCycle ? (isHoveringMain ? 'PAUSED (HOVER)' : 'ON') : 'PAUSED'}</span>
           </button>
 
           {/* Center/Right Sync Countdown */}
@@ -2419,7 +2676,11 @@ export default function TVCommandCenter() {
       </nav>
 
       {/* 5. MAIN CONTENT AREA (Fills 100% of the Available Viewport Without Scrolling) */}
-      <main className={`flex-1 overflow-hidden flex flex-col min-h-0 ${activeTab === 'live' ? 'px-4 py-2' : 'p-3 md:p-4'}`}>
+      <main
+        onMouseEnter={() => setIsHoveringMain(true)}
+        onMouseLeave={() => setIsHoveringMain(false)}
+        className={`flex-1 overflow-hidden flex flex-col min-h-0 ${activeTab === 'live' ? 'px-4 py-2' : 'p-3 md:p-4'}`}
+      >
         {loading && !data ? (
           <div className="flex-1 flex flex-col items-center justify-center gap-2">
             <RefreshCw className="w-8 h-8 animate-spin text-emerald-400" />
@@ -2445,21 +2706,37 @@ export default function TVCommandCenter() {
                       ? '#1 OVERALL STUDS RIGHT NOW'
                       : '#1 OVERALL STUDS (ALL GAMES)'}
                   </h2>
-                  <span
-                    className={`text-[9px] font-condensed font-bold uppercase px-1.5 py-0.2 rounded-[2px] ${
-                      data?.isProjectionsMode
-                        ? 'bg-cyan-950/80 text-cyan-300 border border-cyan-500/40'
+                  {selectedTickerGame ? (
+                    <span className="inline-flex items-center gap-1 text-[9px] font-condensed font-bold uppercase px-1.5 py-0.2 rounded-[2px] bg-amber-500/20 text-amber-300 border border-amber-400/50 shadow-sm">
+                      <span>{selectedTickerGame.awayTeam.abbreviation} @ {selectedTickerGame.homeTeam.abbreviation}</span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedTickerGameId(null);
+                        }}
+                        className="ml-0.5 hover:text-white text-amber-400 transition-colors"
+                        title="Clear Game Filter"
+                      >
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                    </span>
+                  ) : (
+                    <span
+                      className={`text-[9px] font-condensed font-bold uppercase px-1.5 py-0.2 rounded-[2px] ${
+                        data?.isProjectionsMode
+                          ? 'bg-cyan-950/80 text-cyan-300 border border-cyan-500/40'
+                          : gameFilterMode === 'live'
+                          ? 'bg-red-950/80 text-red-300 border border-red-500/40'
+                          : 'bg-white/10 text-slate-300 border border-white/15'
+                      }`}
+                    >
+                      {data?.isProjectionsMode
+                        ? 'ESPN PROJECTIONS'
                         : gameFilterMode === 'live'
-                        ? 'bg-red-950/80 text-red-300 border border-red-500/40'
-                        : 'bg-white/10 text-slate-300 border border-white/15'
-                    }`}
-                  >
-                    {data?.isProjectionsMode
-                      ? 'ESPN PROJECTIONS'
-                      : gameFilterMode === 'live'
-                      ? 'LIVE IN-PROGRESS'
-                      : 'ALL GAMES'}
-                  </span>
+                        ? 'LIVE IN-PROGRESS'
+                        : 'ALL GAMES'}
+                    </span>
+                  )}
                 </div>
 
                 <span className="text-[11px] font-condensed font-bold text-[#00E676] uppercase tracking-wider">
@@ -2477,7 +2754,8 @@ export default function TVCommandCenter() {
                   { pos: 'DEF' as FantasyPosition, label: 'TOP DEF' },
                   { pos: 'K' as FantasyPosition, label: 'TOP K' },
                 ].map(({ pos, label }) => {
-                  const player = sortedLeaderboards?.[pos]?.[0];
+                  const topEntry = sortedLeaderboards?.[pos]?.[0];
+                  const player = topEntry?.player;
 
                   if (!player) {
                     return (
@@ -2531,7 +2809,8 @@ export default function TVCommandCenter() {
                             <img
                               src={player.headshot}
                               alt={player.name}
-                              className="w-full h-full object-cover"
+                              className={`w-full h-full ${player.position === 'DEF' ? 'object-contain p-1.5 team-logo-contrast' : 'object-cover'}`}
+                              style={player.position === 'DEF' ? { filter: 'drop-shadow(0 0 2.5px rgba(255, 255, 255, 0.45))' } : undefined}
                               onError={(e) => {
                                 (e.currentTarget as HTMLImageElement).src = player.team.logo;
                               }}
@@ -2590,7 +2869,7 @@ export default function TVCommandCenter() {
                             {formatPoints(pts)}
                           </span>
                           <span className="text-[9px] font-condensed font-bold uppercase text-slate-400 tracking-widest mt-1">
-                            {player.isProjection ? `PROJ ${scoringFormat.toUpperCase()}` : `${scoringFormat.toUpperCase()} PTS`}
+                            {getScoringUnitLabel(pos, scoringFormat, player.isProjection)}
                           </span>
                         </div>
                       </div>
@@ -2599,18 +2878,16 @@ export default function TVCommandCenter() {
                       <div className="flex flex-wrap gap-1.5 mt-2 pt-2 border-t border-white/10">
                         {statPills.length > 0 ? (
                           statPills.map((pill, pIdx) => {
-                            const isTD = pill.toUpperCase().includes('TD');
-                            const isTurnover = pill.toUpperCase().includes('INT') || pill.toUpperCase().includes('FUM');
+                            const impact = getHighImpactStatType(pill);
+                            const pillClass = impact === 'emerald'
+                              ? 'bg-emerald-950/80 text-emerald-400 border-emerald-500/50 font-semibold shadow-sm'
+                              : impact === 'gold'
+                              ? 'bg-amber-950/80 text-amber-300 border-amber-500/40 font-semibold shadow-sm'
+                              : 'bg-[#0E1017] text-slate-300 border-white/10';
                             return (
                               <span
                                 key={`pill-${player.id}-${pIdx}`}
-                                className={`px-2 py-0.5 rounded-[2px] text-[10px] md:text-[11px] font-mono-score font-bold tracking-wide uppercase border ${
-                                  isTD
-                                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50'
-                                    : isTurnover
-                                    ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
-                                    : 'bg-[#0E1017] text-slate-200 border-white/10'
-                                }`}
+                                className={`px-2 py-0.5 rounded-[2px] text-[10px] md:text-[11px] font-mono-score font-bold tracking-wide uppercase border ${pillClass}`}
                               >
                                 {pill}
                               </span>
@@ -2630,30 +2907,68 @@ export default function TVCommandCenter() {
 
             {/* RIGHT 4 COLUMNS: VERTICAL LIVE SCORING & BIG PLAYS FEED */}
             <div className="col-span-12 lg:col-span-4 flex flex-col h-full bg-[#0E1017] rounded-[4px] border border-white/10 p-3 overflow-hidden shadow-xl min-h-0">
-              <div className="flex items-center justify-between pb-2 border-b border-white/10 shrink-0">
-                <div className="flex items-center gap-2">
-                  <Zap className="w-4 h-4 text-amber-400" />
-                  <h2 className="text-xs md:text-sm font-condensed font-bold tracking-wide uppercase text-white">
-                    LIVE SCORING &amp; BIG PLAYS FEED
-                  </h2>
-                  <span
-                    className={`text-[9px] font-condensed font-bold uppercase px-1.5 py-0.2 rounded-[2px] ${
-                      gameFilterMode === 'live'
-                        ? 'bg-red-950/80 text-red-300 border border-red-500/40'
-                        : 'bg-white/10 text-slate-300 border border-white/15'
-                    }`}
-                  >
-                    {gameFilterMode === 'live' ? 'LIVE' : 'ALL'}
-                  </span>
+              <div className="flex flex-col gap-1.5 pb-2 border-b border-white/10 shrink-0">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Zap className="w-4 h-4 text-amber-400" />
+                    <h2 className="text-xs md:text-sm font-condensed font-bold tracking-wide uppercase text-white">
+                      LIVE SCORING &amp; BIG PLAYS FEED
+                    </h2>
+                    {selectedTickerGame ? (
+                      <span className="inline-flex items-center gap-1 text-[9px] font-condensed font-bold uppercase px-1.5 py-0.2 rounded-[2px] bg-amber-500/20 text-amber-300 border border-amber-400/50 shadow-sm">
+                        <span>{selectedTickerGame.awayTeam.abbreviation} @ {selectedTickerGame.homeTeam.abbreviation}</span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedTickerGameId(null);
+                          }}
+                          className="ml-0.5 hover:text-white text-amber-400 transition-colors"
+                          title="Clear Game Filter"
+                        >
+                          <X className="w-2.5 h-2.5" />
+                        </button>
+                      </span>
+                    ) : (
+                      <span
+                        className={`text-[9px] font-condensed font-bold uppercase px-1.5 py-0.2 rounded-[2px] ${
+                          gameFilterMode === 'live'
+                            ? 'bg-red-950/80 text-red-300 border border-red-500/40'
+                            : 'bg-white/10 text-slate-300 border border-white/15'
+                        }`}
+                      >
+                        {gameFilterMode === 'live' ? 'LIVE' : 'ALL'}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Inline Fantasy Burst Alert */}
+                  {burstAlerts.length > 0 && (
+                    <div className="flex items-center gap-1 px-2 py-0.5 rounded-[2px] bg-emerald-950/90 border border-emerald-500/50 text-emerald-300 text-[10px] font-mono-score font-bold animate-pulse shadow-sm">
+                      <Flame className="w-3 h-3 text-emerald-400" />
+                      <span>+{burstAlerts[0].delta.toFixed(1)}: {burstAlerts[0].playerName}</span>
+                    </div>
+                  )}
                 </div>
 
-                {/* Inline Fantasy Burst Alert */}
-                {burstAlerts.length > 0 && (
-                  <div className="flex items-center gap-1 px-2 py-0.5 rounded-[2px] bg-emerald-950/90 border border-emerald-500/50 text-emerald-300 text-[10px] font-mono-score font-bold animate-pulse shadow-sm">
-                    <Flame className="w-3 h-3 text-emerald-400" />
-                    <span>+{burstAlerts[0].delta.toFixed(1)}: {burstAlerts[0].playerName}</span>
-                  </div>
-                )}
+                {/* Quick Play-Type Filter Pills */}
+                <div className="flex items-center gap-1 pt-1 overflow-x-auto shrink-0">
+                  {(['ALL', 'TDs', 'BIG PLAYS', 'TURNOVERS', 'REDZONE'] as const).map((filterType) => {
+                    const isActive = playTypeFilter === filterType;
+                    return (
+                      <button
+                        key={filterType}
+                        onClick={() => setPlayTypeFilter(filterType)}
+                        className={`px-2 py-0.5 rounded-[2px] text-[9px] font-condensed font-bold uppercase tracking-wider transition-colors shrink-0 ${
+                          isActive
+                            ? 'bg-amber-400 text-black shadow-sm font-black'
+                            : 'bg-[#141722] text-slate-400 hover:text-slate-200 border border-white/10'
+                        }`}
+                      >
+                        {filterType}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               {/* Scrollable Vertical Plays List */}
@@ -2737,9 +3052,9 @@ export default function TVCommandCenter() {
                           )}
                         </div>
 
-                        {/* Full Play Description (Never clipped!) */}
-                        <p className="text-xs font-semibold text-slate-100 leading-snug">
-                          {upd.description}
+                        {/* Full Play Description (Formatted & Never clipped!) */}
+                        <p className="text-xs font-semibold text-slate-200 leading-snug">
+                          {renderCleanPlayDescription(upd.description)}
                         </p>
 
                         {/* Fantasy Impact & Ownership Tagging */}
@@ -3417,21 +3732,37 @@ export default function TVCommandCenter() {
                   <h2 className="text-sm md:text-base font-condensed font-bold tracking-wide uppercase text-white">
                     {data?.isProjectionsMode ? `PROJECTED TOP 10 ${TABS.find((t) => t.id === activeTab)?.label}` : `TOP 10 ${TABS.find((t) => t.id === activeTab)?.label}`}
                   </h2>
-                  <span
-                    className={`text-[9px] font-condensed font-bold uppercase px-1.5 py-0.2 rounded-[2px] ${
-                      data?.isProjectionsMode
-                        ? 'bg-cyan-950/80 text-cyan-300 border border-cyan-500/40'
+                  {selectedTickerGame ? (
+                    <span className="inline-flex items-center gap-1 text-[9px] font-condensed font-bold uppercase px-1.5 py-0.2 rounded-[2px] bg-amber-500/20 text-amber-300 border border-amber-400/50 shadow-sm">
+                      <span>{selectedTickerGame.awayTeam.abbreviation} @ {selectedTickerGame.homeTeam.abbreviation}</span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedTickerGameId(null);
+                        }}
+                        className="ml-0.5 hover:text-white text-amber-400 transition-colors"
+                        title="Clear Game Filter"
+                      >
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                    </span>
+                  ) : (
+                    <span
+                      className={`text-[9px] font-condensed font-bold uppercase px-1.5 py-0.2 rounded-[2px] ${
+                        data?.isProjectionsMode
+                          ? 'bg-cyan-950/80 text-cyan-300 border border-cyan-500/40'
+                          : gameFilterMode === 'live'
+                          ? 'bg-red-950/80 text-red-300 border border-red-500/40'
+                          : 'bg-white/10 text-slate-300 border border-white/15'
+                      }`}
+                    >
+                      {data?.isProjectionsMode
+                        ? 'ESPN PROJECTIONS'
                         : gameFilterMode === 'live'
-                        ? 'bg-red-950/80 text-red-300 border border-red-500/40'
-                        : 'bg-white/10 text-slate-300 border border-white/15'
-                    }`}
-                  >
-                    {data?.isProjectionsMode
-                      ? 'ESPN PROJECTIONS'
-                      : gameFilterMode === 'live'
-                      ? 'LIVE IN-PROGRESS'
-                      : 'ALL GAMES'}
-                  </span>
+                        ? 'LIVE IN-PROGRESS'
+                        : 'ALL GAMES'}
+                    </span>
+                  )}
                 </div>
 
                 {/* Inline Burst Alert next to title to save vertical space */}
@@ -3481,14 +3812,14 @@ export default function TVCommandCenter() {
                 <div className="flex flex-col gap-1.5 h-full justify-between overflow-hidden min-h-0">
                   {sortedLeaderboards?.[activeTab as FantasyPosition]
                     ?.slice(0, 5)
-                    .map((player, idx) => {
-                      const rank = idx + 1;
-                      const owners = getOwnershipTags(player);
+                    .map((entry) => {
+                      const owners = getOwnershipTags(entry.player);
                       return renderLeaderboardCard(
-                        player,
-                        rank,
+                        entry.player,
+                        entry.nominalRank,
+                        entry.rankDisplay,
                         scoringFormat,
-                        boostedPlayers[player.id],
+                        boostedPlayers[entry.player.id],
                         owners
                       );
                     })}
@@ -3498,14 +3829,14 @@ export default function TVCommandCenter() {
                 <div className="flex flex-col gap-1.5 h-full justify-between overflow-hidden min-h-0">
                   {sortedLeaderboards?.[activeTab as FantasyPosition]
                     ?.slice(5, 10)
-                    .map((player, idx) => {
-                      const rank = idx + 6;
-                      const owners = getOwnershipTags(player);
+                    .map((entry) => {
+                      const owners = getOwnershipTags(entry.player);
                       return renderLeaderboardCard(
-                        player,
-                        rank,
+                        entry.player,
+                        entry.nominalRank,
+                        entry.rankDisplay,
                         scoringFormat,
-                        boostedPlayers[player.id],
+                        boostedPlayers[entry.player.id],
                         owners
                       );
                     })}
@@ -3863,11 +4194,12 @@ export default function TVCommandCenter() {
 
 /**
  * Render an individual player leaderboard card in the Top 10 2-column grid
- * Fully responsive to available height with zero stat truncation
+ * Fully responsive to available height with zero stat truncation and high-impact highlights
  */
 function renderLeaderboardCard(
   player: FantasyPlayer,
-  rank: number,
+  nominalRank: number,
+  rankDisplay: string,
   scoringFormat: ScoringFormat,
   boosted?: { delta: number; timestamp: number },
   ownershipTags?: PlayerOwnerTag[]
@@ -3878,26 +4210,26 @@ function renderLeaderboardCard(
 
   // Rank Accent Color: Gold (1), Silver (2), Bronze (3), or NFL Team Primary Color (4-10)
   const accentColor =
-    rank === 1
+    nominalRank === 1
       ? '#FFD700'
-      : rank === 2
+      : nominalRank === 2
       ? '#C0C0C0'
-      : rank === 3
+      : nominalRank === 3
       ? '#CD7F32'
       : NFL_TEAM_COLORS[player.team.abbreviation] || '#38BDF8';
 
   let rankBadgeStyle = 'bg-[#141722] text-slate-300 border border-white/10';
-  if (rank === 1) {
+  if (nominalRank === 1) {
     rankBadgeStyle = 'bg-[#FFD700] text-black font-black border border-[#FFD700] shadow-[0_0_12px_rgba(255,215,0,0.6)]';
-  } else if (rank === 2) {
+  } else if (nominalRank === 2) {
     rankBadgeStyle = 'bg-[#C0C0C0] text-black font-black border border-[#C0C0C0] shadow-[0_0_10px_rgba(192,192,192,0.5)]';
-  } else if (rank === 3) {
+  } else if (nominalRank === 3) {
     rankBadgeStyle = 'bg-[#CD7F32] text-white font-black border border-[#CD7F32] shadow-[0_0_8px_rgba(205,127,50,0.5)]';
   }
 
   return (
     <div
-      key={`${player.id}-${rank}`}
+      key={`${player.id}-${rankDisplay}`}
       style={{ borderLeftColor: accentColor }}
       className={`relative flex items-center justify-between px-3 py-1.5 rounded-[4px] border-l-[3px] border-y border-r border-white/10 transition-all flex-1 min-h-0 ${
         isBoosted
@@ -3914,11 +4246,11 @@ function renderLeaderboardCard(
 
       {/* Left: Rank + Headshot + Name, Team, and Full Non-Truncated Stat Line */}
       <div className="flex items-center gap-2.5 min-w-0 flex-1 mr-2">
-        {/* Rank Number */}
+        {/* Rank Number / Tied Badge */}
         <div
-          className={`w-7 h-7 rounded-[2px] flex items-center justify-center text-xs font-mono-score font-bold shrink-0 ${rankBadgeStyle}`}
+          className={`min-w-[28px] h-7 px-1 rounded-[2px] flex items-center justify-center text-xs font-mono-score font-bold shrink-0 ${rankBadgeStyle}`}
         >
-          <span>{rank}</span>
+          <span>{rankDisplay}</span>
         </div>
 
         {/* Headshot / Team Logo */}
@@ -3926,19 +4258,23 @@ function renderLeaderboardCard(
           <img
             src={player.headshot}
             alt={player.name}
-            className="w-full h-full object-cover"
+            className={`w-full h-full ${player.position === 'DEF' ? 'object-contain p-1 team-logo-contrast' : 'object-cover'}`}
+            style={player.position === 'DEF' ? { filter: 'drop-shadow(0 0 2.5px rgba(255, 255, 255, 0.45))' } : undefined}
             onError={(e) => {
               (e.currentTarget as HTMLImageElement).src = player.team.logo;
             }}
           />
-          {/* Miniature Team Logo in Corner */}
-          <div className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-[2px] bg-[#07080C] p-0.5 border border-white/10">
-            <img
-              src={player.team.logo}
-              alt={player.team.abbreviation}
-              className="w-full h-full object-contain"
-            />
-          </div>
+          {/* Miniature Team Logo in Corner - Hidden on DEF cards since primary avatar is already the team logo */}
+          {player.position !== 'DEF' && (
+            <div className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-[2px] bg-[#07080C] p-0.5 border border-white/10">
+              <img
+                src={player.team.logo}
+                alt={player.team.abbreviation}
+                className="w-full h-full object-contain team-logo-contrast"
+                style={{ filter: 'drop-shadow(0 0 2.5px rgba(255, 255, 255, 0.45))' }}
+              />
+            </div>
+          )}
         </div>
 
         {/* Name, Team vs Opponent, Live Clock, Owner Badges, and FULL UNTRUNCATED STAT LINE */}
@@ -4009,11 +4345,34 @@ function renderLeaderboardCard(
             </span>
           </div>
 
-          {/* Crisp Badge of Real-World Stats - FULLY VISIBLE WITH NO TRUNCATION */}
-          <div className="mt-0.5">
-            <span className="inline-block px-1.5 py-0.2 rounded-[2px] bg-[#141722] border border-white/10 text-[10px] md:text-[11px] font-mono-score font-bold text-slate-200 whitespace-nowrap">
-              {player.rawStatLine}
-            </span>
+          {/* Crisp Badges of Real-World Stats with High-Impact Highlighting */}
+          <div className="mt-0.5 flex flex-wrap gap-1">
+            {player.rawStatLine ? (
+              player.rawStatLine
+                .split(/[•,]/)
+                .map((s) => s.trim())
+                .filter((s) => s.length > 0)
+                .map((seg, sIdx) => {
+                  const impact = getHighImpactStatType(seg);
+                  const segClass = impact === 'emerald'
+                    ? 'text-emerald-400 font-semibold bg-emerald-950/80 border-emerald-500/40'
+                    : impact === 'gold'
+                    ? 'text-amber-300 font-semibold bg-amber-950/80 border-amber-500/40'
+                    : 'text-slate-300 bg-[#141722] border-white/10';
+                  return (
+                    <span
+                      key={`stat-${player.id}-${sIdx}`}
+                      className={`inline-block px-1.5 py-0.2 rounded-[2px] border text-[10px] md:text-[11px] font-mono-score font-bold whitespace-nowrap ${segClass}`}
+                    >
+                      {seg}
+                    </span>
+                  );
+                })
+            ) : (
+              <span className="inline-block px-1.5 py-0.2 rounded-[2px] bg-[#141722] border border-white/10 text-[10px] md:text-[11px] font-mono-score font-bold text-slate-400 whitespace-nowrap">
+                --
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -4024,7 +4383,7 @@ function renderLeaderboardCard(
           {Number.isInteger(pts) ? pts.toFixed(1) : pts.toFixed(1)}
         </div>
         <div className="text-[9px] font-condensed font-bold text-slate-400 uppercase tracking-widest mt-0.5">
-          {player.isProjection ? `PROJ ${scoringFormat.toUpperCase()}` : `${scoringFormat.toUpperCase()} PTS`}
+          {getScoringUnitLabel(player.position, scoringFormat, player.isProjection)}
         </div>
       </div>
     </div>
