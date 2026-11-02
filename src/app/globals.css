@@ -117,6 +117,19 @@ body {
   box-shadow: 0 0 8px rgba(239, 68, 68, 0.9);
 }
 
+/* Monster fantasy score glow (>25 points) */
+.monster-points-glow {
+  text-shadow: 0 0 12px rgba(52, 211, 153, 0.45);
+}
+
+/* Subtle card ambient hover */
+.card-franchise-glow {
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.card-franchise-glow:hover {
+  transform: translateY(-1px);
+}
+
 /* Keyboard shortcut chip styling */
 .kbd-shortcut {
   font-family: var(--font-jetbrains-mono), monospace;

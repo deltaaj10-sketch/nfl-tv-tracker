@@ -34,6 +34,9 @@ import {
   SlidersHorizontal,
   CheckCircle2,
   Keyboard,
+  Shield,
+  TrendingUp,
+  Crosshair,
 } from 'lucide-react';
 import { playBroadcastAlertSound } from '@/lib/soundEffects';
 import {
@@ -2939,12 +2942,17 @@ export default function TVCommandCenter() {
             : 'border-zinc-800/80 bg-[#0e1015] border-l-2 border-l-zinc-700/50 hover:border-zinc-700 hover:bg-[#13151f]'
         }`}
       >
-        {/* Red Zone Badge Alert on card */}
-        {isRedZone && !isRedZonePinned && (
+        {/* Active Filter or Red Zone Badge Alert on card */}
+        {isSelected ? (
+          <div className="absolute -top-2 right-1.5 px-1.5 py-0.5 bg-amber-400 text-black text-[8px] font-condensed font-black tracking-wider uppercase rounded-md shadow flex items-center gap-1 z-10">
+            <Check className="w-2.5 h-2.5 stroke-[3]" />
+            <span>FILTERED</span>
+          </div>
+        ) : isRedZone && !isRedZonePinned ? (
           <div className="absolute -top-2 right-1.5 px-1.5 py-0.5 bg-rose-600 text-white text-[8px] font-condensed font-black tracking-widest uppercase rounded-md shadow-sm">
             RED ZONE
           </div>
-        )}
+        ) : null}
 
         {/* Minimalist Field-Position Progress Bar at Bottom of In-Progress Card */}
         {isLive && (
@@ -3101,7 +3109,12 @@ export default function TVCommandCenter() {
 
   return (
     <div className="flex flex-col h-screen max-h-screen w-screen bg-[#0a0b0e] broadcast-grid-bg text-[#F4F4F6] select-none overflow-hidden font-condensed justify-between pb-14">
-      {/* 1. AUTO-CYCLE PROGRESS BAR (Visual bar at the top of the TV) */}
+      {/* 1. REDZONE AMBIENT TOP BEACON */}
+      {hasActiveRedZone && (
+        <div className="w-full h-0.5 bg-gradient-to-r from-transparent via-rose-500 to-transparent shadow-[0_0_12px_rgba(244,63,94,0.9)] animate-pulse shrink-0 z-50 pointer-events-none" />
+      )}
+
+      {/* 2. AUTO-CYCLE PROGRESS BAR (Visual bar at the top of the TV) */}
       <div className="w-full h-1 bg-[#0e1015] relative overflow-hidden shrink-0">
         {autoCycle && (
           <div
@@ -3379,7 +3392,7 @@ export default function TVCommandCenter() {
 
       {/* 4. EDGE-TO-EDGE BROADCAST NAVIGATION TABS */}
       <nav className="h-10 bg-[#0e1015] border-b border-zinc-800/80 px-2 flex items-center shrink-0 w-full justify-between">
-        {TABS.map((tab) => {
+        {TABS.map((tab, idx) => {
           const active = activeTab === tab.id;
           return (
             <button
@@ -3394,7 +3407,16 @@ export default function TVCommandCenter() {
                   : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.01]'
               }`}
             >
-              <span>{tab.label}</span>
+              <span className="flex items-center gap-1.5">
+                <span
+                  className={`text-[10px] font-mono transition-opacity ${
+                    active ? 'text-emerald-400 font-bold opacity-90' : 'text-zinc-600 opacity-60'
+                  }`}
+                >
+                  {idx + 1}
+                </span>
+                <span>{tab.label}</span>
+              </span>
               {tab.id === 'room' && (guestTags.length > 0 || syncedLeagues.length > 0) && (
                 <span className="ml-1.5 px-1.5 py-0.2 bg-amber-400/20 text-amber-300 rounded-md text-[10px] font-mono-score font-bold">
                   {guestTags.length + syncedLeagues.length}
@@ -3404,6 +3426,13 @@ export default function TVCommandCenter() {
                 <span className="ml-1.5 px-1.5 py-0.2 bg-emerald-400/20 text-emerald-400 rounded-md text-[10px] font-mono-score font-bold">
                   {savedBets.length}
                 </span>
+              )}
+              {/* Active Tab Auto-Cycle Progress Line */}
+              {active && autoCycle && (
+                <div
+                  className="absolute bottom-0 left-0 h-0.5 bg-gradient-to-r from-emerald-400 to-cyan-400 transition-all duration-200 ease-linear pointer-events-none"
+                  style={{ width: `${cycleProgress}%` }}
+                />
               )}
             </button>
           );
@@ -3535,11 +3564,17 @@ export default function TVCommandCenter() {
                     <div
                       key={player.id}
                       onClick={() => setSelectedDetailPlayer(player)}
-                      style={{ borderLeftColor: teamAccent, borderLeftWidth: '3px' }}
-                      className={`relative p-2.5 md:p-3 rounded-lg border flex flex-col justify-between transition-all cursor-pointer ${
+                      style={{
+                        borderLeftColor: teamAccent,
+                        borderLeftWidth: '3px',
+                        background: isBoosted
+                          ? undefined
+                          : `radial-gradient(circle at 10% 20%, ${teamAccent}18 0%, rgba(19, 21, 31, 0.98) 75%)`,
+                      }}
+                      className={`relative p-2.5 md:p-3 rounded-lg border flex flex-col justify-between transition-all cursor-pointer card-franchise-glow ${
                         isBoosted
                           ? 'border-emerald-400 bg-emerald-950/20'
-                          : 'bg-[#13151f] border-zinc-800/80 hover:border-zinc-700 hover:bg-[#181a26]'
+                          : 'border-zinc-800/80 hover:border-zinc-700 hover:bg-[#181a26]'
                       }`}
                     >
                       {/* Top Row: Position badge, headshot, Name, Clock, Matchup, and Points */}
@@ -3631,7 +3666,7 @@ export default function TVCommandCenter() {
                           <span className="text-[10px] font-condensed font-semibold uppercase text-zinc-500 tracking-wider leading-none mb-1">
                             {getScoringUnitLabel(pos, scoringFormat, player.isProjection)}
                           </span>
-                          <span className="text-3xl md:text-4xl font-mono-score font-semibold tracking-tight text-emerald-400 leading-none">
+                          <span className={`text-3xl md:text-4xl font-mono-score font-semibold tracking-tight text-emerald-400 leading-none ${pts >= 25 ? 'monster-points-glow' : ''}`}>
                             {formatPoints(pts)}
                           </span>
                         </div>
@@ -3803,7 +3838,7 @@ export default function TVCommandCenter() {
                         <div className="flex items-center justify-between gap-1 flex-wrap">
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <span
-                              className={`text-[9px] font-condensed font-black uppercase px-1.5 py-0.5 rounded-md tracking-wider ${
+                              className={`text-[9px] font-condensed font-black uppercase px-1.5 py-0.5 rounded-md tracking-wider flex items-center gap-1 ${
                                 isTD
                                   ? 'bg-emerald-400 text-black'
                                   : isTO
@@ -3813,7 +3848,11 @@ export default function TVCommandCenter() {
                                   : 'bg-zinc-800 text-zinc-200'
                               }`}
                             >
-                              {upd.headline}
+                              {isTD && <Flame className="w-2.5 h-2.5" />}
+                              {isTO && <Shield className="w-2.5 h-2.5" />}
+                              {isFG && <Crosshair className="w-2.5 h-2.5" />}
+                              {!isTD && !isTO && !isFG && <TrendingUp className="w-2.5 h-2.5" />}
+                              <span>{upd.headline}</span>
                             </span>
                             <span className="text-[11px] font-condensed font-bold text-zinc-400">
                               {upd.gameName} • {upd.gameClock}
@@ -3903,9 +3942,17 @@ export default function TVCommandCenter() {
                     return (
                       <div
                         key={`${friend.name}-${idx}`}
-                        className={`p-3 rounded-lg border transition-all ${
+                        style={
                           isFirst
-                            ? 'bg-[#181a26] border-amber-500/50 border-l-[3px] border-l-amber-400'
+                            ? {
+                                background:
+                                  'radial-gradient(circle at 10% 20%, rgba(245, 158, 11, 0.15) 0%, rgba(24, 26, 38, 0.98) 75%)',
+                              }
+                            : undefined
+                        }
+                        className={`p-3 rounded-lg border transition-all card-franchise-glow ${
+                          isFirst
+                            ? 'border-amber-500/50 border-l-[3px] border-l-amber-400'
                             : 'bg-[#13151f] border-zinc-800/80 hover:border-zinc-700'
                         }`}
                       >
@@ -3935,7 +3982,7 @@ export default function TVCommandCenter() {
                           </div>
 
                           <div className="text-right">
-                            <div className="text-xl font-mono-score font-semibold text-emerald-400 leading-none">
+                            <div className={`text-xl font-mono-score font-semibold text-emerald-400 leading-none ${friend.totalPoints >= 100 ? 'monster-points-glow' : ''}`}>
                               {friend.totalPoints.toFixed(1)}
                             </div>
                             <span className="text-[9px] font-mono-score font-semibold text-zinc-500 uppercase tracking-widest mt-0.5 block">
@@ -5368,13 +5415,21 @@ function renderLeaderboardCard(
     <div
       key={`${player.id}-${rankDisplay}`}
       onClick={() => onSelectPlayer?.(player)}
-      style={{ borderLeftColor: teamAccent, borderLeftWidth: isLeader ? '4px' : '2.5px' }}
-      className={`relative flex items-center justify-between px-3 py-1.5 rounded-lg border-y border-r transition-all h-[98px] max-h-[98px] min-h-[98px] shrink-0 cursor-pointer ${
+      style={{
+        borderLeftColor: teamAccent,
+        borderLeftWidth: isLeader ? '4px' : '2.5px',
+        background: isBoosted
+          ? undefined
+          : isLeader
+          ? `radial-gradient(circle at 8% 25%, ${teamAccent}22 0%, rgba(19, 21, 31, 0.98) 75%)`
+          : `radial-gradient(circle at 5% 25%, ${teamAccent}12 0%, rgba(14, 16, 21, 0.98) 75%)`,
+      }}
+      className={`relative flex items-center justify-between px-3 py-1.5 rounded-lg border-y border-r transition-all h-[98px] max-h-[98px] min-h-[98px] shrink-0 cursor-pointer card-franchise-glow ${
         isBoosted
           ? 'bg-emerald-950/20 border-r-emerald-500/50 border-y-emerald-500/50 animate-burst'
           : isLeader
-          ? 'bg-[#13151f] border-zinc-700/80 hover:bg-[#181a28] hover:border-zinc-600'
-          : 'bg-[#0e1015] border-zinc-800/80 hover:bg-[#12141c] hover:border-zinc-700'
+          ? 'border-zinc-700/80 hover:bg-[#181a28] hover:border-zinc-600'
+          : 'border-zinc-800/80 hover:bg-[#12141c] hover:border-zinc-700'
       }`}
     >
       {/* Floating Delta Badge when points increase */}
@@ -5526,7 +5581,7 @@ function renderLeaderboardCard(
         <div className="text-[10px] font-condensed font-semibold text-zinc-500 uppercase tracking-wider leading-none mb-1">
           {getScoringUnitLabel(player.position, scoringFormat, player.isProjection)}
         </div>
-        <div className={`${isLeader ? 'text-2xl lg:text-3xl font-semibold' : 'text-xl lg:text-2xl font-semibold'} font-mono-score tracking-tight text-emerald-400 leading-none`}>
+        <div className={`${isLeader ? 'text-2xl lg:text-3xl font-semibold' : 'text-xl lg:text-2xl font-semibold'} font-mono-score tracking-tight text-emerald-400 leading-none ${pts >= 25 ? 'monster-points-glow' : ''}`}>
           {Number.isInteger(pts) ? pts.toFixed(1) : pts.toFixed(1)}
         </div>
       </div>
