@@ -2070,11 +2070,32 @@ export default function TVCommandCenter() {
           setActiveTab(TABS[tabIdx].id);
           setAutoCycle(false);
         }
+      } else if (e.key === 'ArrowRight' || e.key === ']' || e.key.toLowerCase() === 'j') {
+        e.preventDefault();
+        setActiveTab((curr) => {
+          const idx = TABS.findIndex((t) => t.id === curr);
+          const nextIdx = (idx + 1) % TABS.length;
+          return TABS[nextIdx].id;
+        });
+        setAutoCycle(false);
+      } else if (e.key === 'ArrowLeft' || e.key === '[' || e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setActiveTab((curr) => {
+          const idx = TABS.findIndex((t) => t.id === curr);
+          const prevIdx = (idx - 1 + TABS.length) % TABS.length;
+          return TABS[prevIdx].id;
+        });
+        setAutoCycle(false);
+      } else if (e.key.toLowerCase() === 'r') {
+        e.preventDefault();
+        fetchData();
+        syncLeaguesData();
+        showToast('Refreshing Live Data...', 'info');
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [toggleFullscreen]);
+  }, [toggleFullscreen, fetchData, syncLeaguesData, showToast]);
 
   // Initial Fetch on Mount
   useEffect(() => {
@@ -2842,9 +2863,10 @@ export default function TVCommandCenter() {
     // If no external leagues, synthesize living room matchups from guest friends
     if (guestTags.length >= 2) {
       const list: ParsedLeagueMatchup[] = [];
-      for (let i = 0; i < guestTags.length; i += 2) {
+      for (let i = 0; i < guestTags.length - 1; i += 2) {
         const g1 = guestTags[i];
-        const g2 = guestTags[i + 1] || guestTags[0];
+        const g2 = guestTags[i + 1];
+        if (!g2 || g1.id === g2.id) continue;
         const friend1 = roomFriendsLeaderboard.find((f) => f.name === g1.guestName);
         const friend2 = roomFriendsLeaderboard.find((f) => f.name === g2.guestName);
         list.push({
@@ -4655,16 +4677,23 @@ export default function TVCommandCenter() {
                         </div>
 
                         {/* Visual Point Proportion Tug-of-War Bar */}
-                        <div className="w-full h-1.5 bg-[#0a0b0e] rounded-full overflow-hidden flex items-center border border-zinc-800">
-                          <div 
-                            className="h-full bg-emerald-400 transition-all duration-300"
-                            style={{ width: `${Math.max(8, Math.min(92, (match.team1.points / Math.max(1, match.team1.points + match.team2.points)) * 100))}%` }}
-                          />
-                          <div 
-                            className="h-full bg-cyan-400 transition-all duration-300"
-                            style={{ width: `${Math.max(8, Math.min(92, (match.team2.points / Math.max(1, match.team1.points + match.team2.points)) * 100))}%` }}
-                          />
-                        </div>
+                        {(() => {
+                          const matchTotal = match.team1.points + match.team2.points;
+                          const team1Share = matchTotal === 0 ? 50 : Math.max(8, Math.min(92, Math.round((match.team1.points / matchTotal) * 100)));
+                          const team2Share = 100 - team1Share;
+                          return (
+                            <div className="w-full h-1.5 bg-[#0a0b0e] rounded-full overflow-hidden flex items-center border border-zinc-800">
+                              <div 
+                                className="h-full bg-emerald-400 transition-all duration-300"
+                                style={{ width: `${team1Share}%` }}
+                              />
+                              <div 
+                                className="h-full bg-cyan-400 transition-all duration-300"
+                                style={{ width: `${team2Share}%` }}
+                              />
+                            </div>
+                          );
+                        })()}
                       </div>
                     );
                   })
@@ -5767,6 +5796,25 @@ export default function TVCommandCenter() {
                 <span className="kbd-shortcut text-xs font-black">ESC</span>
               </div>
 
+              <div className="p-3 rounded-lg bg-[#0a0b0e] border border-zinc-800/80 flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-bold text-white uppercase block">Channel Flip</span>
+                  <span className="text-[10px] text-zinc-500">Next or previous broadcast view</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="kbd-shortcut text-xs font-black">←</span>
+                  <span className="kbd-shortcut text-xs font-black">→</span>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-lg bg-[#0a0b0e] border border-zinc-800/80 flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-bold text-white uppercase block">Quick Refresh</span>
+                  <span className="text-[10px] text-zinc-500">Sync live scores, plays &amp; leagues</span>
+                </div>
+                <span className="kbd-shortcut text-xs font-black">R</span>
+              </div>
+
               <div className="p-3 rounded-lg bg-[#0a0b0e] border border-zinc-800/80 flex items-center justify-between sm:col-span-2">
                 <div>
                   <span className="text-xs font-bold text-white uppercase block">Direct Channel Switching</span>
@@ -5963,6 +6011,8 @@ function renderLeaderboardCard(
   hasPossession?: boolean
 ) {
   const pts = player.points[scoringFormat] ?? 0;
+  const proj = player.projectedPoints?.[scoringFormat];
+  const projDelta = proj !== undefined && proj > 0 ? pts - proj : null;
   const isBoosted = Boolean(boosted && Date.now() - boosted.timestamp < 6000);
   const owners = ownershipTags || [];
   const isLeader = nominalRank === 1;
@@ -6158,6 +6208,16 @@ function renderLeaderboardCard(
         <div className={`${isLeader ? 'text-2xl lg:text-3xl font-semibold' : 'text-xl lg:text-2xl font-semibold'} font-mono-score tracking-tight text-emerald-400 leading-none ${pts >= 25 ? 'monster-points-glow' : ''}`}>
           {Number.isInteger(pts) ? pts.toFixed(1) : pts.toFixed(1)}
         </div>
+        {projDelta !== null && !player.isProjection && (
+          <span
+            className={`text-[9px] font-mono-score font-semibold tracking-tight mt-0.5 ${
+              projDelta >= 0 ? 'text-emerald-400' : 'text-zinc-500'
+            }`}
+            title={`Projected: ${proj?.toFixed(1)} pts`}
+          >
+            {projDelta >= 0 ? `+${projDelta.toFixed(1)}` : projDelta.toFixed(1)} vs Proj
+          </span>
+        )}
       </div>
     </div>
   );

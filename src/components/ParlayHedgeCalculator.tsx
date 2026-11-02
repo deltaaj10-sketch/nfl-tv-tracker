@@ -69,7 +69,8 @@ export default function ParlayHedgeCalculator({ slip, gradedLegs }: ParlayHedgeC
   const [activeStrategy, setActiveStrategy] = useState<'equal' | 'freeroll' | 'aggressive'>('equal');
 
   // Decimal odds calculation
-  const decOdds = hedgeOdds < 0 ? 1 + 100 / Math.abs(hedgeOdds) : 1 + hedgeOdds / 100;
+  const safeOdds = hedgeOdds === 0 ? -110 : hedgeOdds;
+  const decOdds = safeOdds < 0 ? 1 + 100 / Math.abs(safeOdds) : 1 + safeOdds / 100;
 
   // Recommended Hedge Stakes based on Strategy
   const sweatLeg = liveOrUpcoming[0];
@@ -91,10 +92,11 @@ export default function ParlayHedgeCalculator({ slip, gradedLegs }: ParlayHedgeC
     }
   }
 
-  // Optimal equal profit hedge
-  const equalHedgeStake = Math.round((payoutNum / decOdds) * 100) / 100;
+  // Optimal equal profit hedge (prevent division by zero or NaN)
+  const safeDecOdds = Math.max(1.01, decOdds);
+  const equalHedgeStake = Math.round((payoutNum / safeDecOdds) * 100) / 100;
   // Freeroll hedge (just cover the initial parlay stake)
-  const freerollHedgeStake = Math.round((wagerNum / (decOdds - 1)) * 100) / 100;
+  const freerollHedgeStake = Math.round((wagerNum / Math.max(0.01, safeDecOdds - 1)) * 100) / 100;
   // Aggressive 75% lock
   const aggressiveHedgeStake = Math.round(equalHedgeStake * 0.75 * 100) / 100;
 

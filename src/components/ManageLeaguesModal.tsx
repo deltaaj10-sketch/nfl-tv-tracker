@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   Plus,
@@ -35,6 +35,18 @@ export default function ManageLeaguesModal({
   availablePlayers,
   currentWeek,
 }: ManageLeaguesModalProps) {
+  // Close on Escape key press
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   const [activeTab, setActiveTab] = useState<'sleeper' | 'espn' | 'guests'>('sleeper');
 
   // Sleeper Form State
@@ -71,17 +83,20 @@ export default function ManageLeaguesModal({
     setSleeperError(null);
 
     try {
-      const res = await fetch(`/api/sleeper-league?leagueId=${sleeperId.trim()}&week=${sleeperWeek}`);
+      const val = sleeperId.trim();
+      const query = /^\d+$/.test(val) ? `leagueId=${val}` : `username=${encodeURIComponent(val)}`;
+      const res = await fetch(`/api/sleeper-league?${query}&week=${sleeperWeek}`);
       const json = await res.json();
       if (!res.ok || json.error) {
         throw new Error(json.error || `HTTP ${res.status}`);
       }
 
+      const resolvedLeagueId = json.leagueId || val;
       const newLeague: SyncedLeagueConfig = {
-        id: `sleeper-${sleeperId.trim()}-${Date.now()}`,
+        id: `sleeper-${resolvedLeagueId}-${Date.now()}`,
         type: 'sleeper',
-        name: sleeperName.trim() || json.name || `Sleeper League ${sleeperId.trim()}`,
-        leagueId: sleeperId.trim(),
+        name: sleeperName.trim() || json.name || `Sleeper League ${resolvedLeagueId}`,
+        leagueId: resolvedLeagueId,
         week: parseInt(sleeperWeek) || 6,
       };
 
@@ -89,7 +104,7 @@ export default function ManageLeaguesModal({
       setSleeperId('');
       setSleeperName('');
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to connect Sleeper league. Verify the League ID.';
+      const message = err instanceof Error ? err.message : 'Failed to connect Sleeper league. Verify your Username or League ID.';
       setSleeperError(message);
     } finally {
       setSleeperLoading(false);

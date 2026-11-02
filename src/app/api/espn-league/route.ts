@@ -15,8 +15,8 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Missing leagueId parameter' }, { status: 400 });
     }
 
-    // Build ESPN Fantasy API URL
-    const espnUrl = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${season}/segments/0/leagues/${leagueId}?view=mMatchup&view=mRoster&view=mTeam&view=mSettings`;
+    let resolvedSeason = season;
+    let espnUrl = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${season}/segments/0/leagues/${leagueId}?view=mMatchup&view=mRoster&view=mTeam&view=mSettings`;
 
     const headers: Record<string, string> = {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
@@ -28,10 +28,24 @@ export async function GET(request: Request) {
       headers['Cookie'] = `espn_s2=${espn_s2}; SWID=${formattedSwid};`;
     }
 
-    const res = await fetch(espnUrl, {
+    let res = await fetch(espnUrl, {
       headers,
       cache: 'no-store',
     });
+
+    // If 404 or 400 and user did not explicitly specify a custom season, fall back to recent seasons (2025, 2024)
+    if (!res.ok && (res.status === 404 || res.status === 400) && (!searchParams.get('season') || season === '2026')) {
+      const fallbackSeasons = ['2025', '2024'];
+      for (const fbSeason of fallbackSeasons) {
+        const fallbackUrl = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${fbSeason}/segments/0/leagues/${leagueId}?view=mMatchup&view=mRoster&view=mTeam&view=mSettings`;
+        const fbRes = await fetch(fallbackUrl, { headers, cache: 'no-store' });
+        if (fbRes.ok) {
+          res = fbRes;
+          resolvedSeason = fbSeason;
+          break;
+        }
+      }
+    }
 
     if (!res.ok) {
       if (res.status === 401 || res.status === 403) {
@@ -136,6 +150,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       leagueId,
       name: data.settings?.name || `ESPN League ${leagueId}`,
+      season: resolvedSeason,
       currentPeriod,
       teams: Array.from(teamsMap.values()),
       matchups,

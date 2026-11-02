@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   X,
   Plus,
@@ -93,6 +93,18 @@ export default function ManageBetsModal({
   availableGames,
   availablePlayers,
 }: ManageBetsModalProps) {
+  // Close on Escape key press
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   // Tabs: 'props_market' (Fast-search pinning) | 'list' (active slips) | 'create' (custom builder)
   const [activeTab, setActiveTab] = useState<'props_market' | 'list' | 'create'>('props_market');
 

@@ -5,9 +5,16 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const username = searchParams.get('username');
+    const usernameParam = searchParams.get('username');
     let leagueId = searchParams.get('leagueId');
     const week = searchParams.get('week') || '6';
+
+    // If leagueId is provided but contains letters/underscores, treat it as a Sleeper username
+    const looksLikeUsername = Boolean(leagueId && /[a-zA-Z_]/.test(leagueId.trim()));
+    const username = usernameParam || (looksLikeUsername ? leagueId?.trim() : null);
+    if (looksLikeUsername) {
+      leagueId = null;
+    }
 
     if (!leagueId && username) {
       // Look up user by username
