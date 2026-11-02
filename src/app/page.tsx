@@ -1866,9 +1866,16 @@ export default function TVCommandCenter() {
         setBurstAlerts((prev) => [...newAlerts, ...prev].slice(0, 5));
       }
 
-      // Cap liveUpdates to max 60 items in memory to guarantee long-running stability
-      if (json.liveUpdates && json.liveUpdates.length > 60) {
-        json.liveUpdates = json.liveUpdates.slice(0, 60);
+      // Filter out nullified plays with "No Play" and cap to max 60 items
+      if (json.liveUpdates) {
+        json.liveUpdates = json.liveUpdates.filter((u: any) => {
+          const d = (u.description || '').toLowerCase();
+          const h = (u.headline || '').toLowerCase();
+          return !d.includes('no play') && !h.includes('no play');
+        });
+        if (json.liveUpdates.length > 60) {
+          json.liveUpdates = json.liveUpdates.slice(0, 60);
+        }
       }
       const allUpdates = json.liveUpdates || [];
       const tdUpdates = allUpdates.filter((u) => u.type === 'touchdown');
@@ -2580,7 +2587,11 @@ export default function TVCommandCenter() {
   // Filter Live Updates feed by game state, interactive selected game, play type, and search
   const filteredLiveUpdates = useMemo(() => {
     if (!data?.liveUpdates) return [];
-    let list = data.liveUpdates;
+    let list = data.liveUpdates.filter((u) => {
+      const descLower = (u.description || '').toLowerCase();
+      const headlineLower = (u.headline || '').toLowerCase();
+      return !descLower.includes('no play') && !headlineLower.includes('no play');
+    });
     if (gameFilterMode === 'live') {
       list = list.filter((u) => u.isGameLive === true);
     }
@@ -2858,6 +2869,13 @@ export default function TVCommandCenter() {
     if (data?.liveUpdates) {
       for (const u of data.liveUpdates.slice(0, 15)) {
         const desc = (u.description || '').trim();
+        const descLower = desc.toLowerCase();
+        const headlineLower = (u.headline || '').toLowerCase();
+        // Skip nullified plays with "No Play"
+        if (descLower.includes('no play') || headlineLower.includes('no play')) {
+          continue;
+        }
+
         const cleanedDesc = desc.replace(/^\(\d+:\d+\)\s*(?:\([^)]+\)\s*)?/i, '').trim();
         const playerMatch = cleanedDesc.match(/^([A-Z]\.?[A-Za-z'-]+(?:\s+[A-Z][A-Za-z'-]+)?(?:\s+(?:Jr\.|Sr\.|III|II|IV))?)/);
         const receiverMatch = cleanedDesc.match(/(?:to|intended for)\s+([A-Z]\.?[A-Za-z'-]+(?:\s+[A-Z][A-Za-z'-]+)?(?:\s+(?:Jr\.|Sr\.|III|II|IV))?)/i);
@@ -2902,7 +2920,6 @@ export default function TVCommandCenter() {
             badgeColor: 'bg-rose-950/80 text-rose-300 border border-rose-500/50',
             title: `${toDisplay} (${matchup})`,
             detail: u.gameClock,
-            highlight: 'TURNOVER',
             highlightColor: 'text-rose-400',
           });
         }
@@ -3531,9 +3548,9 @@ export default function TVCommandCenter() {
           </div>
         ) : activeTab === 'live' ? (
           /* TAB 1: 12-COLUMN BROADCAST GRID (8-COL STUDS + 4-COL VERTICAL PLAY FEED) */
-          <div className="grid grid-cols-12 gap-3 h-full overflow-hidden min-h-0">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-3 h-full overflow-hidden min-h-0">
             {/* LEFT 8 COLUMNS: #1 OVERALL STUDS RIGHT NOW (2x3 Grid) */}
-            <div className="col-span-12 lg:col-span-8 flex flex-col h-full bg-[#0e1015] rounded-xl border border-zinc-800/80 p-3 overflow-hidden min-h-0">
+            <div className="col-span-12 md:col-span-7 lg:col-span-8 flex flex-col h-full bg-[#0e1015] rounded-xl border border-zinc-800/80 p-3 overflow-hidden min-h-0">
               <div className="flex items-center justify-between pb-2 border-b border-zinc-800/80 shrink-0">
                 <div className="flex items-center gap-2">
                   <Trophy className="w-4 h-4 text-amber-400" />
@@ -3773,7 +3790,7 @@ export default function TVCommandCenter() {
             </div>
 
             {/* RIGHT 4 COLUMNS: VERTICAL LIVE SCORING & BIG PLAYS FEED */}
-            <div className="col-span-12 lg:col-span-4 flex flex-col h-full bg-[#0e1015] rounded-xl border border-zinc-800/80 p-3 overflow-hidden min-h-0">
+            <div className="col-span-12 md:col-span-5 lg:col-span-4 flex flex-col h-full bg-[#0e1015] rounded-xl border border-zinc-800/80 p-3 overflow-hidden min-h-0">
               <div className="flex flex-col gap-1.5 pb-2 border-b border-zinc-800/80 shrink-0">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -3975,9 +3992,9 @@ export default function TVCommandCenter() {
           </div>
         ) : activeTab === 'room' ? (
           /* TAB 8: ROOM MATCHUPS & ROSTERS (12-COLUMN BROADCAST GRID) */
-          <div className="grid grid-cols-12 gap-4 h-full overflow-hidden">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-3 h-full overflow-hidden">
             {/* Left 5 Columns: Living Room Friends Leaderboard */}
-            <div className="col-span-12 lg:col-span-5 flex flex-col h-full bg-[#0e1015] rounded-xl border border-zinc-800/80 p-3 overflow-hidden">
+            <div className="col-span-12 md:col-span-5 flex flex-col h-full bg-[#0e1015] rounded-xl border border-zinc-800/80 p-3 overflow-hidden">
               <div className="flex items-center justify-between pb-2 border-b border-zinc-800/80 shrink-0">
                 <div className="flex items-center gap-2">
                   <Crown className="w-4 h-4 text-amber-400" />
@@ -4190,7 +4207,7 @@ export default function TVCommandCenter() {
             </div>
 
             {/* Right 7 Columns: Connected League Matchups */}
-            <div className="col-span-12 lg:col-span-7 flex flex-col h-full bg-[#0e1015] rounded-xl border border-zinc-800/80 p-3 overflow-hidden">
+            <div className="col-span-12 md:col-span-7 flex flex-col h-full bg-[#0e1015] rounded-xl border border-zinc-800/80 p-3 overflow-hidden">
               <div className="flex items-center justify-between pb-2 border-b border-zinc-800/80 shrink-0">
                 <div className="flex items-center gap-2">
                   <Swords className="w-4 h-4 text-cyan-400" />

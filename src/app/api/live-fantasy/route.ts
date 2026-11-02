@@ -1287,6 +1287,14 @@ export async function GET(request: Request) {
 
       // 7. Parse scoringPlays
       for (const sp of scoringPlays) {
+        if (!sp || !sp.type) continue;
+        const spTextLower = (sp.text || '').toLowerCase();
+        const spTypeLower = (sp.scoringType?.name || sp.type?.text || '').toLowerCase();
+        // Nullified plays / penalties with "No Play"
+        if (spTextLower.includes('no play') || spTypeLower.includes('no play')) {
+          continue;
+        }
+
         const typeStr = (sp.scoringType?.name || sp.type?.text || '').toLowerCase();
         let cat: LiveUpdate['type'] = 'touchdown';
 
@@ -1357,6 +1365,11 @@ export async function GET(request: Request) {
 
         const textLower = (pl.text || '').toLowerCase();
         const typeText = (pl.type?.text || '').toLowerCase();
+
+        // Nullified plays / penalties with "No Play"
+        if (textLower.includes('no play') || typeText.includes('no play')) {
+          continue;
+        }
 
         const isTurnover =
           pl.isTurnover === true ||
