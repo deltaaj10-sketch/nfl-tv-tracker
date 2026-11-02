@@ -87,8 +87,11 @@ export interface FantasyPlayer {
 export interface PlayerRawNumericStats {
   passYds: number;
   passTD: number;
+  passComp?: number;
+  passAtt?: number;
   rushYds: number;
   rushTD: number;
+  carries?: number;
   rec: number;
   recYds: number;
   recTD: number;
@@ -184,7 +187,7 @@ export interface LiveFantasyResponse {
 
 // Bets & Parlays Data Models
 export type BetLegType = 'player_prop' | 'anytime_td' | 'spread' | 'moneyline' | 'total';
-export type PropStatType = 'passYds' | 'passTD' | 'rushYds' | 'recYds' | 'rec' | 'rushRecYds';
+export type PropStatType = 'passYds' | 'passTD' | 'passComp' | 'passAtt' | 'rushYds' | 'carries' | 'recYds' | 'rec' | 'rushRecYds';
 
 export interface BetLeg {
   id: string;

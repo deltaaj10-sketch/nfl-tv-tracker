@@ -555,14 +555,20 @@ function gradeBetLeg(
     if (raw && leg.statType) {
       if (leg.statType === 'passYds') currentVal = raw.passYds;
       else if (leg.statType === 'passTD') currentVal = raw.passTD;
+      else if (leg.statType === 'passComp') currentVal = raw.passComp ?? player?.stats.completions ?? 0;
+      else if (leg.statType === 'passAtt') currentVal = raw.passAtt ?? player?.stats.passingAttempts ?? 0;
       else if (leg.statType === 'rushYds') currentVal = raw.rushYds;
+      else if (leg.statType === 'carries') currentVal = raw.carries ?? player?.stats.rushingAttempts ?? 0;
       else if (leg.statType === 'recYds') currentVal = raw.recYds;
       else if (leg.statType === 'rec') currentVal = raw.rec;
       else if (leg.statType === 'rushRecYds') currentVal = raw.rushYds + raw.recYds;
     } else if (player?.stats && leg.statType) {
       if (leg.statType === 'passYds') currentVal = player.stats.passingYards || 0;
       else if (leg.statType === 'passTD') currentVal = player.stats.passingTouchdowns || 0;
+      else if (leg.statType === 'passComp') currentVal = player.stats.completions || 0;
+      else if (leg.statType === 'passAtt') currentVal = player.stats.passingAttempts || 0;
       else if (leg.statType === 'rushYds') currentVal = player.stats.rushingYards || 0;
+      else if (leg.statType === 'carries') currentVal = player.stats.rushingAttempts || 0;
       else if (leg.statType === 'recYds') currentVal = player.stats.receivingYards || 0;
       else if (leg.statType === 'rec') currentVal = player.stats.receptions || 0;
       else if (leg.statType === 'rushRecYds') currentVal = (player.stats.rushingYards || 0) + (player.stats.receivingYards || 0);
@@ -1182,12 +1188,12 @@ function getPlayerPropsSummary(player: FantasyPlayer) {
   if (pos === 'QB') {
     const passYdsTarget = 238.5;
     const currentPassYds = raw?.passYds ?? (stats.passingYards || 0);
-    const passTdsTarget = 1.5;
-    const currentPassTds = raw?.passTD ?? (stats.passingTouchdowns || 0);
+    const passCompTarget = 21.5;
+    const currentPassComp = raw?.passComp ?? (stats.completions || 0);
     return [
       {
         id: 'passYds',
-        label: 'Pass Yds',
+        label: 'Passing Yds',
         target: passYdsTarget,
         current: currentPassYds,
         unit: 'YDS',
@@ -1196,14 +1202,14 @@ function getPlayerPropsSummary(player: FantasyPlayer) {
         isCashed: currentPassYds >= passYdsTarget,
       },
       {
-        id: 'passTD',
-        label: 'Pass TDs',
-        target: passTdsTarget,
-        current: currentPassTds,
-        unit: 'TD',
-        pct: Math.min(100, Math.round((currentPassTds / passTdsTarget) * 100)),
-        statusText: currentPassTds >= passTdsTarget ? 'COVERED' : `${currentPassTds} / ${passTdsTarget} TD`,
-        isCashed: currentPassTds >= passTdsTarget,
+        id: 'passComp',
+        label: 'Pass Comp',
+        target: passCompTarget,
+        current: currentPassComp,
+        unit: 'COMP',
+        pct: Math.min(100, Math.round((currentPassComp / passCompTarget) * 100)),
+        statusText: currentPassComp >= passCompTarget ? 'COVERED' : `${currentPassComp} / ${passCompTarget} COMP`,
+        isCashed: currentPassComp >= passCompTarget,
       },
     ];
   }
@@ -1211,11 +1217,12 @@ function getPlayerPropsSummary(player: FantasyPlayer) {
   if (pos === 'RB') {
     const rushYdsTarget = 62.5;
     const currentRushYds = raw?.rushYds ?? (stats.rushingYards || 0);
-    const rushTds = (raw?.rushTD ?? 0) + (raw?.recTD ?? 0) + (stats.rushingTouchdowns || 0);
+    const carriesTarget = 14.5;
+    const currentCarries = raw?.carries ?? (stats.rushingAttempts || 0);
     return [
       {
         id: 'rushYds',
-        label: 'Rush Yds',
+        label: 'Rushing Yds',
         target: rushYdsTarget,
         current: currentRushYds,
         unit: 'YDS',
@@ -1224,14 +1231,14 @@ function getPlayerPropsSummary(player: FantasyPlayer) {
         isCashed: currentRushYds >= rushYdsTarget,
       },
       {
-        id: 'anytimeTD',
-        label: 'Anytime TD',
-        target: 1,
-        current: rushTds,
-        unit: 'TD',
-        pct: rushTds > 0 ? 100 : 35,
-        statusText: rushTds > 0 ? 'TD CASHED' : 'HUNTING TD',
-        isCashed: rushTds > 0,
+        id: 'carries',
+        label: 'Carries',
+        target: carriesTarget,
+        current: currentCarries,
+        unit: 'CAR',
+        pct: Math.min(100, Math.round((currentCarries / carriesTarget) * 100)),
+        statusText: currentCarries >= carriesTarget ? 'COVERED' : `${currentCarries} / ${carriesTarget} CAR`,
+        isCashed: currentCarries >= carriesTarget,
       },
     ];
   }
@@ -1241,11 +1248,10 @@ function getPlayerPropsSummary(player: FantasyPlayer) {
     const currentRecYds = raw?.recYds ?? (stats.receivingYards || 0);
     const recTarget = pos === 'WR' ? 4.5 : 3.5;
     const currentRec = raw?.rec ?? (stats.receptions || 0);
-    const tds = (raw?.recTD ?? 0) + (raw?.rushTD ?? 0) + (stats.receivingTouchdowns || 0);
     return [
       {
         id: 'recYds',
-        label: 'Rec Yds',
+        label: 'Receiving Yds',
         target: recYdsTarget,
         current: currentRecYds,
         unit: 'YDS',
@@ -1262,33 +1268,6 @@ function getPlayerPropsSummary(player: FantasyPlayer) {
         pct: Math.min(100, Math.round((currentRec / recTarget) * 100)),
         statusText: currentRec >= recTarget ? 'COVERED' : `${currentRec} / ${recTarget} REC`,
         isCashed: currentRec >= recTarget,
-      },
-      {
-        id: 'anytimeTD',
-        label: 'Anytime TD',
-        target: 1,
-        current: tds,
-        unit: 'TD',
-        pct: tds > 0 ? 100 : 35,
-        statusText: tds > 0 ? 'TD CASHED' : 'HUNTING TD',
-        isCashed: tds > 0,
-      },
-    ];
-  }
-
-  if (pos === 'K') {
-    const fgTarget = 1.5;
-    const currentFg = stats.fgMade || 0;
-    return [
-      {
-        id: 'fgMade',
-        label: 'FG Made',
-        target: fgTarget,
-        current: currentFg,
-        unit: 'FG',
-        pct: Math.min(100, Math.round((currentFg / fgTarget) * 100)),
-        statusText: currentFg >= fgTarget ? 'COVERED' : `${currentFg} / ${fgTarget} FG`,
-        isCashed: currentFg >= fgTarget,
       },
     ];
   }
@@ -1360,7 +1339,16 @@ export default function TVCommandCenter() {
   const [bettingSubView, setBettingSubView] = useState<'slips' | 'props'>('slips');
   const [bettingSearch, setBettingSearch] = useState('');
   const [bettingGameFilter, setBettingGameFilter] = useState('ALL');
-  const [bettingPosFilter, setBettingPosFilter] = useState<'ALL' | 'QB' | 'RB' | 'WR' | 'TE' | 'K'>('ALL');
+  const [bettingPosFilter, setBettingPosFilter] = useState<'ALL' | 'QB' | 'RB' | 'WR' | 'TE'>('ALL');
+
+  // Inline Quick Connect for Room / Leagues Tab
+  const [quickFriendName, setQuickFriendName] = useState('');
+  const [quickPlayerSearch, setQuickPlayerSearch] = useState('');
+  const [quickSelectedPlayer, setQuickSelectedPlayer] = useState<{ id?: string; name: string; position?: string; team?: string } | null>(null);
+  const [inlineSleeperInput, setInlineSleeperInput] = useState('');
+  const [inlineSleeperLoading, setInlineSleeperLoading] = useState(false);
+  const [inlineSleeperError, setInlineSleeperError] = useState<string | null>(null);
+  const [inlineSleeperSuccess, setInlineSleeperSuccess] = useState<string | null>(null);
 
   // Timers & Cycling
   const [cycleProgress, setCycleProgress] = useState(0); // 0 to 100%
@@ -2132,16 +2120,22 @@ export default function TVCommandCenter() {
         stepCount = 0;
         setCycleProgress(0);
         setActiveTab((curr) => {
-          const availableTabs = savedBets.length > 0 ? TABS : TABS.filter((t) => t.id !== 'bets');
+          const hasLeaguesOrFriends = syncedLeagues.length > 0 || guestTags.length > 0;
+          const hasTrackedBets = savedBets.length > 0;
+          const availableTabs = TABS.filter((t) => {
+            if (t.id === 'room' && !hasLeaguesOrFriends) return false;
+            if (t.id === 'bets' && !hasTrackedBets) return false;
+            return true;
+          });
           const currentIndex = availableTabs.findIndex((t) => t.id === curr);
-          const nextIndex = (currentIndex + 1) % availableTabs.length;
+          const nextIndex = currentIndex === -1 ? 0 : (currentIndex + 1) % availableTabs.length;
           return availableTabs[nextIndex].id;
         });
       }
     }, stepMs);
 
     return () => clearInterval(cycleInterval);
-  }, [autoCycle, isHoveringMain, savedBets]);
+  }, [autoCycle, isHoveringMain, savedBets, syncedLeagues, guestTags]);
 
   // Live Games Count across all scoreboard events
   const liveGamesCount = useMemo(() => {
@@ -2179,6 +2173,74 @@ export default function TVCommandCenter() {
     }
     return list;
   }, [data]);
+
+  // Inline Quick-Add Friend for Living Room Leaderboard
+  const handleQuickAddFriend = () => {
+    if (!quickFriendName.trim()) return;
+    const name = quickFriendName.trim();
+    const newGuest: GuestTagConfig = {
+      id: `guest-${Date.now()}`,
+      guestName: name,
+      teamName: `${name}'s Squad`,
+      players: quickSelectedPlayer ? [quickSelectedPlayer] : [],
+    };
+    handleUpdateGuests([...guestTags, newGuest]);
+    setQuickFriendName('');
+    setQuickPlayerSearch('');
+    setQuickSelectedPlayer(null);
+  };
+
+  // Quick player suggestions for couch friend tagger
+  const quickPlayerSuggestions = useMemo(() => {
+    const q = quickPlayerSearch.trim().toLowerCase();
+    if (!q) return [];
+    return allActivePlayers
+      .filter((p) => p.position !== 'DEF' && (p.name.toLowerCase().includes(q) || p.team.abbreviation.toLowerCase().includes(q)))
+      .slice(0, 6);
+  }, [quickPlayerSearch, allActivePlayers]);
+
+  // Inline Sleeper Quick-Sync for League Matchups panel
+  const handleInlineSleeperSync = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const input = inlineSleeperInput.trim();
+    if (!input) return;
+
+    setInlineSleeperLoading(true);
+    setInlineSleeperError(null);
+    setInlineSleeperSuccess(null);
+
+    const weekToSync = data?.season?.week || 6;
+
+    try {
+      const isId = /^\d+$/.test(input);
+      const url = isId
+        ? `/api/sleeper-league?leagueId=${encodeURIComponent(input)}&week=${weekToSync}`
+        : `/api/sleeper-league?username=${encodeURIComponent(input)}&week=${weekToSync}`;
+
+      const res = await fetch(url);
+      const json = await res.json();
+      if (!res.ok || json.error) {
+        throw new Error(json.error || `Failed to connect Sleeper league (${res.status})`);
+      }
+
+      const newLeague: SyncedLeagueConfig = {
+        id: `sleeper-${json.leagueId || input}-${Date.now()}`,
+        type: 'sleeper',
+        name: json.name || `Sleeper League ${input}`,
+        leagueId: String(json.leagueId || input),
+        week: weekToSync,
+      };
+
+      handleUpdateLeagues([...syncedLeagues, newLeague]);
+      setInlineSleeperSuccess(`Connected "${newLeague.name}"!`);
+      setInlineSleeperInput('');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to connect Sleeper league.';
+      setInlineSleeperError(msg);
+    } finally {
+      setInlineSleeperLoading(false);
+    }
+  };
 
   // Monitor Bet Slips & Legs for newly Cashed Wins
   useEffect(() => {
@@ -3912,10 +3974,10 @@ export default function TVCommandCenter() {
             </div>
           </div>
         ) : activeTab === 'room' ? (
-          /* TAB 8: ROOM MATCHUPS & ROSTERS */
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-3.5 h-full overflow-hidden">
-            {/* Left 6 Columns: Living Room Friends Leaderboard */}
-            <div className="lg:col-span-6 flex flex-col h-full bg-[#0e1015] rounded-xl border border-zinc-800/80 p-3 overflow-hidden">
+          /* TAB 8: ROOM MATCHUPS & ROSTERS (12-COLUMN BROADCAST GRID) */
+          <div className="grid grid-cols-12 gap-4 h-full overflow-hidden">
+            {/* Left 5 Columns: Living Room Friends Leaderboard */}
+            <div className="col-span-12 lg:col-span-5 flex flex-col h-full bg-[#0e1015] rounded-xl border border-zinc-800/80 p-3 overflow-hidden">
               <div className="flex items-center justify-between pb-2 border-b border-zinc-800/80 shrink-0">
                 <div className="flex items-center gap-2">
                   <Crown className="w-4 h-4 text-amber-400" />
@@ -3927,20 +3989,117 @@ export default function TVCommandCenter() {
                   onClick={() => setIsManageModalOpen(true)}
                   className="text-xs font-condensed font-bold text-amber-400 hover:text-amber-300 uppercase tracking-wide"
                 >
-                  + Add / Edit Friends
+                  + Friends Manager
                 </button>
               </div>
 
               <div className="flex-1 overflow-y-auto pr-1 pt-2 space-y-2">
                 {roomFriendsLeaderboard.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center gap-2 text-zinc-500 font-condensed">
-                    <Users className="w-8 h-8 text-zinc-600" />
-                    <p className="text-xs font-medium">No friends tagged in the living room yet.</p>
+                  /* INLINE QUICK-ADD FRIEND CARD */
+                  <div className="h-full flex flex-col justify-between gap-3 text-zinc-400 font-condensed p-2">
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 text-white">
+                        <Users className="w-5 h-5 text-amber-400 shrink-0" />
+                        <div>
+                          <h3 className="text-sm font-black uppercase tracking-wide">Quick-Add Couch Friends</h3>
+                          <p className="text-[11px] text-zinc-500 font-medium">Tag people in the room to track their fantasy points live.</p>
+                        </div>
+                      </div>
+
+                      {/* Quick Add Form */}
+                      <div className="space-y-2 bg-[#13151f] p-3 rounded-lg border border-zinc-800">
+                        <div>
+                          <label className="text-[10px] font-bold text-zinc-400 uppercase block mb-1">Friend Name</label>
+                          <input
+                            type="text"
+                            value={quickFriendName}
+                            onChange={(e) => setQuickFriendName(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleQuickAddFriend();
+                            }}
+                            placeholder="e.g. Alex, Sarah, Dave..."
+                            className="w-full bg-[#0a0b0e] border border-zinc-800 rounded px-2.5 py-1.5 text-xs text-white placeholder-zinc-500 font-bold focus:outline-none focus:border-amber-400"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-[10px] font-bold text-zinc-400 uppercase block mb-1">Tag an NFL Player (Optional)</label>
+                          {quickSelectedPlayer ? (
+                            <div className="flex items-center justify-between px-2.5 py-1.5 bg-[#0a0b0e] border border-amber-500/40 rounded text-xs">
+                              <span className="font-bold text-amber-300">
+                                {quickSelectedPlayer.name} ({quickSelectedPlayer.team} • {quickSelectedPlayer.position})
+                              </span>
+                              <button
+                                onClick={() => setQuickSelectedPlayer(null)}
+                                className="text-zinc-500 hover:text-white"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="relative">
+                              <input
+                                type="text"
+                                value={quickPlayerSearch}
+                                onChange={(e) => setQuickPlayerSearch(e.target.value)}
+                                placeholder="Search NFL player to tag..."
+                                className="w-full bg-[#0a0b0e] border border-zinc-800 rounded px-2.5 py-1.5 text-xs text-white placeholder-zinc-500 font-medium focus:outline-none focus:border-zinc-700"
+                              />
+                              {quickPlayerSuggestions.length > 0 && (
+                                <div className="absolute top-full left-0 right-0 mt-1 bg-[#181a24] border border-zinc-700 rounded-lg shadow-xl z-30 max-h-36 overflow-y-auto">
+                                  {quickPlayerSuggestions.map((p) => (
+                                    <button
+                                      key={p.id}
+                                      onClick={() => {
+                                        setQuickSelectedPlayer({
+                                          id: p.id,
+                                          name: p.name,
+                                          position: p.position,
+                                          team: p.team.abbreviation,
+                                        });
+                                        setQuickPlayerSearch('');
+                                      }}
+                                      className="w-full text-left px-2.5 py-1.5 hover:bg-zinc-800 flex items-center justify-between text-xs border-b border-zinc-800/60 last:border-b-0"
+                                    >
+                                      <span className="font-bold text-white">{p.name}</span>
+                                      <span className="text-[10px] text-zinc-400 font-mono-score font-semibold">
+                                        {p.team.abbreviation} • {p.position}
+                                      </span>
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        <button
+                          onClick={handleQuickAddFriend}
+                          disabled={!quickFriendName.trim()}
+                          className="w-full mt-1 py-1.5 rounded bg-amber-400 hover:bg-amber-300 disabled:opacity-40 disabled:cursor-not-allowed text-black font-black text-xs uppercase transition-colors"
+                        >
+                          + Add Friend to Living Room
+                        </button>
+                      </div>
+
+                      {/* Explanation Card */}
+                      <div className="p-3 bg-[#0a0b0e] border border-zinc-800/80 rounded-lg space-y-1.5 text-[11px]">
+                        <span className="font-black text-zinc-300 uppercase tracking-wider text-[10px] block">
+                          How Living Room Tracking Works:
+                        </span>
+                        <div className="text-zinc-400 space-y-1">
+                          <p>• Tag each person on your couch and assign them their fantasy players.</p>
+                          <p>• Point totals aggregate in real-time as touchdowns and drives occur.</p>
+                          <p>• Real-time lead changes and score margins update live alongside RedZone.</p>
+                        </div>
+                      </div>
+                    </div>
+
                     <button
                       onClick={() => setIsManageModalOpen(true)}
-                      className="px-3 py-1.5 rounded-lg bg-amber-400 text-black font-black text-xs uppercase"
+                      className="w-full py-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-800 font-bold text-xs uppercase transition-colors text-center"
                     >
-                      Tag Friends in Room
+                      Open Full Friends &amp; Rosters Manager
                     </button>
                   </div>
                 ) : (
@@ -4030,8 +4189,8 @@ export default function TVCommandCenter() {
               </div>
             </div>
 
-            {/* Right 6 Columns: Connected League Matchups */}
-            <div className="lg:col-span-6 flex flex-col h-full bg-[#0e1015] rounded-xl border border-zinc-800/80 p-3 overflow-hidden">
+            {/* Right 7 Columns: Connected League Matchups */}
+            <div className="col-span-12 lg:col-span-7 flex flex-col h-full bg-[#0e1015] rounded-xl border border-zinc-800/80 p-3 overflow-hidden">
               <div className="flex items-center justify-between pb-2 border-b border-zinc-800/80 shrink-0">
                 <div className="flex items-center gap-2">
                   <Swords className="w-4 h-4 text-cyan-400" />
@@ -4039,21 +4198,97 @@ export default function TVCommandCenter() {
                     Live League Matchups
                   </h2>
                 </div>
-                <span className="text-xs font-condensed font-semibold text-zinc-500 uppercase tracking-wider">
-                  {allConnectedMatchups.length} MATCHUPS
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-condensed font-semibold text-zinc-500 uppercase tracking-wider">
+                    {allConnectedMatchups.length} MATCHUPS
+                  </span>
+                  <button
+                    onClick={() => setIsManageModalOpen(true)}
+                    className="text-xs font-condensed font-bold text-cyan-400 hover:text-cyan-300 uppercase tracking-wide"
+                  >
+                    + League Manager
+                  </button>
+                </div>
               </div>
 
               <div className="flex-1 overflow-y-auto pr-1 pt-2 space-y-2">
                 {allConnectedMatchups.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center gap-2 text-zinc-500 font-condensed">
-                    <Swords className="w-8 h-8 text-zinc-600" />
-                    <p className="text-xs font-medium">No Sleeper or ESPN leagues connected yet.</p>
+                  /* INLINE SLEEPER QUICK-SYNC BAR */
+                  <div className="h-full flex flex-col justify-between gap-4 text-zinc-400 font-condensed p-3">
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2.5 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 shrink-0">
+                          <Swords className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <h3 className="text-base font-black text-white uppercase tracking-wider">
+                            Sync Live Sleeper or ESPN Leagues
+                          </h3>
+                          <p className="text-xs text-zinc-500 font-medium">
+                            Display head-to-head point margins, live scoreboards, and momentum tug-of-war bars on TV.
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Inline Quick-Sync Bar */}
+                      <form onSubmit={handleInlineSleeperSync} className="p-3.5 bg-[#13151f] rounded-lg border border-zinc-800 space-y-2.5">
+                        <label className="text-xs font-black text-white uppercase tracking-wide block">
+                          Instant Sleeper Quick-Sync
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={inlineSleeperInput}
+                            onChange={(e) => setInlineSleeperInput(e.target.value)}
+                            placeholder="Enter Sleeper Username or League ID (e.g. 1048382910293)..."
+                            className="flex-1 bg-[#0a0b0e] border border-zinc-800 rounded px-3 py-2 text-xs text-white placeholder-zinc-500 font-bold focus:outline-none focus:border-cyan-400"
+                          />
+                          <button
+                            type="submit"
+                            disabled={inlineSleeperLoading || !inlineSleeperInput.trim()}
+                            className="px-4 py-2 rounded bg-cyan-400 hover:bg-cyan-300 disabled:opacity-40 disabled:cursor-not-allowed text-black font-black text-xs uppercase tracking-wide transition-colors shrink-0 flex items-center gap-1.5"
+                          >
+                            {inlineSleeperLoading ? (
+                              <>
+                                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                <span>Syncing...</span>
+                              </>
+                            ) : (
+                              <span>1-Click Sync</span>
+                            )}
+                          </button>
+                        </div>
+
+                        {inlineSleeperError && (
+                          <div className="p-2 rounded bg-rose-950/60 border border-rose-500/50 text-rose-300 text-xs font-medium">
+                            {inlineSleeperError}
+                          </div>
+                        )}
+                        {inlineSleeperSuccess && (
+                          <div className="p-2 rounded bg-emerald-950/60 border border-emerald-500/50 text-emerald-300 text-xs font-medium">
+                            {inlineSleeperSuccess}
+                          </div>
+                        )}
+                      </form>
+
+                      {/* Supported platforms cards */}
+                      <div className="grid grid-cols-2 gap-3 text-xs">
+                        <div className="p-2.5 rounded bg-[#0a0b0e] border border-zinc-800 space-y-1">
+                          <span className="font-bold text-zinc-300 uppercase text-[10px] block">Sleeper Fantasy</span>
+                          <p className="text-[11px] text-zinc-500">Public or private leagues supported via League ID or username.</p>
+                        </div>
+                        <div className="p-2.5 rounded bg-[#0a0b0e] border border-zinc-800 space-y-1">
+                          <span className="font-bold text-zinc-300 uppercase text-[10px] block">ESPN Fantasy</span>
+                          <p className="text-[11px] text-zinc-500">Connect ESPN with private league cookies in the League Manager.</p>
+                        </div>
+                      </div>
+                    </div>
+
                     <button
                       onClick={() => setIsManageModalOpen(true)}
-                      className="px-3 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-black font-black text-xs uppercase"
+                      className="w-full py-2.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-cyan-300 hover:text-white border border-zinc-800 font-bold text-xs uppercase transition-colors text-center"
                     >
-                      Connect Your League
+                      Open Full League Manager (ESPN &amp; Advanced Sleeper)
                     </button>
                   </div>
                 ) : (
@@ -4171,10 +4406,10 @@ export default function TVCommandCenter() {
                 </div>
 
                 {/* Sub-View Switcher: Slips vs Live Props Market */}
-                <div className="flex items-center bg-[#0a0b0e] p-0.5 rounded-lg border border-zinc-800/80">
+                <div className="flex items-center bg-[#0a0b0e] p-0.5 rounded-[4px] border border-zinc-800/80">
                   <button
                     onClick={() => setBettingSubView('slips')}
-                    className={`px-2.5 py-1 rounded-md text-[10px] font-condensed uppercase transition-all ${
+                    className={`px-2.5 py-1 rounded-[4px] text-[10px] font-condensed uppercase transition-all ${
                       bettingSubView === 'slips'
                         ? 'bg-white text-black font-black'
                         : 'text-zinc-400 hover:text-white font-bold'
@@ -4184,7 +4419,7 @@ export default function TVCommandCenter() {
                   </button>
                   <button
                     onClick={() => setBettingSubView('props')}
-                    className={`px-2.5 py-1 rounded-md text-[10px] font-condensed uppercase transition-all ${
+                    className={`px-2.5 py-1 rounded-[4px] text-[10px] font-condensed uppercase transition-all ${
                       bettingSubView === 'props'
                         ? 'bg-emerald-400 text-black font-black'
                         : 'text-zinc-400 hover:text-white font-bold'
@@ -4194,11 +4429,11 @@ export default function TVCommandCenter() {
                   </button>
                 </div>
 
-                {bettingSubView === 'slips' && (
-                  <div className="flex items-center gap-1 bg-[#0a0b0e] p-0.5 rounded-lg border border-zinc-800/80">
+                {bettingSubView === 'slips' && savedBets.length > 0 && (
+                  <div className="flex items-center gap-1 bg-[#0a0b0e] p-0.5 rounded-[4px] border border-zinc-800/80">
                     <button
                       onClick={() => setSlipsFilter('ALL')}
-                      className={`px-2 py-0.5 rounded-md text-[10px] font-condensed uppercase transition-all ${
+                      className={`px-2 py-0.5 rounded-[4px] text-[10px] font-condensed uppercase transition-all ${
                         slipsFilter === 'ALL'
                           ? 'bg-white text-black font-black'
                           : 'text-zinc-400 hover:text-white font-bold'
@@ -4208,7 +4443,7 @@ export default function TVCommandCenter() {
                     </button>
                     <button
                       onClick={() => setSlipsFilter('IN_FLIGHT')}
-                      className={`px-2 py-0.5 rounded-md text-[10px] font-condensed uppercase transition-all flex items-center gap-1 ${
+                      className={`px-2 py-0.5 rounded-[4px] text-[10px] font-condensed uppercase transition-all flex items-center gap-1 ${
                         slipsFilter === 'IN_FLIGHT'
                           ? 'bg-cyan-400 text-black font-black'
                           : 'text-zinc-400 hover:text-white font-bold'
@@ -4219,7 +4454,7 @@ export default function TVCommandCenter() {
                     </button>
                     <button
                       onClick={() => setSlipsFilter('SWEATING')}
-                      className={`px-2 py-0.5 rounded-md text-[10px] font-condensed uppercase transition-all flex items-center gap-1 ${
+                      className={`px-2 py-0.5 rounded-[4px] text-[10px] font-condensed uppercase transition-all flex items-center gap-1 ${
                         slipsFilter === 'SWEATING'
                           ? 'bg-amber-400 text-black font-black'
                           : 'text-zinc-400 hover:text-white font-bold'
@@ -4230,7 +4465,7 @@ export default function TVCommandCenter() {
                     </button>
                     <button
                       onClick={() => setSlipsFilter('CASHED')}
-                      className={`px-2 py-0.5 rounded-md text-[10px] font-condensed uppercase transition-all flex items-center gap-1 ${
+                      className={`px-2 py-0.5 rounded-[4px] text-[10px] font-condensed uppercase transition-all flex items-center gap-1 ${
                         slipsFilter === 'CASHED'
                           ? 'bg-emerald-400 text-black font-black'
                           : 'text-zinc-400 hover:text-white font-bold'
@@ -4243,21 +4478,42 @@ export default function TVCommandCenter() {
                 )}
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 ml-auto">
                 <button
                   onClick={() => setIsBetsModalOpen(true)}
-                  className="px-3 py-1.5 rounded-lg bg-emerald-400 hover:bg-emerald-300 text-black font-condensed font-black text-xs uppercase transition-colors flex items-center gap-1.5"
+                  className="px-3 py-1.5 rounded-[4px] bg-emerald-400 hover:bg-emerald-300 text-black font-condensed font-black text-xs uppercase transition-colors flex items-center gap-1.5"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>+ Manage Slips &amp; Props</span>
+                  <span>Manage Slips &amp; Props</span>
                 </button>
               </div>
             </div>
 
             {/* Main Content: Slips vs Live Props Market */}
-            {bettingSubView === 'props' ? (
+            {bettingSubView === 'props' || savedBets.length === 0 ? (
               /* LIVE PROPS & PLAYER MARKET BOARD */
               <div className="flex-1 flex flex-col min-h-0 pt-2">
+                {/* Auto-Show Banner when Slips = 0 */}
+                {savedBets.length === 0 && (
+                  <div className="mb-2 px-3 py-2 rounded-[4px] bg-[#12141c] border border-amber-500/40 flex items-center justify-between gap-3 text-xs shrink-0 animate-fadeIn">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0" />
+                      <span className="font-condensed font-black tracking-wide text-amber-300 uppercase truncate">
+                        NO ACTIVE SLIPS — TAP ANY LIVE PROP BELOW TO BUILD A PARLAY
+                      </span>
+                      <span className="hidden md:inline text-zinc-500 font-medium">
+                        (Live stats and progress update automatically)
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => setIsBetsModalOpen(true)}
+                      className="px-2.5 py-1 rounded-[4px] bg-amber-400 hover:bg-amber-300 text-black font-condensed font-black text-[11px] uppercase tracking-wider shrink-0 transition-colors"
+                    >
+                      + Custom Slip
+                    </button>
+                  </div>
+                )}
+
                 {/* Search & Filters Bar */}
                 <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-2 pb-2 shrink-0 border-b border-zinc-800/80">
                   {/* Search Bar */}
@@ -4268,19 +4524,19 @@ export default function TVCommandCenter() {
                       value={bettingSearch}
                       onChange={(e) => setBettingSearch(e.target.value)}
                       placeholder="Search any NFL player, team, or position..."
-                      className="w-full bg-[#0a0b0e] border border-zinc-800 rounded-lg pl-9 pr-3 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-700 font-bold"
+                      className="w-full bg-[#0a0b0e] border border-zinc-800 rounded-[4px] pl-9 pr-3 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-700 font-bold"
                     />
                   </div>
 
                   {/* Filter Pills: Position + Game */}
                   <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
                     {/* Position Pills */}
-                    <div className="flex items-center gap-1 bg-[#0a0b0e] p-0.5 rounded-lg border border-zinc-800 shrink-0">
-                      {(['ALL', 'QB', 'RB', 'WR', 'TE', 'K'] as const).map((pos) => (
+                    <div className="flex items-center gap-1 bg-[#0a0b0e] p-0.5 rounded-[4px] border border-zinc-800 shrink-0">
+                      {(['ALL', 'QB', 'RB', 'WR', 'TE'] as const).map((pos) => (
                         <button
                           key={pos}
                           onClick={() => setBettingPosFilter(pos)}
-                          className={`px-2 py-0.5 rounded-md text-[9px] font-condensed uppercase transition-all ${
+                          className={`px-2 py-0.5 rounded-[4px] text-[9px] font-condensed uppercase transition-all ${
                             bettingPosFilter === pos
                               ? 'bg-white text-black font-black'
                               : 'text-zinc-400 hover:text-white font-bold'
@@ -4296,7 +4552,7 @@ export default function TVCommandCenter() {
                       <div className="flex items-center gap-1 overflow-x-auto no-scrollbar shrink-0">
                         <button
                           onClick={() => setBettingGameFilter('ALL')}
-                          className={`px-2 py-1 rounded-md text-[9px] font-condensed uppercase transition-all ${
+                          className={`px-2 py-1 rounded-[4px] text-[9px] font-condensed uppercase transition-all ${
                             bettingGameFilter === 'ALL'
                               ? 'bg-amber-400 text-black font-black'
                               : 'bg-[#0a0b0e] text-zinc-400 hover:text-white border border-zinc-800 font-bold'
@@ -4311,7 +4567,7 @@ export default function TVCommandCenter() {
                             <button
                               key={g.id}
                               onClick={() => setBettingGameFilter(g.id)}
-                              className={`px-2 py-1 rounded-md text-[9px] font-condensed uppercase transition-all flex items-center gap-1 shrink-0 ${
+                              className={`px-2 py-1 rounded-[4px] text-[9px] font-condensed uppercase transition-all flex items-center gap-1 shrink-0 ${
                                 active
                                   ? 'bg-amber-400 text-black font-black'
                                   : isLive
@@ -4349,13 +4605,14 @@ export default function TVCommandCenter() {
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pb-3">
                       {filteredMarketPlayers.map((player) => {
                         const props = getPlayerPropsSummary(player);
+                        if (props.length === 0) return null;
                         const isLive = player.isGameLive || player.isLive || player.gameStatus?.state === 'in';
                         const teamAccent = getTeamAccentColor(player.team.abbreviation);
                         return (
                           <div
                             key={player.id}
                             style={{ borderLeftColor: teamAccent, borderLeftWidth: '3px' }}
-                            className={`rounded-lg border p-3 flex flex-col justify-between transition-all ${
+                            className={`rounded-[4px] border p-3 flex flex-col justify-between transition-all ${
                               isLive
                                 ? 'bg-[#13151f] border-zinc-800 hover:border-zinc-700'
                                 : 'bg-[#0e1015] border-zinc-800/80 hover:border-zinc-700'
@@ -4377,12 +4634,12 @@ export default function TVCommandCenter() {
                                     <span className="text-xs font-condensed font-black text-white truncate">
                                       {player.name} {player.jersey ? `#${player.jersey}` : ''}
                                     </span>
-                                    <span className="text-[9px] font-condensed font-black text-amber-400 px-1.5 py-0.2 rounded-md bg-amber-500/10 border border-amber-500/30 shrink-0">
+                                    <span className="text-[9px] font-condensed font-black text-amber-400 px-1.5 py-0.2 rounded-[3px] bg-amber-500/10 border border-amber-500/30 shrink-0">
                                       {player.position}
                                     </span>
                                     {player.injuryStatus && player.injuryStatus !== 'NA' && (
                                       <span
-                                        className={`px-1.5 py-0.2 rounded-md text-[8px] font-black uppercase tracking-wider shrink-0 ${
+                                        className={`px-1.5 py-0.2 rounded-[3px] text-[8px] font-black uppercase tracking-wider shrink-0 ${
                                           player.injuryStatus === 'Out' || player.injuryStatus === 'IR' || player.injuryStatus === 'PUP'
                                             ? 'bg-rose-600 text-white'
                                             : player.injuryStatus === 'Doubtful'
@@ -4407,7 +4664,7 @@ export default function TVCommandCenter() {
 
                               <button
                                 onClick={() => setIsBetsModalOpen(true)}
-                                className="px-2.5 py-1 rounded-md bg-emerald-400 hover:bg-emerald-300 text-black text-[10px] font-condensed font-black uppercase transition-all shrink-0"
+                                className="px-2.5 py-1 rounded-[4px] bg-emerald-400 hover:bg-emerald-300 text-black text-[10px] font-condensed font-black uppercase transition-all shrink-0"
                               >
                                 + Bet Prop
                               </button>
@@ -4456,37 +4713,9 @@ export default function TVCommandCenter() {
                 </div>
               </div>
             ) : (
-              /* Slips 2-Column Grid */
+              /* Slips 2-Column Grid (Active Saved Bets) */
               <div className="flex-1 overflow-y-auto pr-1 pt-2">
-                {savedBets.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center gap-3 text-zinc-500 py-12 font-condensed">
-                    <div className="p-3 rounded-xl bg-[#0a0b0e] border border-zinc-800">
-                      <DollarSign className="w-8 h-8 text-emerald-400" />
-                    </div>
-                    <div className="text-center">
-                      <p className="text-base font-black text-white uppercase">
-                        No Bets or Parlays Currently Tracked
-                      </p>
-                      <p className="text-xs text-zinc-500 max-w-sm mt-1 font-medium">
-                        Add player props, game spreads, totals, and anytime touchdown scorers to watch them grade live on your second TV.
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => setIsBetsModalOpen(true)}
-                        className="px-4 py-2 rounded-lg bg-emerald-400 hover:bg-emerald-300 text-black font-condensed font-black text-xs uppercase transition-colors"
-                      >
-                        + Add Your First Bet / Parlay
-                      </button>
-                      <button
-                        onClick={() => setBettingSubView('props')}
-                        className="px-4 py-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-white font-condensed font-bold text-xs uppercase transition-colors"
-                      >
-                        Browse Player Props Market
-                      </button>
-                    </div>
-                  </div>
-                ) : filteredSlips.length === 0 ? (
+                {filteredSlips.length === 0 ? (
                   <div className="h-full flex flex-col items-center justify-center gap-2 text-zinc-500 py-12 font-condensed">
                     <p className="text-sm font-bold uppercase text-zinc-400">
                       No slips found matching &ldquo;{slipsFilter}&rdquo; filter

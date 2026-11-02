@@ -5,11 +5,59 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const leagueId = searchParams.get('leagueId');
+    const username = searchParams.get('username');
+    let leagueId = searchParams.get('leagueId');
     const week = searchParams.get('week') || '6';
 
+    if (!leagueId && username) {
+      // Look up user by username
+      const userRes = await fetch(`https://api.sleeper.app/v1/user/${encodeURIComponent(username.trim())}`, {
+        headers: { 'User-Agent': 'Mozilla/5.0' },
+        cache: 'no-store',
+      });
+      if (!userRes.ok) {
+        return NextResponse.json({ error: `Sleeper user "${username}" not found` }, { status: 404 });
+      }
+      const userData = await userRes.json();
+      const userId = userData?.user_id;
+      if (!userId) {
+        return NextResponse.json({ error: `Could not resolve user ID for "${username}"` }, { status: 404 });
+      }
+
+      // Fetch user's leagues for recent seasons
+      const currentYear = new Date().getFullYear();
+      let leaguesList: Array<{ league_id: string; name: string }> = [];
+      for (const yr of [currentYear, currentYear - 1, 2026, 2025]) {
+        try {
+          const leaguesRes = await fetch(`https://api.sleeper.app/v1/user/${userId}/leagues/nfl/${yr}`, {
+            headers: { 'User-Agent': 'Mozilla/5.0' },
+            cache: 'no-store',
+          });
+          if (leaguesRes.ok) {
+            const lData = await leaguesRes.json();
+            if (Array.isArray(lData) && lData.length > 0) {
+              leaguesList = lData;
+              break;
+            }
+          }
+        } catch {
+          // continue
+        }
+      }
+
+      if (leaguesList.length === 0) {
+        return NextResponse.json(
+          { error: `No active Sleeper leagues found for username "${username}". Try entering your numerical League ID directly.` },
+          { status: 404 }
+        );
+      }
+
+      // Default to the first league
+      leagueId = leaguesList[0].league_id;
+    }
+
     if (!leagueId) {
-      return NextResponse.json({ error: 'Missing leagueId parameter' }, { status: 400 });
+      return NextResponse.json({ error: 'Missing leagueId or username parameter' }, { status: 400 });
     }
 
     // Fetch league info, users, rosters, and matchups in parallel

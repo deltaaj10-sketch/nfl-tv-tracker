@@ -940,8 +940,11 @@ export async function GET(request: Request) {
               playerRawStats: {
                 passYds: 0,
                 passTD: 0,
+                passComp: 0,
+                passAtt: 0,
                 rushYds: 0,
                 rushTD: 0,
+                carries: 0,
                 rec: 0,
                 recYds: 0,
                 recTD: 0,
@@ -1090,6 +1093,11 @@ export async function GET(request: Request) {
             let resolvedPosition: FantasyPosition | null = null;
             let hasOfficial = false;
 
+            const athleteRawPos =
+              athlete.position?.abbreviation ||
+              athlete.position?.name ||
+              (typeof athlete.position === 'string' ? athlete.position : '');
+
             if (player && (player.position === 'TE' || player.position === 'RB' || player.position === 'QB' || player.position === 'K')) {
               // PRESERVE true position from master roster / pre-seed!
               resolvedPosition = player.position;
@@ -1097,8 +1105,11 @@ export async function GET(request: Request) {
             } else if (sleeperPositionCache.has(athleteNorm)) {
               resolvedPosition = sleeperPositionCache.get(athleteNorm) || null;
               if (resolvedPosition) hasOfficial = true;
-            } else if (athlete.position?.abbreviation) {
-              resolvedPosition = normalizePosition(athlete.position.abbreviation);
+            } else if (sleeperPositionCache.has(`${athleteNorm}_${currentTeam.abbreviation.toLowerCase()}`)) {
+              resolvedPosition = sleeperPositionCache.get(`${athleteNorm}_${currentTeam.abbreviation.toLowerCase()}`) || null;
+              if (resolvedPosition) hasOfficial = true;
+            } else if (athleteRawPos) {
+              resolvedPosition = normalizePosition(athleteRawPos);
               if (resolvedPosition) hasOfficial = true;
             } else if (leaderPositions.has(athleteId)) {
               resolvedPosition = normalizePosition(leaderPositions.get(athleteId));
@@ -1108,6 +1119,9 @@ export async function GET(request: Request) {
               if (resolvedPosition) hasOfficial = true;
             } else if (rosterCache.has(athleteNorm)) {
               resolvedPosition = normalizePosition(rosterCache.get(athleteNorm));
+              if (resolvedPosition) hasOfficial = true;
+            } else if (rosterCache.has(`${athleteNorm}_${currentTeam.abbreviation.toLowerCase()}`)) {
+              resolvedPosition = normalizePosition(rosterCache.get(`${athleteNorm}_${currentTeam.abbreviation.toLowerCase()}`));
               if (resolvedPosition) hasOfficial = true;
             }
 
@@ -1429,14 +1443,24 @@ export async function GET(request: Request) {
       }
     });
 
-    // Secondary position refinement pass to ensure accurate RB vs WR vs QB classification
+    // Secondary position refinement pass to ensure accurate RB vs WR vs QB vs TE classification
     for (const player of allPlayersMap.values()) {
       const athleteNorm = player.name.toLowerCase().replace(/[^a-z]/g, '');
+      const teamAbbr = player.team.abbreviation.toLowerCase();
+
+      // 1. Check Sleeper position cache by normName and normName_team
       if (sleeperPositionCache.has(athleteNorm)) {
         player.position = sleeperPositionCache.get(athleteNorm)!;
         (player as any).hasOfficialPosition = true;
         continue;
       }
+      if (sleeperPositionCache.has(`${athleteNorm}_${teamAbbr}`)) {
+        player.position = sleeperPositionCache.get(`${athleteNorm}_${teamAbbr}`)!;
+        (player as any).hasOfficialPosition = true;
+        continue;
+      }
+
+      // 2. Check rosterCache by player.id, athleteNorm, and norm_team
       if (rosterCache.has(player.id)) {
         const rPos = normalizePosition(rosterCache.get(player.id));
         if (rPos) {
@@ -1444,6 +1468,32 @@ export async function GET(request: Request) {
           (player as any).hasOfficialPosition = true;
           continue;
         }
+      }
+      if (rosterCache.has(athleteNorm)) {
+        const rPos = normalizePosition(rosterCache.get(athleteNorm));
+        if (rPos) {
+          player.position = rPos;
+          (player as any).hasOfficialPosition = true;
+          continue;
+        }
+      }
+      if (rosterCache.has(`${athleteNorm}_${teamAbbr}`)) {
+        const rPos = normalizePosition(rosterCache.get(`${athleteNorm}_${teamAbbr}`));
+        if (rPos) {
+          player.position = rPos;
+          (player as any).hasOfficialPosition = true;
+          continue;
+        }
+      }
+
+      // 3. Check guaranteed roster athletes list
+      const guaranteedAth = GUARANTEED_ROSTER_ATHLETES.find(
+        (g) => g.id === player.id || g.name.toLowerCase().replace(/[^a-z]/g, '') === athleteNorm
+      );
+      if (guaranteedAth) {
+        player.position = guaranteedAth.position;
+        (player as any).hasOfficialPosition = true;
+        continue;
       }
 
       // If player is already TE, NEVER alter to WR!
@@ -1527,8 +1577,11 @@ export async function GET(request: Request) {
           playerRawStats: {
             passYds: proj.stats.passingYards || 0,
             passTD: proj.stats.passingTouchdowns || 0,
+            passComp: proj.stats.completions || 0,
+            passAtt: proj.stats.passingAttempts || 0,
             rushYds: proj.stats.rushingYards || 0,
             rushTD: proj.stats.rushingTouchdowns || 0,
+            carries: proj.stats.rushingAttempts || 0,
             rec: proj.stats.receptions || 0,
             recYds: proj.stats.receivingYards || 0,
             recTD: proj.stats.receivingTouchdowns || 0,
@@ -1580,8 +1633,11 @@ export async function GET(request: Request) {
           player.playerRawStats = {
             passYds: s.passingYards || 0,
             passTD: s.passingTouchdowns || 0,
+            passComp: s.completions || 0,
+            passAtt: s.passingAttempts || 0,
             rushYds: s.rushingYards || 0,
             rushTD: s.rushingTouchdowns || 0,
+            carries: s.rushingAttempts || 0,
             rec: s.receptions || 0,
             recYds: s.receivingYards || 0,
             recTD: s.receivingTouchdowns || 0,
@@ -1643,8 +1699,11 @@ export async function GET(request: Request) {
         player.playerRawStats = {
           passYds,
           passTD,
+          passComp: s.completions || 0,
+          passAtt: s.passingAttempts || 0,
           rushYds,
           rushTD,
+          carries: s.rushingAttempts || 0,
           rec,
           recYds,
           recTD,

@@ -31,7 +31,7 @@ interface ManageBetsModalProps {
 export interface GeneratedMarketProp {
   id: string;
   type: BetLegType;
-  category: 'PASSING' | 'RUSHING' | 'RECEIVING' | 'TOUCHDOWN' | 'GAME_LINE';
+  category: 'PASSING' | 'RUSHING' | 'RECEIVING' | 'GAME_TOTAL';
   playerName: string;
   playerId?: string;
   playerHeadshot?: string;
@@ -47,22 +47,28 @@ export interface GeneratedMarketProp {
 }
 
 const STAT_OPTIONS: { id: PropStatType; label: string }[] = [
-  { id: 'passYds', label: 'Pass Yds' },
-  { id: 'passTD', label: 'Pass TDs' },
-  { id: 'rushYds', label: 'Rush Yds' },
-  { id: 'recYds', label: 'Rec Yds' },
+  { id: 'passYds', label: 'Passing Yards' },
+  { id: 'passComp', label: 'Pass Completions' },
+  { id: 'rushYds', label: 'Rushing Yards' },
+  { id: 'carries', label: 'Carries' },
+  { id: 'recYds', label: 'Receiving Yards' },
   { id: 'rec', label: 'Receptions' },
-  { id: 'rushRecYds', label: 'Rush + Rec Yds' },
 ];
 
 export function getRealisticPropLine(position: string, statType: PropStatType): string {
   if (statType === 'passYds') return position === 'QB' ? '238.5' : '0.5';
-  if (statType === 'passTD') return '1.5';
+  if (statType === 'passComp') return position === 'QB' ? '21.5' : '0.5';
+  if (statType === 'passAtt') return position === 'QB' ? '32.5' : '1.5';
   if (statType === 'rushYds') {
     if (position === 'RB') return '62.5';
     if (position === 'QB') return '21.5';
     if (position === 'WR') return '6.5';
     return '14.5';
+  }
+  if (statType === 'carries') {
+    if (position === 'RB') return '14.5';
+    if (position === 'QB') return '4.5';
+    return '1.5';
   }
   if (statType === 'recYds') {
     if (position === 'WR') return '48.5';
@@ -75,11 +81,6 @@ export function getRealisticPropLine(position: string, statType: PropStatType): 
     if (position === 'TE') return '3.5';
     if (position === 'RB') return '2.5';
     return '3.5';
-  }
-  if (statType === 'rushRecYds') {
-    if (position === 'RB') return '76.5';
-    if (position === 'WR') return '54.5';
-    return '38.5';
   }
   return '45.5';
 }
@@ -97,7 +98,7 @@ export default function ManageBetsModal({
 
   // Fast-Search Prop Market State
   const [marketSearch, setMarketSearch] = useState('');
-  const [marketCategory, setMarketCategory] = useState<'ALL' | 'PASSING' | 'RUSHING' | 'RECEIVING' | 'TOUCHDOWN' | 'GAME_LINE'>('ALL');
+  const [marketCategory, setMarketCategory] = useState<'ALL' | 'PASSING' | 'RUSHING' | 'RECEIVING' | 'GAME_TOTAL'>('ALL');
   const [marketGameFilter, setMarketGameFilter] = useState('ALL');
 
   // New Custom Slip Form State
@@ -115,16 +116,14 @@ export default function ManageBetsModal({
   const [propDirection, setPropDirection] = useState<'OVER' | 'UNDER'>('OVER');
   const [propLine, setPropLine] = useState('48.5');
 
-  // Game Spread / Moneyline / Total
+  // Game Total
   const [selectedGameId, setSelectedGameId] = useState(availableGames[0]?.id || '');
-  const [selectedTeamAbbr, setSelectedTeamAbbr] = useState('');
-  const [spreadValue, setSpreadValue] = useState('-3.5');
   const [totalDirection, setTotalDirection] = useState<'OVER' | 'UNDER'>('OVER');
   const [totalLine, setTotalLine] = useState('47.5');
 
   const selectedGame = availableGames.find((g) => g.id === selectedGameId) || availableGames[0];
 
-  // 1. Generate the Comprehensive 629 Live Props Market Database
+  // 1. Generate Strict Live Props Market Database (Passing Yds, Pass Comp, Rush Yds, Carries, Rec Yds, Rec, Game Totals)
   const allGeneratedProps = useMemo<GeneratedMarketProp[]>(() => {
     const list: GeneratedMarketProp[] = [];
 
@@ -147,26 +146,10 @@ export default function ManageBetsModal({
       };
     };
 
-    // A. Player Props
+    // A. Player Props (Strictly offensive Passing, Rushing, Receiving)
     for (const p of availablePlayers) {
-      if (p.position === 'DEF') continue;
+      if (p.position === 'DEF' || p.position === 'K') continue;
       const gameInfo = getGameStatus(p.team.abbreviation);
-
-      // Anytime TD for all offensive players
-      list.push({
-        id: `prop-${p.id}-anytime-td`,
-        type: 'anytime_td',
-        category: 'TOUCHDOWN',
-        playerName: p.name,
-        playerId: p.id,
-        playerHeadshot: p.headshot,
-        playerTeam: p.team.abbreviation,
-        description: `${p.name} Anytime Touchdown (1+ TD)`,
-        odds: p.position === 'RB' ? '-110' : p.position === 'WR' ? '+155' : p.position === 'TE' ? '+210' : '+280',
-        matchup: gameInfo.matchup,
-        gameStatusText: gameInfo.text,
-        isGameLive: gameInfo.isLive,
-      });
 
       // QB Props
       if (p.position === 'QB') {
@@ -205,18 +188,35 @@ export default function ManageBetsModal({
           isGameLive: gameInfo.isLive,
         });
         list.push({
-          id: `prop-${p.id}-passTD-over`,
+          id: `prop-${p.id}-passComp-over`,
           type: 'player_prop',
           category: 'PASSING',
           playerName: p.name,
           playerId: p.id,
           playerHeadshot: p.headshot,
           playerTeam: p.team.abbreviation,
-          statType: 'passTD',
+          statType: 'passComp',
           direction: 'OVER',
-          targetValue: 1.5,
-          description: `${p.name} OVER 1.5 Passing TDs`,
-          odds: '+115',
+          targetValue: 21.5,
+          description: `${p.name} OVER 21.5 Pass Completions`,
+          odds: '-110',
+          matchup: gameInfo.matchup,
+          gameStatusText: gameInfo.text,
+          isGameLive: gameInfo.isLive,
+        });
+        list.push({
+          id: `prop-${p.id}-passComp-under`,
+          type: 'player_prop',
+          category: 'PASSING',
+          playerName: p.name,
+          playerId: p.id,
+          playerHeadshot: p.headshot,
+          playerTeam: p.team.abbreviation,
+          statType: 'passComp',
+          direction: 'UNDER',
+          targetValue: 21.5,
+          description: `${p.name} UNDER 21.5 Pass Completions`,
+          odds: '-110',
           matchup: gameInfo.matchup,
           gameStatusText: gameInfo.text,
           isGameLive: gameInfo.isLive,
@@ -277,17 +277,17 @@ export default function ManageBetsModal({
           isGameLive: gameInfo.isLive,
         });
         list.push({
-          id: `prop-${p.id}-rushRecYds-rb-over`,
+          id: `prop-${p.id}-carries-rb-over`,
           type: 'player_prop',
           category: 'RUSHING',
           playerName: p.name,
           playerId: p.id,
           playerHeadshot: p.headshot,
           playerTeam: p.team.abbreviation,
-          statType: 'rushRecYds',
+          statType: 'carries',
           direction: 'OVER',
-          targetValue: 78.5,
-          description: `${p.name} OVER 78.5 Rush + Rec Yds`,
+          targetValue: 14.5,
+          description: `${p.name} OVER 14.5 Carries`,
           odds: '-110',
           matchup: gameInfo.matchup,
           gameStatusText: gameInfo.text,
@@ -306,6 +306,23 @@ export default function ManageBetsModal({
           targetValue: 2.5,
           description: `${p.name} OVER 2.5 Receptions`,
           odds: '-125',
+          matchup: gameInfo.matchup,
+          gameStatusText: gameInfo.text,
+          isGameLive: gameInfo.isLive,
+        });
+        list.push({
+          id: `prop-${p.id}-recYds-rb-over`,
+          type: 'player_prop',
+          category: 'RECEIVING',
+          playerName: p.name,
+          playerId: p.id,
+          playerHeadshot: p.headshot,
+          playerTeam: p.team.abbreviation,
+          statType: 'recYds',
+          direction: 'OVER',
+          targetValue: 18.5,
+          description: `${p.name} OVER 18.5 Receiving Yds`,
+          odds: '-115',
           matchup: gameInfo.matchup,
           gameStatusText: gameInfo.text,
           isGameLive: gameInfo.isLive,
@@ -365,6 +382,23 @@ export default function ManageBetsModal({
           gameStatusText: gameInfo.text,
           isGameLive: gameInfo.isLive,
         });
+        list.push({
+          id: `prop-${p.id}-rec-wr-under`,
+          type: 'player_prop',
+          category: 'RECEIVING',
+          playerName: p.name,
+          playerId: p.id,
+          playerHeadshot: p.headshot,
+          playerTeam: p.team.abbreviation,
+          statType: 'rec',
+          direction: 'UNDER',
+          targetValue: 4.5,
+          description: `${p.name} UNDER 4.5 Receptions`,
+          odds: '-110',
+          matchup: gameInfo.matchup,
+          gameStatusText: gameInfo.text,
+          isGameLive: gameInfo.isLive,
+        });
       }
 
       // TE Props
@@ -381,6 +415,23 @@ export default function ManageBetsModal({
           direction: 'OVER',
           targetValue: 36.5,
           description: `${p.name} OVER 36.5 Receiving Yds`,
+          odds: '-115',
+          matchup: gameInfo.matchup,
+          gameStatusText: gameInfo.text,
+          isGameLive: gameInfo.isLive,
+        });
+        list.push({
+          id: `prop-${p.id}-recYds-te-under`,
+          type: 'player_prop',
+          category: 'RECEIVING',
+          playerName: p.name,
+          playerId: p.id,
+          playerHeadshot: p.headshot,
+          playerTeam: p.team.abbreviation,
+          statType: 'recYds',
+          direction: 'UNDER',
+          targetValue: 36.5,
+          description: `${p.name} UNDER 36.5 Receiving Yds`,
           odds: '-115',
           matchup: gameInfo.matchup,
           gameStatusText: gameInfo.text,
@@ -406,7 +457,7 @@ export default function ManageBetsModal({
       }
     }
 
-    // B. Game Lines (Spreads, Totals, Moneylines)
+    // B. Game Totals ONLY (Strictly Over / Under Total Points - No Spreads or Moneylines)
     for (const g of availableGames) {
       const isLive = g.status.state === 'in';
       const isPost = g.status.state === 'post';
@@ -414,39 +465,11 @@ export default function ManageBetsModal({
       const score = `${g.awayTeam.score}-${g.homeTeam.score}`;
       const statusText = isLive ? `${clock} • ${score}` : isPost ? `FINAL • ${score}` : `${g.awayTeam.abbreviation} @ ${g.homeTeam.abbreviation}`;
 
-      // Spread Away
-      list.push({
-        id: `game-${g.id}-spread-away`,
-        type: 'spread',
-        category: 'GAME_LINE',
-        playerName: g.awayTeam.displayName,
-        playerTeam: g.awayTeam.abbreviation,
-        description: `${g.awayTeam.abbreviation} -3.5 vs ${g.homeTeam.abbreviation}`,
-        odds: '-110',
-        matchup: `${g.awayTeam.abbreviation} vs ${g.homeTeam.abbreviation}`,
-        gameStatusText: statusText,
-        isGameLive: isLive,
-      });
-
-      // Spread Home
-      list.push({
-        id: `game-${g.id}-spread-home`,
-        type: 'spread',
-        category: 'GAME_LINE',
-        playerName: g.homeTeam.displayName,
-        playerTeam: g.homeTeam.abbreviation,
-        description: `${g.homeTeam.abbreviation} +3.5 vs ${g.awayTeam.abbreviation}`,
-        odds: '-110',
-        matchup: `${g.awayTeam.abbreviation} vs ${g.homeTeam.abbreviation}`,
-        gameStatusText: statusText,
-        isGameLive: isLive,
-      });
-
       // Over Total
       list.push({
         id: `game-${g.id}-total-over`,
         type: 'total',
-        category: 'GAME_LINE',
+        category: 'GAME_TOTAL',
         playerName: `${g.awayTeam.abbreviation} / ${g.homeTeam.abbreviation}`,
         playerTeam: g.awayTeam.abbreviation,
         description: `OVER 47.5 Total Points (${g.awayTeam.abbreviation} vs ${g.homeTeam.abbreviation})`,
@@ -460,7 +483,7 @@ export default function ManageBetsModal({
       list.push({
         id: `game-${g.id}-total-under`,
         type: 'total',
-        category: 'GAME_LINE',
+        category: 'GAME_TOTAL',
         playerName: `${g.awayTeam.abbreviation} / ${g.homeTeam.abbreviation}`,
         playerTeam: g.homeTeam.abbreviation,
         description: `UNDER 47.5 Total Points (${g.awayTeam.abbreviation} vs ${g.homeTeam.abbreviation})`,
@@ -596,31 +619,6 @@ export default function ManageBetsModal({
         direction: propDirection,
         targetValue: parseFloat(propLine) || 0,
         description: `${selectedPlayer.name} ${propDirection} ${propLine} ${statLabel}`,
-      };
-    } else if (selectedLegType === 'anytime_td') {
-      if (!selectedPlayer) return;
-      newLeg = {
-        id: legId,
-        type: 'anytime_td',
-        playerId: selectedPlayer.id,
-        playerName: selectedPlayer.name,
-        playerHeadshot: selectedPlayer.headshot,
-        playerTeam: selectedPlayer.team.abbreviation,
-        description: `${selectedPlayer.name} Anytime Touchdown (1+ TD)`,
-      };
-    } else if (selectedLegType === 'spread') {
-      if (!selectedGame) return;
-      const team = selectedTeamAbbr || selectedGame.awayTeam.abbreviation;
-      const opp = team === selectedGame.awayTeam.abbreviation ? selectedGame.homeTeam.abbreviation : selectedGame.awayTeam.abbreviation;
-      const spreadNum = parseFloat(spreadValue) || 0;
-      const spreadStr = spreadNum > 0 ? `+${spreadNum}` : `${spreadNum}`;
-      newLeg = {
-        id: legId,
-        type: 'spread',
-        gameId: selectedGame.id,
-        teamAbbr: team,
-        spread: spreadNum,
-        description: `${team} ${spreadStr} vs ${opp}`,
       };
     } else if (selectedLegType === 'total') {
       if (!selectedGame) return;
@@ -793,8 +791,7 @@ export default function ManageBetsModal({
                         { id: 'PASSING', label: 'PASSING' },
                         { id: 'RUSHING', label: 'RUSHING' },
                         { id: 'RECEIVING', label: 'RECEIVING' },
-                        { id: 'TOUCHDOWN', label: 'ANYTIME TD' },
-                        { id: 'GAME_LINE', label: 'GAME LINES' },
+                        { id: 'GAME_TOTAL', label: 'GAME TOTALS' },
                       ] as const
                     ).map((cat) => (
                       <button
@@ -1098,22 +1095,24 @@ export default function ManageBetsModal({
                     className="bg-[#0e1015] border border-zinc-800 rounded px-2.5 py-1.5 text-xs text-white font-bold outline-none"
                   >
                     <option value="player_prop">Player Prop (Over / Under)</option>
-                    <option value="anytime_td">Anytime Touchdown</option>
-                    <option value="spread">Game Spread</option>
-                    <option value="total">Game Total (Over / Under)</option>
+                    <option value="total">Game Total Points (Over / Under)</option>
                   </select>
 
-                  {(selectedLegType === 'player_prop' || selectedLegType === 'anytime_td') && (
+                  {selectedLegType === 'player_prop' && (
                     <select
+                      value={selectedPlayer?.id || ''}
                       onChange={(e) => {
                         const p = availablePlayers.find((pl) => pl.id === e.target.value);
                         setSelectedPlayer(p || null);
+                        if (p) {
+                          setPropLine(getRealisticPropLine(p.position, propStat));
+                        }
                       }}
                       className="bg-[#0e1015] border border-zinc-800 rounded px-2.5 py-1.5 text-xs text-white font-bold outline-none"
                     >
                       <option value="">Select Player...</option>
                       {availablePlayers
-                        .filter((p) => p.position !== 'DEF')
+                        .filter((p) => p.position !== 'DEF' && p.position !== 'K')
                         .map((p) => (
                           <option key={p.id} value={p.id}>
                             {p.name} ({p.team.abbreviation} - {p.position})
@@ -1121,7 +1120,91 @@ export default function ManageBetsModal({
                         ))}
                     </select>
                   )}
+
+                  {selectedLegType === 'total' && (
+                    <select
+                      value={selectedGameId}
+                      onChange={(e) => setSelectedGameId(e.target.value)}
+                      className="bg-[#0e1015] border border-zinc-800 rounded px-2.5 py-1.5 text-xs text-white font-bold outline-none"
+                    >
+                      {availableGames.map((g) => (
+                        <option key={g.id} value={g.id}>
+                          {g.awayTeam.abbreviation} @ {g.homeTeam.abbreviation}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </div>
+
+                {selectedLegType === 'player_prop' && selectedPlayer && (
+                  <div className="grid grid-cols-3 gap-2 pt-1 border-t border-zinc-800/80">
+                    <div>
+                      <label className="text-[10px] font-bold text-zinc-500 block uppercase mb-1">Prop Stat</label>
+                      <select
+                        value={propStat}
+                        onChange={(e) => {
+                          const newStat = e.target.value as PropStatType;
+                          setPropStat(newStat);
+                          setPropLine(getRealisticPropLine(selectedPlayer.position, newStat));
+                        }}
+                        className="w-full bg-[#0e1015] border border-zinc-800 rounded px-2 py-1 text-xs text-white font-bold outline-none"
+                      >
+                        {STAT_OPTIONS.map((opt) => (
+                          <option key={opt.id} value={opt.id}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-zinc-500 block uppercase mb-1">Direction</label>
+                      <select
+                        value={propDirection}
+                        onChange={(e) => setPropDirection(e.target.value as 'OVER' | 'UNDER')}
+                        className="w-full bg-[#0e1015] border border-zinc-800 rounded px-2 py-1 text-xs text-white font-bold outline-none"
+                      >
+                        <option value="OVER">OVER</option>
+                        <option value="UNDER">UNDER</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-zinc-500 block uppercase mb-1">Line Value</label>
+                      <input
+                        type="text"
+                        value={propLine}
+                        onChange={(e) => setPropLine(e.target.value)}
+                        placeholder="e.g. 64.5"
+                        className="w-full bg-[#0e1015] border border-zinc-800 rounded px-2 py-1 text-xs text-white font-mono-score font-bold outline-none"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {selectedLegType === 'total' && (
+                  <div className="grid grid-cols-2 gap-2 pt-1 border-t border-zinc-800/80">
+                    <div>
+                      <label className="text-[10px] font-bold text-zinc-500 block uppercase mb-1">Total Direction</label>
+                      <select
+                        value={totalDirection}
+                        onChange={(e) => setTotalDirection(e.target.value as 'OVER' | 'UNDER')}
+                        className="w-full bg-[#0e1015] border border-zinc-800 rounded px-2 py-1 text-xs text-white font-bold outline-none"
+                      >
+                        <option value="OVER">OVER</option>
+                        <option value="UNDER">UNDER</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-zinc-500 block uppercase mb-1">Total Points Line</label>
+                      <input
+                        type="text"
+                        value={totalLine}
+                        onChange={(e) => setTotalLine(e.target.value)}
+                        placeholder="47.5"
+                        className="w-full bg-[#0e1015] border border-zinc-800 rounded px-2 py-1 text-xs text-white font-mono-score font-bold outline-none"
+                      />
+                    </div>
+                  </div>
+                )}
 
                 <div className="flex justify-end">
                   <button
