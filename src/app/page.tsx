@@ -245,9 +245,13 @@ function formatPlayerStatPills(player: FantasyPlayer): string[] {
 
     // 2. Rushing
     if ((s.rushingAttempts || 0) > 0 || (s.rushingYards || 0) !== 0) {
-      if (pos === 'WR' || pos === 'TE') {
-        let wrRush = `${s.rushingAttempts || 0} CAR, ${s.rushingYards || 0} YDS`;
-        if ((s.rushingTouchdowns || 0) > 0) wrRush += `, ${s.rushingTouchdowns} TD`;
+      if (pos === 'QB') {
+        const qbRush = `${s.rushingAttempts || 0} CAR • ${s.rushingYards || 0} RUSH`;
+        pills.push(qbRush);
+        if ((s.rushingTouchdowns || 0) > 0) pills.push(`${s.rushingTouchdowns} TD`);
+      } else if (pos === 'WR' || pos === 'TE') {
+        let wrRush = `${s.rushingAttempts || 0} CAR • ${s.rushingYards || 0} YDS`;
+        if ((s.rushingTouchdowns || 0) > 0) wrRush += ` • ${s.rushingTouchdowns} TD`;
         pills.push(wrRush);
       } else {
         if ((s.rushingAttempts || 0) > 0) pills.push(`${s.rushingAttempts} CAR`);
@@ -1298,59 +1302,6 @@ interface WakeLockSentinelLike {
   addEventListener: (type: 'release', listener: () => void) => void;
 }
 
-interface SyncCountdownProps {
-  onSync: () => void;
-  intervalSec?: number;
-}
-
-/**
- * Pure 60fps Optimization: Memoized 1-second countdown clock.
- * Prevents the entire parent dashboard from re-rendering every 1,000ms.
- */
-const SyncCountdown = React.memo(function SyncCountdown({ onSync, intervalSec = 15 }: SyncCountdownProps) {
-  const [countdown, setCountdown] = useState(intervalSec);
-  const [isSpinning, setIsSpinning] = useState(false);
-  const onSyncRef = useRef(onSync);
-  onSyncRef.current = onSync;
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev <= 1) {
-          onSyncRef.current();
-          return intervalSec;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [intervalSec]);
-
-  const handleManualRefresh = () => {
-    setIsSpinning(true);
-    setCountdown(intervalSec);
-    onSyncRef.current();
-    setTimeout(() => setIsSpinning(false), 900);
-  };
-
-  return (
-    <div className="flex items-center gap-1.5 bg-[#0e1015] px-2.5 py-1 rounded-lg border border-zinc-800/80 shrink-0 text-xs whitespace-nowrap">
-      <Clock className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-      <span className="text-[10px] text-zinc-500 font-semibold uppercase tracking-wider hidden sm:inline">SYNC:</span>
-      <span className="font-mono-score text-cyan-300 font-bold w-5 text-center text-xs">
-        {countdown}s
-      </span>
-
-      <button
-        onClick={handleManualRefresh}
-        title="Force Refresh Data"
-        className="p-1 rounded-md hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
-      >
-        <RefreshCw className={`w-3.5 h-3.5 ${isSpinning ? 'animate-spin text-emerald-400' : ''}`} />
-      </button>
-    </div>
-  );
-});
 
 export default function TVCommandCenter() {
   const [data, setData] = useState<LiveFantasyResponse | null>(null);
@@ -2123,12 +2074,20 @@ export default function TVCommandCenter() {
     syncLeaguesData();
   }, [fetchData, syncLeaguesData]);
 
-  // Combined Sync Handler passed to memoized <SyncCountdown />
+  // Combined Sync Handler
   const handleSync = useCallback(() => {
     fetchData();
     syncLeaguesData();
     fetchRoomState();
   }, [fetchData, syncLeaguesData, fetchRoomState]);
+
+  // Periodic 15-Second Background Data Sync
+  useEffect(() => {
+    const syncTimer = setInterval(() => {
+      handleSync();
+    }, 15000);
+    return () => clearInterval(syncTimer);
+  }, [handleSync]);
 
   // Clean up old boost highlights (older than 6s)
   useEffect(() => {
@@ -2732,21 +2691,34 @@ export default function TVCommandCenter() {
     return Number.isInteger(pts) ? pts.toFixed(1) : pts.toFixed(1);
   };
 
-  // Split NFL games: Pin ALL active in-progress games on the Left + Scroll FINAL & PRE games on the Right
-  const { pinnedLiveGames, scrollingGames, hasActiveRedZone } = useMemo(() => {
+  // Split NFL games: Pin active in-progress games (or upcoming games if none live) on Left + Scroll on Right
+  const { pinnedLiveGames, scrollingGames, hasActiveRedZone, isUpcomingPinned } = useMemo(() => {
     const allGames = data?.games || [];
     const live: LiveGame[] = [];
-    const nonLive: LiveGame[] = [];
+    const upcoming: LiveGame[] = [];
+    const finalGames: LiveGame[] = [];
     let rzFound = false;
 
+    const isGameUpcoming = (g: LiveGame) => {
+      if (g.status?.state === 'pre') return true;
+      if (g.status?.completed) return false;
+      const detail = (g.status?.detail || '').toLowerCase();
+      const shortDetail = (g.status?.shortDetail || '').toLowerCase();
+      if (detail.includes('final') || shortDetail.includes('final')) return false;
+      if (g.status?.state === 'in') return false;
+      return true;
+    };
+
     for (const g of allGames) {
-      const isLive = g.status.state === 'in';
+      const isLive = g.status?.state === 'in';
       if (isLive) {
         const isRz = Boolean(g.isRedZone || g.situation?.isRedZone);
         if (isRz) rzFound = true;
         live.push(g);
+      } else if (isGameUpcoming(g)) {
+        upcoming.push(g);
       } else {
-        nonLive.push(g);
+        finalGames.push(g);
       }
     }
 
@@ -2759,14 +2731,17 @@ export default function TVCommandCenter() {
       return 0;
     });
 
-    // Sort non-live games: upcoming ('pre') games first, followed by completed ('post') games
-    nonLive.sort((a, b) => {
-      const aPre = a.status.state === 'pre' ? 0 : 1;
-      const bPre = b.status.state === 'pre' ? 0 : 1;
-      return aPre - bPre;
-    });
-
-    return { pinnedLiveGames: live, scrollingGames: nonLive, hasActiveRedZone: rzFound };
+    if (live.length > 0) {
+      // Live games are pinned; scrolling games has upcoming games first, then final games
+      const nonLive = [...upcoming, ...finalGames];
+      return { pinnedLiveGames: live, scrollingGames: nonLive, hasActiveRedZone: rzFound, isUpcomingPinned: false };
+    } else if (upcoming.length > 0) {
+      // When NO games are actively LIVE, pin upcoming games (like tonight's primetime game) so users immediately see them!
+      const nonLive = [...upcoming, ...finalGames];
+      return { pinnedLiveGames: upcoming, scrollingGames: nonLive, hasActiveRedZone: false, isUpcomingPinned: true };
+    } else {
+      return { pinnedLiveGames: [], scrollingGames: finalGames, hasActiveRedZone: false, isUpcomingPinned: false };
+    }
   }, [data?.games]);
 
   // Clean seamless 2x track of scrolling games
@@ -2817,27 +2792,55 @@ export default function TVCommandCenter() {
       }
     }
 
-    // 3. Touchdown Plays & Turnovers from Live Scoring Updates
+    // 3. Touchdown Plays & Turnovers from Live Scoring Updates with full Player & Matchup context
     if (data?.liveUpdates) {
-      for (const u of data.liveUpdates.slice(0, 10)) {
+      for (const u of data.liveUpdates.slice(0, 15)) {
+        const desc = (u.description || '').trim();
+        const cleanedDesc = desc.replace(/^\(\d+:\d+\)\s*(?:\([^)]+\)\s*)?/i, '').trim();
+        const playerMatch = cleanedDesc.match(/^([A-Z]\.?[A-Za-z'-]+(?:\s+[A-Z][A-Za-z'-]+)?(?:\s+(?:Jr\.|Sr\.|III|II|IV))?)/);
+        const receiverMatch = cleanedDesc.match(/(?:to|intended for)\s+([A-Z]\.?[A-Za-z'-]+(?:\s+[A-Z][A-Za-z'-]+)?(?:\s+(?:Jr\.|Sr\.|III|II|IV))?)/i);
+        const interceptorMatch = cleanedDesc.match(/intercepted by\s+([A-Z]\.?[A-Za-z'-]+(?:\s+[A-Z][A-Za-z'-]+)?(?:\s+(?:Jr\.|Sr\.|III|II|IV))?)/i);
+
+        const matchup = u.gameName || `${u.team?.abbreviation || 'NFL'}`;
+
         if (u.type === 'touchdown') {
+          let playerDisplay = playerMatch ? playerMatch[1] : u.team?.abbreviation ? `${u.team.abbreviation}` : 'TOUCHDOWN';
+          if (playerMatch && receiverMatch && playerMatch[1] !== receiverMatch[1]) {
+            playerDisplay = `${playerMatch[1]} to ${receiverMatch[1]}`;
+          }
+          const ydMatch = cleanedDesc.match(/(\d+)\s*(?:yd|yard)/i);
+          const shortPlay = ydMatch ? `${ydMatch[1]} YD TD` : 'TD';
+
           items.push({
             id: `td-${u.id}`,
             badge: 'TOUCHDOWN',
             badgeColor: 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/50',
-            title: u.headline,
-            detail: u.gameClock,
+            title: `${playerDisplay} (${matchup})`,
+            detail: `${shortPlay} • ${u.gameClock}`,
             highlight: u.fantasyImpact || '+6.0 PTS',
             highlightColor: 'text-emerald-400',
           });
         } else if (u.type === 'turnover') {
+          // Filter out generic turnover logs that lack team/player description
+          if (!desc || desc.length < 8 || desc.toLowerCase().includes('end of period') || desc.toLowerCase().includes('end of game') || desc.toLowerCase().includes('end of half')) {
+            continue;
+          }
+          let toDisplay = '';
+          if (interceptorMatch) {
+            toDisplay = `INT by ${interceptorMatch[1]}`;
+          } else if (playerMatch) {
+            toDisplay = `${playerMatch[1]} Turn`;
+          } else {
+            toDisplay = `${u.team?.abbreviation || 'DEF'} Turn`;
+          }
+
           items.push({
             id: `to-${u.id}`,
             badge: 'TURNOVER',
             badgeColor: 'bg-rose-950/80 text-rose-300 border border-rose-500/50',
-            title: u.headline,
+            title: `${toDisplay} (${matchup})`,
             detail: u.gameClock,
-            highlight: 'POSSESSION CHANGE',
+            highlight: 'TURNOVER',
             highlightColor: 'text-rose-400',
           });
         }
@@ -3209,12 +3212,12 @@ export default function TVCommandCenter() {
           </div>
         </div>
 
-        {/* Right Controls: LEAGUES, ROOM QR, THEATER, AUDIO, CYCLE, and <SyncCountdown /> */}
-        <div className="flex items-center gap-2">
+        {/* Right Controls: Single compact line - LEAGUES, ROOM QR, KEYS, THEATER, AUDIO, CYCLE */}
+        <div className="flex items-center gap-1.5 flex-nowrap shrink-0">
           {/* LEAGUES Button */}
           <button
             onClick={() => setIsManageModalOpen(true)}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#0e1015] hover:bg-[#13151f] text-xs font-condensed font-bold uppercase text-amber-300 border border-zinc-800/80 transition-colors"
+            className="whitespace-nowrap h-8 px-2.5 text-xs flex items-center gap-1.5 shrink-0 rounded-lg bg-[#0e1015] hover:bg-[#13151f] font-condensed font-bold uppercase text-amber-300 border border-zinc-800/80 transition-colors"
           >
             <Settings className="w-3.5 h-3.5 text-amber-400" />
             <span>LEAGUES</span>
@@ -3228,7 +3231,7 @@ export default function TVCommandCenter() {
           {/* ROOM QR Button */}
           <button
             onClick={() => setIsQrModalOpen(true)}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#0e1015] hover:bg-[#13151f] text-xs font-condensed font-bold uppercase text-cyan-400 border border-zinc-800/80 transition-colors"
+            className="whitespace-nowrap h-8 px-2.5 text-xs flex items-center gap-1.5 shrink-0 rounded-lg bg-[#0e1015] hover:bg-[#13151f] font-condensed font-bold uppercase text-cyan-400 border border-zinc-800/80 transition-colors"
             title="Scan QR Code with phone to join and add bets"
           >
             <QrCode className="w-3.5 h-3.5 text-cyan-400" />
@@ -3238,7 +3241,7 @@ export default function TVCommandCenter() {
           {/* Keyboard Shortcuts HUD Button */}
           <button
             onClick={() => setIsShortcutsModalOpen(true)}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#0e1015] hover:bg-[#13151f] text-xs font-condensed font-bold uppercase text-zinc-400 hover:text-white border border-zinc-800/80 transition-colors"
+            className="whitespace-nowrap h-8 px-2 text-xs flex items-center gap-1 shrink-0 rounded-lg bg-[#0e1015] hover:bg-[#13151f] font-condensed font-bold uppercase text-zinc-400 hover:text-white border border-zinc-800/80 transition-colors"
             title="Broadcast TV Remote Keyboard Shortcuts (Press ?)"
           >
             <Keyboard className="w-3.5 h-3.5 text-zinc-400" />
@@ -3249,7 +3252,7 @@ export default function TVCommandCenter() {
           {/* Theater / Fullscreen Mode Toggle */}
           <button
             onClick={toggleFullscreen}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-condensed font-bold uppercase transition-colors border ${
+            className={`whitespace-nowrap h-8 px-2.5 text-xs flex items-center gap-1.5 shrink-0 rounded-lg font-condensed font-bold uppercase transition-colors border ${
               isFullscreen
                 ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400'
                 : 'bg-[#0e1015] border-zinc-800/80 text-zinc-400 hover:text-white'
@@ -3268,7 +3271,7 @@ export default function TVCommandCenter() {
           {/* Sound Toggle Button */}
           <button
             onClick={handleToggleSound}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-condensed font-bold uppercase transition-colors border ${
+            className={`whitespace-nowrap h-8 px-2.5 text-xs flex items-center gap-1.5 shrink-0 rounded-lg font-condensed font-bold uppercase transition-colors border ${
               isSoundEnabled
                 ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400'
                 : 'bg-[#0e1015] border-zinc-800/80 text-zinc-400 hover:text-white'
@@ -3287,7 +3290,7 @@ export default function TVCommandCenter() {
           {/* TV Auto-Cycle Toggle */}
           <button
             onClick={() => setAutoCycle(!autoCycle)}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-condensed font-bold uppercase transition-colors border ${
+            className={`whitespace-nowrap h-8 px-2.5 text-xs flex items-center gap-1.5 shrink-0 rounded-lg font-condensed font-bold uppercase transition-colors border ${
               autoCycle
                 ? isHoveringMain
                   ? 'bg-amber-500/15 border-amber-500/40 text-amber-300'
@@ -3300,9 +3303,6 @@ export default function TVCommandCenter() {
             <span className="hidden sm:inline">CYCLE: {autoCycle ? (isHoveringMain ? 'PAUSED' : 'ON') : 'OFF'}</span>
             <span className="kbd-shortcut hidden md:inline">SPACE</span>
           </button>
-
-          {/* Center/Right Sync Countdown */}
-          <SyncCountdown onSync={handleSync} />
         </div>
       </header>
 
@@ -3325,18 +3325,24 @@ export default function TVCommandCenter() {
           </div>
         ) : (
           <div className="flex items-center w-full overflow-hidden">
-            {/* Left Section — Pinned In-Progress Live Games */}
+            {/* Left Section — Pinned In-Progress Live Games or Pinned Upcoming Primetime Games */}
             {pinnedLiveGames.length > 0 && (
               <div className="flex-shrink-0 z-20 flex items-center gap-2 pr-3 pl-1 border-r border-zinc-800/80 bg-[#0e1015]">
                 <div
                   className={`flex items-center gap-1.5 px-2 py-0.5 rounded-md text-white text-[10px] font-condensed font-bold uppercase tracking-wider whitespace-nowrap ${
                     hasActiveRedZone
                       ? 'bg-rose-600 font-black'
+                      : isUpcomingPinned
+                      ? 'bg-amber-500/20 border border-amber-500/50 text-amber-300 font-black'
                       : 'bg-emerald-950/80 border border-emerald-500/50 text-emerald-300 font-bold'
                   }`}
                 >
-                  <Activity className="w-3 h-3 shrink-0" />
-                  <span>{hasActiveRedZone ? 'RED ZONE' : 'LIVE NOW'}</span>
+                  {isUpcomingPinned ? (
+                    <Clock className="w-3 h-3 text-amber-400 shrink-0" />
+                  ) : (
+                    <Activity className="w-3 h-3 shrink-0" />
+                  )}
+                  <span>{hasActiveRedZone ? 'RED ZONE' : isUpcomingPinned ? 'UPCOMING' : 'LIVE NOW'}</span>
                   <span className="px-1.5 py-0.2 rounded-sm bg-black/40 text-[9px] font-mono-score font-bold">
                     {pinnedLiveGames.length}
                   </span>
@@ -3443,7 +3449,13 @@ export default function TVCommandCenter() {
       <main
         onMouseEnter={() => setIsHoveringMain(true)}
         onMouseLeave={() => setIsHoveringMain(false)}
-        className={`flex-1 overflow-hidden flex flex-col min-h-0 ${activeTab === 'live' ? 'px-4 py-2' : 'p-3 md:p-4'}`}
+        className={`flex-1 overflow-hidden flex flex-col min-h-0 ${
+          activeTab === 'live'
+            ? 'px-4 py-2'
+            : activeTab === 'bets' || activeTab === 'room'
+            ? 'p-3 md:p-4'
+            : 'px-4 py-1.5 md:py-2'
+        }`}
       >
         {loading && !data ? (
           <div className="flex-1 flex flex-col items-center justify-center gap-2">
@@ -3673,7 +3685,7 @@ export default function TVCommandCenter() {
                       </div>
 
                       {/* Bottom Stat Pills Area: Individual Crisp High-Contrast Pills */}
-                      <div className="flex items-center gap-1.5 mt-2 pt-2 border-t border-zinc-800/80 overflow-x-auto no-scrollbar flex-nowrap py-0.5">
+                      <div className="flex flex-wrap items-center gap-1.5 mt-1.5 pt-1.5 border-t border-zinc-800/80 py-0.5">
                         {statPills.length > 0 ? (
                           statPills.map((pill, pIdx) => {
                             const pillClass = getStatSegmentClasses(pill, player.position);
@@ -4728,7 +4740,7 @@ export default function TVCommandCenter() {
           /* TABS 2-7: TOP 10 LEADERBOARDS (2-COLUMN GRID: 1-5 ON LEFT, 6-10 ON RIGHT) */
           <div className="h-full flex flex-col justify-between overflow-hidden">
             {/* Compact Subheader with Sort pills, Search & Inline Burst Alert */}
-            <div className="flex items-center justify-between pb-1.5 shrink-0 border-b border-zinc-800/80 mb-1.5 gap-2 flex-wrap">
+            <div className="flex items-center justify-between pb-1 shrink-0 border-b border-zinc-800/80 mb-1 gap-2 flex-wrap">
               <div className="flex items-center gap-2 flex-wrap">
                 <div className="flex items-center gap-1.5">
                   <h2 className="text-sm md:text-base font-condensed font-black tracking-wide uppercase text-white">
@@ -4881,9 +4893,9 @@ export default function TVCommandCenter() {
               </div>
             ) : (
               /* 2-Column Grid: Ranks 1-5 (Left) and Ranks 6-10 (Right) - Exactly 5 items per column fitting 100% */
-              <div className="flex-1 grid grid-cols-2 gap-3 h-full overflow-hidden min-h-0">
+              <div className="flex-1 grid grid-cols-2 gap-2.5 h-full overflow-hidden min-h-0">
                 {/* Left Column: Ranks 1 to 5 */}
-                <div className="flex flex-col gap-1.5 h-full justify-between overflow-hidden min-h-0">
+                <div className="flex flex-col gap-2 h-full justify-between overflow-hidden min-h-0">
                   {sortedLeaderboards?.[activeTab as FantasyPosition]
                     ?.slice(0, 5)
                     .map((entry) => {
@@ -4907,7 +4919,7 @@ export default function TVCommandCenter() {
                 </div>
 
                 {/* Right Column: Ranks 6 to 10 */}
-                <div className="flex flex-col gap-1.5 h-full justify-between overflow-hidden min-h-0">
+                <div className="flex flex-col gap-2 h-full justify-between overflow-hidden min-h-0">
                   {sortedLeaderboards?.[activeTab as FantasyPosition]
                     ?.slice(5, 10)
                     .map((entry) => {
@@ -5424,7 +5436,7 @@ function renderLeaderboardCard(
           ? `radial-gradient(circle at 8% 25%, ${teamAccent}22 0%, rgba(19, 21, 31, 0.98) 75%)`
           : `radial-gradient(circle at 5% 25%, ${teamAccent}12 0%, rgba(14, 16, 21, 0.98) 75%)`,
       }}
-      className={`relative flex items-center justify-between px-3 py-1.5 rounded-lg border-y border-r transition-all h-[98px] max-h-[98px] min-h-[98px] shrink-0 cursor-pointer card-franchise-glow ${
+      className={`relative flex items-center justify-between px-3 py-1.5 md:py-2 rounded-lg border-y border-r transition-all flex-1 min-h-0 cursor-pointer card-franchise-glow ${
         isBoosted
           ? 'bg-emerald-950/20 border-r-emerald-500/50 border-y-emerald-500/50 animate-burst'
           : isLeader
@@ -5440,16 +5452,16 @@ function renderLeaderboardCard(
       )}
 
       {/* Left: Rank + Headshot + Name, Team, and Full Non-Truncated Stat Line */}
-      <div className="flex items-center gap-2.5 min-w-0 flex-1 mr-2">
+      <div className="flex items-center gap-2 min-w-0 flex-1 mr-2">
         {/* Rank Number / Tied Badge */}
         <div
-          className={`min-w-[28px] h-7 px-1.5 rounded-md flex items-center justify-center text-xs font-mono-score font-bold shrink-0 ${rankBadgeStyle}`}
+          className={`min-w-[26px] h-6 px-1 rounded-md flex items-center justify-center text-xs font-mono-score font-bold shrink-0 ${rankBadgeStyle}`}
         >
           <span>{rankDisplay}</span>
         </div>
 
         {/* Headshot / Team Logo Container: Circular Headshot with Unclipped Corner Team Badge */}
-        <div className={`relative shrink-0 ${isLeader ? 'w-13 h-13' : 'w-12 h-12'}`}>
+        <div className="relative w-11 h-11 shrink-0">
           <div className="w-full h-full rounded-full overflow-hidden bg-[#0a0b0e] border border-zinc-800">
             <img
               src={player.headshot}
@@ -5463,7 +5475,7 @@ function renderLeaderboardCard(
           </div>
           {/* Miniature Team Logo in Corner - Hidden on DEF cards since primary avatar is already the team logo */}
           {player.position !== 'DEF' && (
-            <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-zinc-900 ring-1 ring-zinc-700 p-0.5 z-20 flex items-center justify-center">
+            <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-zinc-900 ring-1 ring-zinc-700 p-0.5 z-20 flex items-center justify-center">
               <img
                 src={player.team.logo}
                 alt={player.team.abbreviation}
@@ -5553,15 +5565,15 @@ function renderLeaderboardCard(
             </span>
           </div>
 
-          {/* Crisp Badges of Real-World Stats with Single-Line Horizontal Non-Wrapping Flow */}
-          <div className="mt-1 flex items-center gap-1 overflow-x-auto no-scrollbar flex-nowrap py-0.5">
+          {/* Crisp Badges of Real-World Stats: Wrapping flex container so stats never clip */}
+          <div className="mt-0.5 flex flex-wrap items-center gap-1 py-0.5">
             {statPills.length > 0 ? (
               statPills.map((seg, sIdx) => {
                 const segClass = getStatSegmentClasses(seg, player.position);
                 return (
                   <span
                     key={`stat-${player.id}-${sIdx}`}
-                    className={`inline-block px-1.5 py-0.5 rounded-md border text-[10px] md:text-[11px] font-mono-score font-semibold whitespace-nowrap shrink-0 ${segClass}`}
+                    className={`inline-block px-1.5 md:px-2 py-0.5 rounded-md border text-[10px] md:text-[11px] font-mono-score font-semibold whitespace-nowrap shrink-0 ${segClass}`}
                   >
                     {seg}
                   </span>
@@ -5577,7 +5589,7 @@ function renderLeaderboardCard(
       </div>
 
       {/* Right: Editorial Stack: Subdued Metadata above Massive Display Number */}
-      <div className="flex flex-col items-end justify-center shrink-0 pl-2 border-l border-zinc-800/80 min-w-[70px]">
+      <div className="flex flex-col items-end justify-center shrink-0 pl-2 border-l border-zinc-800/80 min-w-[65px]">
         <div className="text-[10px] font-condensed font-semibold text-zinc-500 uppercase tracking-wider leading-none mb-1">
           {getScoringUnitLabel(player.position, scoringFormat, player.isProjection)}
         </div>

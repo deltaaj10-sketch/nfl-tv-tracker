@@ -1375,12 +1375,18 @@ export async function GET(request: Request) {
 
         if (isTurnover) {
           seenPlayIds.add(plIdStr);
+          const playText = (pl.text || '').trim();
+          // Filter out generic turnover logs that lack team/player description
+          if (!playText || playText.length < 8 || textLower.includes('end of period') || textLower.includes('end of game') || textLower.includes('end of half')) {
+            continue;
+          }
+
           const timestamp = pl.wallclock || pl.modified || new Date().toISOString();
           liveUpdates.push({
             id: `to-${pl.id || `${ev.id}-${liveUpdates.length}`}`,
             type: 'turnover',
             headline: textLower.includes('intercepted') ? 'INTERCEPTION' : 'TURNOVER',
-            description: pl.text || '',
+            description: playText,
             fantasyImpact: '-2.0 pts (Turnover), +2.0 pts DEF',
             gameClock: `Q${pl.period?.number || '?'} ${pl.clock?.displayValue || ''}`.trim(),
             timestamp,
