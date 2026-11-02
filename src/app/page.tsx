@@ -37,6 +37,11 @@ import {
   Shield,
   TrendingUp,
   Crosshair,
+  Trash2,
+  ExternalLink,
+  Pin,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { playBroadcastAlertSound } from '@/lib/soundEffects';
 import {
@@ -1321,6 +1326,14 @@ export default function TVCommandCenter() {
   const [selectedDetailPlayer, setSelectedDetailPlayer] = useState<FantasyPlayer | null>(null);
   const [openHedgeSlipId, setOpenHedgeSlipId] = useState<string | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [toastMessage, setToastMessage] = useState<{ text: string; type?: 'success' | 'info' | 'warn' } | null>(null);
+
+  const showToast = useCallback((text: string, type: 'success' | 'info' | 'warn' = 'success') => {
+    setToastMessage({ text, type });
+    setTimeout(() => {
+      setToastMessage((cur) => (cur?.text === text ? null : cur));
+    }, 3200);
+  }, []);
 
   // Web Audio Alert Sound Settings & Cashed Bet Tracking
   const [isSoundEnabled, setIsSoundEnabled] = useState<boolean>(true);
@@ -2192,10 +2205,108 @@ export default function TVCommandCenter() {
       players: quickSelectedPlayer ? [quickSelectedPlayer] : [],
     };
     handleUpdateGuests([...guestTags, newGuest]);
+    showToast(`Added ${name} to Living Room Leaderboard!`);
     setQuickFriendName('');
     setQuickPlayerSearch('');
     setQuickSelectedPlayer(null);
   };
+
+  // Remove friend from Living Room Leaderboard
+  const handleRemoveFriend = (friendIdOrName: string) => {
+    const friend = guestTags.find((g) => g.id === friendIdOrName || g.guestName === friendIdOrName);
+    const updated = guestTags.filter((g) => g.id !== friendIdOrName && g.guestName !== friendIdOrName);
+    handleUpdateGuests(updated);
+    if (friend) {
+      showToast(`Removed ${friend.guestName} from Living Room`, 'info');
+    }
+  };
+
+  // Check if a prop or player is pinned in savedBets
+  const isPropOrPlayerPinned = useCallback(
+    (playerId: string, propId?: string) => {
+      return savedBets.some((s) =>
+        s.legs.some((l) => l.playerId === playerId || (propId && l.id === propId))
+      );
+    },
+    [savedBets]
+  );
+
+  // Toggle pinning of a prop from the live market board
+  const handleTogglePinPropFromMarket = useCallback(
+    (
+      player: FantasyPlayer,
+      prop?: { id: string; label: string; target: number | string; statType?: string }
+    ) => {
+      let targetSlip = savedBets.find(
+        (s) =>
+          s.id === 'sunday-sweat-slip' ||
+          s.title.toLowerCase().includes('sunday sweat') ||
+          s.title.toLowerCase().includes('sunday room lock')
+      );
+
+      const isPinned = savedBets.some((s) =>
+        s.legs.some((l) => l.playerId === player.id || (prop && l.id === prop.id))
+      );
+
+      if (isPinned && targetSlip) {
+        // Unpin
+        const updatedLegs = targetSlip.legs.filter(
+          (l) => l.playerId !== player.id && (!prop || l.id !== prop.id)
+        );
+        const updatedBets = savedBets.map((s) =>
+          s.id === targetSlip!.id ? { ...s, legs: updatedLegs } : s
+        );
+        handleUpdateBets(updatedBets);
+        showToast(`Unpinned ${player.name} from Slips`, 'info');
+      } else {
+        // Pin
+        const numTarget = prop
+          ? typeof prop.target === 'number'
+            ? prop.target
+            : parseFloat(prop.target) || 45.5
+          : player.position === 'QB'
+          ? 238.5
+          : player.position === 'RB'
+          ? 64.5
+          : 48.5;
+        const statLabel = prop?.label || (player.position === 'QB' ? 'Passing Yds' : player.position === 'RB' ? 'Rushing Yds' : 'Receiving Yds');
+
+        const newLeg: BetLeg = {
+          id: prop?.id || `prop-${player.id}-${Date.now()}`,
+          type: 'player_prop',
+          playerId: player.id,
+          playerName: player.name,
+          playerHeadshot: player.headshot,
+          playerTeam: player.team.abbreviation,
+          statType: (prop?.statType as any) || (player.position === 'QB' ? 'passYds' : player.position === 'RB' ? 'rushYds' : 'recYds'),
+          direction: 'OVER',
+          targetValue: numTarget,
+          description: `${player.name} OVER ${numTarget} ${statLabel}`,
+        };
+
+        if (targetSlip) {
+          const updatedLegs = [...targetSlip.legs, newLeg];
+          const updatedBets = savedBets.map((s) =>
+            s.id === targetSlip!.id ? { ...s, legs: updatedLegs } : s
+          );
+          handleUpdateBets(updatedBets);
+        } else {
+          const newSlip: BetSlip = {
+            id: 'sunday-sweat-slip',
+            title: 'Sunday Sweat (Pinned Action)',
+            ownerName: 'Living Room',
+            wager: '$25',
+            payout: '$175 (+600)',
+            createdAt: Date.now(),
+            legs: [newLeg],
+          };
+          handleUpdateBets([...savedBets, newSlip]);
+        }
+        showToast(`Pinned ${player.name} ${statLabel} to Sunday Sweat!`, 'success');
+      }
+    },
+    [savedBets, handleUpdateBets, showToast]
+  );
 
   // Quick player suggestions for couch friend tagger
   const quickPlayerSuggestions = useMemo(() => {
@@ -3475,6 +3586,65 @@ export default function TVCommandCenter() {
         )}
       </section>
 
+      {/* 3b. ACTIVE MATCHUP SPOTLIGHT HUD (When a Game is Filtered) */}
+      {selectedTickerGame && (
+        <section className="w-full bg-[#12141c] border-b border-amber-500/40 px-3 py-1.5 flex items-center justify-between gap-3 text-xs shrink-0 animate-fadeIn z-20">
+          <div className="flex items-center gap-3 min-w-0 flex-wrap">
+            <div className="flex items-center gap-1.5 bg-[#0a0b0e] border border-amber-500/30 px-2 py-0.5 rounded-md">
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+              <span className="text-[10px] font-condensed font-black uppercase tracking-wider text-amber-300">
+                MATCHUP SPOTLIGHT
+              </span>
+            </div>
+
+            {/* Teams & Score */}
+            <div className="flex items-center gap-2 font-mono-score font-bold">
+              <div className="flex items-center gap-1.5 bg-[#0a0b0e] border border-zinc-800 px-2 py-0.5 rounded-md">
+                <img
+                  src={selectedTickerGame.awayTeam.logo}
+                  alt={selectedTickerGame.awayTeam.abbreviation}
+                  className="w-4 h-4 object-contain team-logo-contrast"
+                />
+                <span className="text-white text-xs">{selectedTickerGame.awayTeam.abbreviation}</span>
+                <span className="text-zinc-200 text-xs font-semibold">{selectedTickerGame.awayTeam.score}</span>
+              </div>
+              <span className="text-zinc-500 text-[10px] font-condensed uppercase font-bold">AT</span>
+              <div className="flex items-center gap-1.5 bg-[#0a0b0e] border border-zinc-800 px-2 py-0.5 rounded-md">
+                <img
+                  src={selectedTickerGame.homeTeam.logo}
+                  alt={selectedTickerGame.homeTeam.abbreviation}
+                  className="w-4 h-4 object-contain team-logo-contrast"
+                />
+                <span className="text-white text-xs">{selectedTickerGame.homeTeam.abbreviation}</span>
+                <span className="text-zinc-200 text-xs font-semibold">{selectedTickerGame.homeTeam.score}</span>
+              </div>
+            </div>
+
+            {/* Game Situation */}
+            <span className="text-[10px] font-mono-score font-semibold text-emerald-400 bg-emerald-950/60 border border-emerald-500/40 px-2 py-0.5 rounded-md">
+              {selectedTickerGame.status.shortDetail || 'LIVE'}
+              {selectedTickerGame.situation?.downDistanceText && ` • ${selectedTickerGame.situation.downDistanceText}`}
+            </span>
+
+            <span className="hidden lg:inline text-[11px] text-zinc-400 font-condensed font-medium">
+              Filtering studs, live scoring plays, and player props to this game
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => setSelectedTickerGameId(null)}
+              className="px-2.5 py-1 rounded-md bg-amber-400 hover:bg-amber-300 text-black font-condensed font-black text-xs uppercase transition-colors flex items-center gap-1.5 shadow-sm"
+              title="Clear matchup filter (Esc)"
+            >
+              <X className="w-3.5 h-3.5" />
+              <span>Show All Games</span>
+              <span className="kbd-shortcut hidden sm:inline ml-0.5">ESC</span>
+            </button>
+          </div>
+        </section>
+      )}
+
       {/* 4. EDGE-TO-EDGE BROADCAST NAVIGATION TABS */}
       <nav className="h-10 bg-[#0e1015] border-b border-zinc-800/80 px-2 flex items-center shrink-0 w-full justify-between">
         {TABS.map((tab, idx) => {
@@ -3648,6 +3818,22 @@ export default function TVCommandCenter() {
                     possessingTeams.has(player.team.abbreviation.toUpperCase())
                   );
 
+                  // Match game score if available
+                  const playerGame = data?.games?.find(
+                    (g) =>
+                      g.awayTeam.abbreviation.toUpperCase() === player.team.abbreviation.toUpperCase() ||
+                      g.homeTeam.abbreviation.toUpperCase() === player.team.abbreviation.toUpperCase()
+                  );
+                  const gameScoreText = playerGame ? `${playerGame.awayTeam.score} - ${playerGame.homeTeam.score}` : '';
+
+                  // Projection comparison
+                  const proj = player.projectedPoints?.[scoringFormat];
+                  const projDelta = proj !== undefined && proj > 0 ? pts - proj : null;
+
+                  // Target benchmark
+                  const benchmarkTarget = pos === 'QB' ? 20.0 : pos === 'DEF' || pos === 'K' ? 10.0 : 15.0;
+                  const benchmarkPct = Math.min(100, Math.round((pts / benchmarkTarget) * 100));
+
                   // Consolidate secondary stats & targets into crisp pills
                   const statPills = formatPlayerStatPills(player);
 
@@ -3706,6 +3892,11 @@ export default function TVCommandCenter() {
                               <span className="text-xs font-condensed font-semibold text-zinc-400 shrink-0">
                                 {player.team.abbreviation} vs {player.opponent.abbreviation}
                               </span>
+                              {gameScoreText && (
+                                <span className="text-[10px] font-mono-score font-bold text-zinc-300 bg-[#0a0b0e] px-1.5 py-0.2 rounded border border-zinc-800 shrink-0">
+                                  {gameScoreText}
+                                </span>
+                              )}
                               <span className={`text-[11px] font-mono-score font-semibold shrink-0 ${player.isGameLive ? 'text-amber-400 flex items-center gap-1' : player.isProjection ? 'text-cyan-400 font-bold' : 'text-zinc-500'}`}>
                                 {player.isGameLive && (
                                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse inline-block" />
@@ -3760,6 +3951,16 @@ export default function TVCommandCenter() {
                           <span className={`text-3xl md:text-4xl font-mono-score font-semibold tracking-tight text-emerald-400 leading-none ${pts >= 25 ? 'monster-points-glow' : ''}`}>
                             {formatPoints(pts)}
                           </span>
+                          {projDelta !== null && (
+                            <span
+                              className={`text-[9px] font-mono-score font-semibold tracking-tight mt-1 ${
+                                projDelta >= 0 ? 'text-emerald-400' : 'text-zinc-500'
+                              }`}
+                              title={`Projected: ${proj?.toFixed(1)} pts`}
+                            >
+                              {projDelta >= 0 ? `+${projDelta.toFixed(1)}` : projDelta.toFixed(1)} vs Proj
+                            </span>
+                          )}
                         </div>
                       </div>
 
@@ -3782,6 +3983,15 @@ export default function TVCommandCenter() {
                             Stats updating live...
                           </span>
                         )}
+                      </div>
+
+                      {/* Subtle Benchmark Progress Bar */}
+                      <div className="w-full h-1 bg-[#0a0b0e] rounded-full overflow-hidden mt-1 border border-zinc-800/80">
+                        <div
+                          className={`h-full transition-all duration-300 ${benchmarkPct >= 100 ? 'bg-emerald-400' : 'bg-emerald-500/70'}`}
+                          style={{ width: `${Math.max(4, benchmarkPct)}%` }}
+                          title={`${benchmarkPct}% to standard ${benchmarkTarget} pt benchmark`}
+                        />
                       </div>
                     </div>
                   );
@@ -3910,10 +4120,29 @@ export default function TVCommandCenter() {
                       upd.description.toLowerCase().includes(key)
                     );
 
+                    // Find matching athlete from allActivePlayers
+                    const descLower = upd.description.toLowerCase();
+                    const matchedPlayer = allActivePlayers.find((p) => {
+                      const pName = p.name.toLowerCase();
+                      if (descLower.includes(pName)) return true;
+                      const parts = pName.split(' ');
+                      if (parts.length >= 2) {
+                        const shortName = `${parts[0][0]}.${parts[1]}`;
+                        if (descLower.includes(shortName)) return true;
+                      }
+                      return false;
+                    });
+
                     return (
                       <div
                         key={`${upd.id}-${idx}`}
+                        onClick={() => {
+                          if (matchedPlayer) setSelectedDetailPlayer(matchedPlayer);
+                        }}
+                        title={matchedPlayer ? `Click to view ${matchedPlayer.name}'s stats & play log` : undefined}
                         className={`h-auto p-3 rounded-lg border transition-all flex flex-col gap-1.5 ${
+                          matchedPlayer ? 'cursor-pointer hover:border-zinc-600' : ''
+                        } ${
                           isTD
                             ? 'bg-[#0e1712] border-emerald-500/50 border-l-4 border-l-emerald-400'
                             : isTO
@@ -3981,6 +4210,20 @@ export default function TVCommandCenter() {
                               <Users className="w-3 h-3 text-amber-400" />
                               <span>{matchingOwners[0][1][0]?.ownerName.toUpperCase()}&apos;S PLAYER</span>
                             </span>
+                          )}
+
+                          {matchedPlayer && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedDetailPlayer(matchedPlayer);
+                              }}
+                              className="text-[9px] font-condensed font-bold uppercase px-1.5 py-0.5 rounded-md bg-zinc-900 text-zinc-300 hover:text-white border border-zinc-800 hover:border-zinc-700 flex items-center gap-1 transition-colors"
+                              title={`Inspect ${matchedPlayer.name}`}
+                            >
+                              <span>{matchedPlayer.name}</span>
+                              <ExternalLink className="w-2.5 h-2.5 text-zinc-400" />
+                            </button>
                           )}
                         </div>
                       </div>
@@ -4169,13 +4412,25 @@ export default function TVCommandCenter() {
                             </div>
                           </div>
 
-                          <div className="text-right">
-                            <div className={`text-xl font-mono-score font-semibold text-emerald-400 leading-none ${friend.totalPoints >= 100 ? 'monster-points-glow' : ''}`}>
-                              {friend.totalPoints.toFixed(1)}
+                          <div className="flex items-center gap-2">
+                            <div className="text-right">
+                              <div className={`text-xl font-mono-score font-semibold text-emerald-400 leading-none ${friend.totalPoints >= 100 ? 'monster-points-glow' : ''}`}>
+                                {friend.totalPoints.toFixed(1)}
+                              </div>
+                              <span className="text-[9px] font-mono-score font-semibold text-zinc-500 uppercase tracking-widest mt-0.5 block">
+                                {pointDiff}
+                              </span>
                             </div>
-                            <span className="text-[9px] font-mono-score font-semibold text-zinc-500 uppercase tracking-widest mt-0.5 block">
-                              {pointDiff}
-                            </span>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleRemoveFriend(friend.name);
+                              }}
+                              className="p-1 rounded text-zinc-600 hover:text-rose-400 hover:bg-rose-950/30 transition-all"
+                              title={`Remove ${friend.name} from Living Room`}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
                           </div>
                         </div>
 
@@ -4184,7 +4439,15 @@ export default function TVCommandCenter() {
                           {friend.rosteredPlayers.map((p, pIdx) => (
                             <span
                               key={`${p.name}-${pIdx}`}
-                              className="px-2 py-0.5 rounded-md bg-[#0a0b0e] border border-zinc-800 text-[10px] font-mono-score font-medium text-zinc-300 flex items-center gap-1.5"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const athlete = allActivePlayers.find(
+                                  (ap) => ap.name.toLowerCase() === p.name.toLowerCase()
+                                );
+                                if (athlete) setSelectedDetailPlayer(athlete);
+                              }}
+                              className="px-2 py-0.5 rounded-md bg-[#0a0b0e] hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 text-[10px] font-mono-score font-medium text-zinc-300 flex items-center gap-1.5 cursor-pointer transition-colors"
+                              title={`Click to inspect ${p.name}`}
                             >
                               {p.position && (
                                 <span className="text-[9px] font-bold text-zinc-500 uppercase">{p.position}</span>
@@ -4679,12 +4942,32 @@ export default function TVCommandCenter() {
                                 </div>
                               </div>
 
-                              <button
-                                onClick={() => setIsBetsModalOpen(true)}
-                                className="px-2.5 py-1 rounded-[4px] bg-emerald-400 hover:bg-emerald-300 text-black text-[10px] font-condensed font-black uppercase transition-all shrink-0"
-                              >
-                                + Bet Prop
-                              </button>
+                              {/* 1-Click Pin / Unpin Button */}
+                              {isPropOrPlayerPinned(player.id) ? (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleTogglePinPropFromMarket(player, props[0]);
+                                  }}
+                                  className="px-2.5 py-1 rounded-[4px] bg-emerald-400 hover:bg-rose-600 text-black hover:text-white text-[10px] font-condensed font-black uppercase transition-all shrink-0 flex items-center gap-1 shadow-sm"
+                                  title="Click to unpin from Sunday Sweat"
+                                >
+                                  <Check className="w-3 h-3 stroke-[3]" />
+                                  <span>PINNED</span>
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleTogglePinPropFromMarket(player, props[0]);
+                                  }}
+                                  className="px-2.5 py-1 rounded-[4px] bg-zinc-800 hover:bg-emerald-400 text-zinc-200 hover:text-black border border-zinc-700 hover:border-emerald-400 text-[10px] font-condensed font-black uppercase transition-all shrink-0 flex items-center gap-1"
+                                  title="Pin to active Sunday Sweat parlay"
+                                >
+                                  <Plus className="w-3 h-3 stroke-[3]" />
+                                  <span>+ PIN TO SWEAT</span>
+                                </button>
+                              )}
                             </div>
 
                             {/* Live In-Game Stat Line vs Projected Stats */}
@@ -4697,30 +4980,49 @@ export default function TVCommandCenter() {
                               </span>
                             </div>
 
-                            {/* Dynamic Prop Lines with Live Progress */}
-                            <div className="space-y-2 pt-1 border-t border-zinc-800/60">
-                              {props.map((pr) => (
-                                <div key={pr.id} className="space-y-1">
-                                  <div className="flex items-center justify-between text-[10px]">
-                                    <span className="text-zinc-300 font-condensed font-semibold">
-                                      {pr.label} (O/U {pr.target})
-                                    </span>
-                                    <span className={`font-mono-score font-bold ${pr.isCashed ? 'text-emerald-400' : 'text-zinc-500'}`}>
-                                      {pr.statusText}
-                                    </span>
+                            {/* Dynamic Prop Lines with Live Progress & 1-Click Pinning */}
+                            <div className="space-y-1.5 pt-1 border-t border-zinc-800/60">
+                              {props.map((pr) => {
+                                const isThisPropPinned = isPropOrPlayerPinned(player.id, pr.id);
+                                return (
+                                  <div
+                                    key={pr.id}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleTogglePinPropFromMarket(player, pr);
+                                    }}
+                                    className="space-y-1 cursor-pointer p-1 rounded hover:bg-zinc-800/40 transition-colors group/prop"
+                                    title="Click to pin or unpin this prop from your Sunday Sweat parlay"
+                                  >
+                                    <div className="flex items-center justify-between text-[10px]">
+                                      <span className="text-zinc-300 font-condensed font-semibold flex items-center gap-1 group-hover/prop:text-white">
+                                        <Pin className={`w-2.5 h-2.5 ${isThisPropPinned ? 'text-emerald-400 fill-emerald-400' : 'text-zinc-600 group-hover/prop:text-zinc-400'}`} />
+                                        <span>{pr.label} (O/U {pr.target})</span>
+                                      </span>
+                                      <div className="flex items-center gap-1.5 font-mono-score font-bold">
+                                        {isThisPropPinned && (
+                                          <span className="text-[9px] text-emerald-400 font-condensed uppercase px-1 py-0.2 rounded bg-emerald-950/80 border border-emerald-500/40">
+                                            PINNED
+                                          </span>
+                                        )}
+                                        <span className={pr.isCashed ? 'text-emerald-400' : 'text-zinc-500'}>
+                                          {pr.statusText}
+                                        </span>
+                                      </div>
+                                    </div>
+                                    <div className="w-full h-1.5 bg-zinc-950 rounded-full overflow-hidden border border-zinc-800">
+                                      <div
+                                        className={`h-full transition-all duration-300 ${
+                                          pr.isCashed
+                                            ? 'bg-emerald-400'
+                                            : 'bg-cyan-500'
+                                        }`}
+                                        style={{ width: `${Math.max(4, pr.pct)}%` }}
+                                      />
+                                    </div>
                                   </div>
-                                  <div className="w-full h-1.5 bg-zinc-950 rounded-full overflow-hidden border border-zinc-800">
-                                    <div
-                                      className={`h-full transition-all duration-300 ${
-                                        pr.isCashed
-                                          ? 'bg-emerald-400'
-                                          : 'bg-cyan-500'
-                                      }`}
-                                      style={{ width: `${Math.max(4, pr.pct)}%` }}
-                                    />
-                                  </div>
-                                </div>
-                              ))}
+                                );
+                              })}
                             </div>
                           </div>
                         );
@@ -5628,6 +5930,20 @@ export default function TVCommandCenter() {
         liveUpdates={data?.liveUpdates || []}
         onClose={() => setSelectedDetailPlayer(null)}
       />
+
+      {/* 7f. FLOATING BROADCAST HUD TOAST */}
+      {toastMessage && (
+        <div className="fixed bottom-12 right-6 z-50 flex items-center gap-2.5 px-4 py-2.5 rounded-lg bg-[#141824] border border-emerald-500/60 text-white font-condensed text-xs font-bold shadow-2xl animate-fadeIn">
+          {toastMessage.type === 'warn' ? (
+            <Flame className="w-4 h-4 text-amber-400 shrink-0" />
+          ) : toastMessage.type === 'info' ? (
+            <Activity className="w-4 h-4 text-cyan-400 shrink-0" />
+          ) : (
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          )}
+          <span>{toastMessage.text}</span>
+        </div>
+      )}
     </div>
   );
 }
