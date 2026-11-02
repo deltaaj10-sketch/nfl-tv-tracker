@@ -224,9 +224,13 @@ export default function ManageLeaguesModal({
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors border border-zinc-800 text-xs font-bold uppercase"
+            title="Close (Press Escape)"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
+            <span className="text-[9px] font-mono-score font-bold px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-zinc-300">
+              ESC
+            </span>
           </button>
         </div>
 

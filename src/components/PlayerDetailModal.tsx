@@ -228,13 +228,16 @@ export default function PlayerDetailModal({
             </div>
           </div>
 
-          {/* Close Button */}
+          {/* Close Button with Esc shortcut indicator */}
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
-            title="Close"
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors border border-zinc-800 text-xs font-condensed font-bold uppercase"
+            title="Close (Press Escape)"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
+            <span className="text-[9px] font-mono-score font-bold px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-zinc-300">
+              ESC
+            </span>
           </button>
         </div>
 
@@ -268,7 +271,7 @@ export default function PlayerDetailModal({
               }`}
             >
               <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">
-                0.5彙 PPR
+                0.5 PPR
               </span>
               <span className="text-2xl md:text-3xl font-mono-score font-bold text-white mt-0.5">
                 {player.points.halfPpr.toFixed(1)}

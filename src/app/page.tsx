@@ -33,6 +33,7 @@ import {
   ArrowUpDown,
   SlidersHorizontal,
   CheckCircle2,
+  Keyboard,
 } from 'lucide-react';
 import { playBroadcastAlertSound } from '@/lib/soundEffects';
 import {
@@ -1383,6 +1384,7 @@ export default function TVCommandCenter() {
   const [isManageModalOpen, setIsManageModalOpen] = useState(false);
   const [isBetsModalOpen, setIsBetsModalOpen] = useState(false);
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
+  const [isShortcutsModalOpen, setIsShortcutsModalOpen] = useState(false);
   const [selectedDetailPlayer, setSelectedDetailPlayer] = useState<FantasyPlayer | null>(null);
   const [openHedgeSlipId, setOpenHedgeSlipId] = useState<string | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -2081,8 +2083,12 @@ export default function TVCommandCenter() {
         setIsManageModalOpen(false);
         setIsBetsModalOpen(false);
         setIsQrModalOpen(false);
+        setIsShortcutsModalOpen(false);
         setOpenHedgeSlipId(null);
         setSelectedTickerGameId(null);
+      } else if (e.key === '?' || (e.shiftKey && e.key === '/')) {
+        e.preventDefault();
+        setIsShortcutsModalOpen((prev) => !prev);
       } else if (e.key.toLowerCase() === 'f') {
         e.preventDefault();
         toggleFullscreen();
@@ -2765,10 +2771,110 @@ export default function TVCommandCenter() {
     return scrollingGames;
   }, [scrollingGames]);
 
-  // Bottom Ticker: Clean 2x track of matchups for locked 60fps GPU scrolling
-  const tickerMatchups = useMemo(() => {
-    return displayMatchups;
-  }, [displayMatchups]);
+  // Bottom Broadcast Marquee Ticker Items: Seamless stream of league matchups, live TDs, RedZone alerts & studs
+  const broadcastTickerItems = useMemo(() => {
+    const items: Array<{
+      id: string;
+      badge: string;
+      badgeColor: string;
+      title: string;
+      detail?: string;
+      highlight?: string;
+      highlightColor?: string;
+    }> = [];
+
+    // 1. All Connected League Matchups
+    for (const m of displayMatchups) {
+      const diff = Math.abs(m.team1.points - m.team2.points);
+      items.push({
+        id: `m-${m.id}`,
+        badge: m.leagueName.toUpperCase(),
+        badgeColor: 'bg-zinc-900 text-zinc-300 border border-zinc-800',
+        title: `${m.team1.ownerName} (${m.team1.points.toFixed(1)}) vs ${m.team2.ownerName} (${m.team2.points.toFixed(1)})`,
+        detail: diff <= 5 ? 'CLUTCH MATCHUP' : undefined,
+        highlight: `${diff.toFixed(1)} PT DIFF`,
+        highlightColor: diff <= 5 ? 'text-amber-300' : 'text-zinc-400',
+      });
+    }
+
+    // 2. Live RedZone Alerts
+    if (data?.games) {
+      for (const g of data.games) {
+        if (g.status?.state === 'in' && (g.isRedZone || g.situation?.isRedZone)) {
+          items.push({
+            id: `rz-${g.id}`,
+            badge: 'RED ZONE',
+            badgeColor: 'bg-rose-950/90 text-rose-300 border border-rose-500/60 animate-pulse',
+            title: `${g.awayTeam.abbreviation} ${g.awayTeam.score} @ ${g.homeTeam.abbreviation} ${g.homeTeam.score}`,
+            detail: g.possessionText ? `Ball at ${g.possessionText}` : 'Threatening Inside the 20',
+            highlight: g.status.shortDetail || 'LIVE',
+            highlightColor: 'text-rose-400',
+          });
+        }
+      }
+    }
+
+    // 3. Touchdown Plays & Turnovers from Live Scoring Updates
+    if (data?.liveUpdates) {
+      for (const u of data.liveUpdates.slice(0, 10)) {
+        if (u.type === 'touchdown') {
+          items.push({
+            id: `td-${u.id}`,
+            badge: 'TOUCHDOWN',
+            badgeColor: 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/50',
+            title: u.headline,
+            detail: u.gameClock,
+            highlight: u.fantasyImpact || '+6.0 PTS',
+            highlightColor: 'text-emerald-400',
+          });
+        } else if (u.type === 'turnover') {
+          items.push({
+            id: `to-${u.id}`,
+            badge: 'TURNOVER',
+            badgeColor: 'bg-rose-950/80 text-rose-300 border border-rose-500/50',
+            title: u.headline,
+            detail: u.gameClock,
+            highlight: 'POSSESSION CHANGE',
+            highlightColor: 'text-rose-400',
+          });
+        }
+      }
+    }
+
+    // 4. Top Fantasy Scorers Across the Slate
+    const topScorers = [...allActivePlayers]
+      .filter((p) => (p.points[scoringFormat] || 0) > 0)
+      .sort((a, b) => (b.points[scoringFormat] || 0) - (a.points[scoringFormat] || 0))
+      .slice(0, 4);
+
+    for (const p of topScorers) {
+      const pills = formatPlayerStatPills(p);
+      items.push({
+        id: `stud-${p.id}`,
+        badge: 'STUD',
+        badgeColor: 'bg-amber-950/80 text-amber-300 border border-amber-500/50',
+        title: `${p.name} (${p.team.abbreviation})`,
+        detail: pills.slice(0, 2).join(' • ') || undefined,
+        highlight: `${(p.points[scoringFormat] || 0).toFixed(1)} PTS`,
+        highlightColor: 'text-emerald-400',
+      });
+    }
+
+    // 5. Fallback if slate is quiet
+    if (items.length === 0) {
+      items.push({
+        id: 'tip-leagues',
+        badge: 'COMMAND CENTER',
+        badgeColor: 'bg-cyan-950/80 text-cyan-300 border border-cyan-500/40',
+        title: 'NFL RedZone Fantasy Command Center Live',
+        detail: 'Click LEAGUES in header to sync your Sleeper or ESPN leagues',
+        highlight: 'READY',
+        highlightColor: 'text-cyan-400',
+      });
+    }
+
+    return items;
+  }, [displayMatchups, data?.games, data?.liveUpdates, allActivePlayers, scoringFormat]);
 
   // Helper to render individual scoreboard game card (used for both pinned RedZone & continuous scrolling)
   const renderScoreboardGameCard = useCallback((game: LiveGame, isRedZonePinned?: boolean) => {
@@ -2910,15 +3016,39 @@ export default function TVCommandCenter() {
                   {downDistanceDisplay}
                 </span>
               )}
+              {game.broadcast && (
+                <span className="text-[8px] font-mono-score font-bold px-1 py-0.2 rounded bg-zinc-900 border border-zinc-800 text-zinc-400 uppercase mt-0.5">
+                  {game.broadcast}
+                </span>
+              )}
             </>
           ) : isPost ? (
-            <span className="text-[10px] font-condensed font-bold text-zinc-500 uppercase tracking-wider">
-              FINAL
-            </span>
+            <div className="flex flex-col items-center">
+              <span className="text-[10px] font-condensed font-bold text-zinc-500 uppercase tracking-wider">
+                {game.status.shortDetail?.includes('OT') ? 'FINAL / OT' : 'FINAL'}
+              </span>
+              {game.broadcast && (
+                <span className="text-[8px] font-mono-score font-medium text-zinc-600 uppercase mt-0.5">
+                  {game.broadcast}
+                </span>
+              )}
+            </div>
           ) : (
-            <span className="text-[10px] font-condensed font-semibold text-zinc-500 uppercase tracking-wider">
-              {game.status.shortDetail || 'UPCOMING'}
-            </span>
+            <div className="flex flex-col items-center gap-0.5">
+              <span className="text-[10px] font-condensed font-semibold text-zinc-400 uppercase tracking-wider">
+                {game.status.shortDetail || 'UPCOMING'}
+              </span>
+              {game.broadcast && (
+                <span className="text-[8px] font-mono-score font-bold px-1.5 py-0.2 rounded bg-zinc-900 border border-zinc-800 text-amber-400 uppercase">
+                  {game.broadcast}
+                </span>
+              )}
+              {game.odds && (
+                <span className="text-[8px] font-mono-score font-medium text-zinc-500 truncate max-w-[80px]" title={game.odds}>
+                  {game.odds}
+                </span>
+              )}
+            </div>
           )}
         </div>
 
@@ -3090,6 +3220,17 @@ export default function TVCommandCenter() {
           >
             <QrCode className="w-3.5 h-3.5 text-cyan-400" />
             <span>ROOM QR</span>
+          </button>
+
+          {/* Keyboard Shortcuts HUD Button */}
+          <button
+            onClick={() => setIsShortcutsModalOpen(true)}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#0e1015] hover:bg-[#13151f] text-xs font-condensed font-bold uppercase text-zinc-400 hover:text-white border border-zinc-800/80 transition-colors"
+            title="Broadcast TV Remote Keyboard Shortcuts (Press ?)"
+          >
+            <Keyboard className="w-3.5 h-3.5 text-zinc-400" />
+            <span className="hidden sm:inline">KEYS</span>
+            <span className="kbd-shortcut hidden md:inline">?</span>
           </button>
 
           {/* Theater / Fullscreen Mode Toggle */}
@@ -4753,95 +4894,85 @@ export default function TVCommandCenter() {
         {/* Fixed Left Label Badge (Anchored) */}
         <div className="h-full px-3 md:px-4 bg-[#0a0b0e] border-r border-zinc-800/80 flex items-center gap-2 z-20 shrink-0">
           <span className="text-white font-condensed font-bold tracking-wider text-xs md:text-sm flex items-center gap-1.5 whitespace-nowrap uppercase">
-            <Trophy className="w-3.5 h-3.5 text-amber-400" />
-            <span>LEAGUE SCORES</span>
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span>BOTTOMLINE</span>
           </span>
-          {displayMatchups.length > 0 && (
-            <span className="px-1.5 py-0.2 rounded-md bg-zinc-900 border border-zinc-800 text-zinc-400 text-[10px] font-mono-score font-bold">
-              {displayMatchups.length}
-            </span>
-          )}
+          <span className="px-1.5 py-0.2 rounded-md bg-zinc-900 border border-zinc-800 text-zinc-400 text-[10px] font-mono-score font-bold">
+            {broadcastTickerItems.length}
+          </span>
         </div>
 
-        {/* Seamless Infinite Marquee Track - Relaxed 110s Pace for Effortless 10-Foot Reading */}
-        <div className="flex-1 overflow-hidden relative h-full flex items-center">
-          {displayMatchups.length === 0 ? (
-            <div className="px-4 text-xs font-condensed font-medium text-zinc-500 flex items-center gap-2">
-              <Activity className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
-              <span>Tip: Click &quot;LEAGUES&quot; in the top bar to link your Sleeper/ESPN leagues or living room friends.</span>
-            </div>
-          ) : (
-            <div
-              className="league-ticker-track flex items-center gap-6"
-              style={{
-                display: 'flex',
-                width: 'max-content',
-                animation: 'tickerScroll 110s linear infinite',
-                willChange: 'transform',
-                transform: 'translate3d(0, 0, 0)',
-                backfaceVisibility: 'hidden',
-                WebkitBackfaceVisibility: 'hidden',
-              }}
-            >
-              {/* Set 1 of Matchups */}
-              {tickerMatchups.map((m, idx) => (
-                <div
-                  key={`m1-${m.id || idx}-${idx}`}
-                  className="flex items-center gap-3 px-3 py-1.5 rounded-lg bg-[#13151f] border border-zinc-800/80 shrink-0 whitespace-nowrap hover:border-zinc-700 transition-colors"
-                >
-                  <span className="text-[10px] font-condensed font-bold uppercase text-zinc-400 bg-zinc-900 px-1.5 py-0.5 rounded-md border border-zinc-800">
-                    {m.leagueName}
-                  </span>
-                  <div className="flex items-center gap-2 text-xs font-condensed">
-                    <span className={m.team1.points > m.team2.points ? 'text-emerald-400 font-bold' : 'text-zinc-300 font-medium'}>
-                      {m.team1.ownerName}
+        {/* Seamless Infinite Marquee Track - Relaxed 120s Pace for Effortless 10-Foot Reading with Hover-to-Pause */}
+        <div className="flex-1 overflow-hidden relative h-full flex items-center group">
+          <div
+            className="league-ticker-track flex items-center gap-6 group-hover:[animation-play-state:paused]"
+            style={{
+              display: 'flex',
+              width: 'max-content',
+              animation: 'tickerScroll 120s linear infinite',
+              willChange: 'transform',
+              transform: 'translate3d(0, 0, 0)',
+              backfaceVisibility: 'hidden',
+              WebkitBackfaceVisibility: 'hidden',
+            }}
+          >
+            {/* Set 1 of Items */}
+            {broadcastTickerItems.map((item, idx) => (
+              <div
+                key={`b1-${item.id}-${idx}`}
+                className="flex items-center gap-3 px-3 py-1.5 rounded-lg bg-[#13151f] border border-zinc-800/80 shrink-0 whitespace-nowrap hover:border-zinc-700 transition-colors"
+              >
+                <span className={`text-[10px] font-condensed font-bold uppercase px-2 py-0.5 rounded-md ${item.badgeColor}`}>
+                  {item.badge}
+                </span>
+                <div className="flex items-center gap-2 text-xs font-condensed">
+                  <span className="text-zinc-200 font-bold">{item.title}</span>
+                  {item.detail && (
+                    <span className="text-zinc-400 font-medium">
+                      • {item.detail}
                     </span>
-                    <span className="text-sm font-mono-score font-semibold text-white px-1.5 py-0.5 rounded-md bg-[#0a0b0e] border border-zinc-800">
-                      {m.team1.points.toFixed(1)}
+                  )}
+                  {item.highlight && (
+                    <span className={`text-xs font-mono-score font-semibold px-1.5 py-0.5 rounded bg-[#0a0b0e] border border-zinc-800 ${item.highlightColor || 'text-white'}`}>
+                      {item.highlight}
                     </span>
-                    <span className="text-zinc-600 text-[10px] font-bold">VS</span>
-                    <span className="text-sm font-mono-score font-semibold text-white px-1.5 py-0.5 rounded-md bg-[#0a0b0e] border border-zinc-800">
-                      {m.team2.points.toFixed(1)}
-                    </span>
-                    <span className={m.team2.points > m.team1.points ? 'text-emerald-400 font-bold' : 'text-zinc-300 font-medium'}>
-                      {m.team2.ownerName}
-                    </span>
-                  </div>
+                  )}
                 </div>
-              ))}
+              </div>
+            ))}
 
-              {/* Set 2 of Matchups for Seamless Infinite Loop */}
-              {tickerMatchups.map((m, idx) => (
-                <div
-                  key={`m2-${m.id || idx}-${idx}`}
-                  className="flex items-center gap-3 px-3 py-1.5 rounded-lg bg-[#13151f] border border-zinc-800/80 shrink-0 whitespace-nowrap hover:border-zinc-700 transition-colors"
-                >
-                  <span className="text-[10px] font-condensed font-bold uppercase text-zinc-400 bg-zinc-900 px-1.5 py-0.5 rounded-md border border-zinc-800">
-                    {m.leagueName}
-                  </span>
-                  <div className="flex items-center gap-2 text-xs font-condensed">
-                    <span className={m.team1.points > m.team2.points ? 'text-emerald-400 font-bold' : 'text-zinc-300 font-medium'}>
-                      {m.team1.ownerName}
+            {/* Set 2 of Items for Seamless Infinite Loop */}
+            {broadcastTickerItems.map((item, idx) => (
+              <div
+                key={`b2-${item.id}-${idx}`}
+                className="flex items-center gap-3 px-3 py-1.5 rounded-lg bg-[#13151f] border border-zinc-800/80 shrink-0 whitespace-nowrap hover:border-zinc-700 transition-colors"
+              >
+                <span className={`text-[10px] font-condensed font-bold uppercase px-2 py-0.5 rounded-md ${item.badgeColor}`}>
+                  {item.badge}
+                </span>
+                <div className="flex items-center gap-2 text-xs font-condensed">
+                  <span className="text-zinc-200 font-bold">{item.title}</span>
+                  {item.detail && (
+                    <span className="text-zinc-400 font-medium">
+                      • {item.detail}
                     </span>
-                    <span className="text-sm font-mono-score font-semibold text-white px-1.5 py-0.5 rounded-md bg-[#0a0b0e] border border-zinc-800">
-                      {m.team1.points.toFixed(1)}
+                  )}
+                  {item.highlight && (
+                    <span className={`text-xs font-mono-score font-semibold px-1.5 py-0.5 rounded bg-[#0a0b0e] border border-zinc-800 ${item.highlightColor || 'text-white'}`}>
+                      {item.highlight}
                     </span>
-                    <span className="text-zinc-600 text-[10px] font-bold">VS</span>
-                    <span className="text-sm font-mono-score font-semibold text-white px-1.5 py-0.5 rounded-md bg-[#0a0b0e] border border-zinc-800">
-                      {m.team2.points.toFixed(1)}
-                    </span>
-                    <span className={m.team2.points > m.team1.points ? 'text-emerald-400 font-bold' : 'text-zinc-300 font-medium'}>
-                      {m.team2.ownerName}
-                    </span>
-                  </div>
+                  )}
                 </div>
-              ))}
-            </div>
-          )}
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* Fixed Right Sync Time & Screen WakeLock Status */}
         <div className="h-full px-3 bg-[#0a0b0e] border-l border-zinc-800/80 flex items-center gap-3 text-[10px] text-zinc-500 shrink-0 z-20 font-condensed">
+          <span className="hidden xl:inline text-zinc-600 uppercase text-[9px]">
+            Hover to Pause
+          </span>
           <div
             className="flex items-center gap-1.5 cursor-pointer hover:text-zinc-300 transition-colors"
             onClick={requestWakeLock}
@@ -4891,22 +5022,24 @@ export default function TVCommandCenter() {
       {isQrModalOpen && (
         <div
           onClick={() => setIsQrModalOpen(false)}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 cursor-pointer animate-fadeIn font-condensed"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 cursor-pointer animate-fadeIn font-condensed"
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="relative max-w-md w-full p-6 md:p-8 rounded-[4px] bg-[#0E1017] border border-zinc-800 flex flex-col items-center text-center cursor-default"
+            className="relative max-w-md w-full p-6 md:p-8 rounded-xl bg-[#0e1015] border border-zinc-800 shadow-2xl flex flex-col items-center text-center cursor-default"
           >
-            {/* Close button */}
+            {/* Close button with Esc badge */}
             <button
               onClick={() => setIsQrModalOpen(false)}
-              className="absolute top-4 right-4 p-1.5 rounded-[2px] bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
+              className="absolute top-4 right-4 flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors border border-zinc-800 text-xs font-bold uppercase"
+              title="Close (Press Escape)"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4" />
+              <span className="kbd-shortcut">ESC</span>
             </button>
 
             {/* Header */}
-            <div className="flex items-center gap-2 px-2.5 py-1 rounded-[2px] bg-cyan-950/60 border border-cyan-500/40 text-cyan-300 text-xs font-black uppercase mb-3 tracking-wider">
+            <div className="flex items-center gap-2 px-2.5 py-1 rounded-md bg-cyan-950/60 border border-cyan-500/40 text-cyan-300 text-xs font-black uppercase mb-3 tracking-wider">
               <Smartphone className="w-3.5 h-3.5 text-cyan-400" />
               <span>Room Phone Sync</span>
             </div>
@@ -4919,7 +5052,7 @@ export default function TVCommandCenter() {
             </p>
 
             {/* High-Contrast QR Code Card */}
-            <div className="p-3 bg-white rounded-[4px] border-2 border-zinc-700 mb-5 flex items-center justify-center">
+            <div className="p-3 bg-white rounded-lg border-2 border-zinc-700 mb-5 flex items-center justify-center shadow-lg">
               <img
                 src={`https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(
                   typeof window !== 'undefined' ? window.location.origin : ''
@@ -4930,7 +5063,7 @@ export default function TVCommandCenter() {
             </div>
 
             {/* Room URL & Copy Button */}
-            <div className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-[2px] bg-[#07080C] border border-zinc-800 text-xs font-mono-score">
+            <div className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-[#0a0b0e] border border-zinc-800 text-xs font-mono-score">
               <span className="text-zinc-400 font-mono truncate text-[11px]">
                 {typeof window !== 'undefined' ? window.location.origin : ''}
               </span>
@@ -4942,7 +5075,7 @@ export default function TVCommandCenter() {
                     setTimeout(() => setCopiedLink(false), 2000);
                   }
                 }}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-[2px] bg-cyan-500 hover:bg-cyan-400 text-black font-black text-[10px] uppercase transition-all shrink-0"
+                className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-cyan-500 hover:bg-cyan-400 text-black font-black text-[10px] uppercase transition-all shrink-0"
               >
                 {copiedLink ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
                 <span>{copiedLink ? 'Copied!' : 'Copy'}</span>
@@ -4952,6 +5085,98 @@ export default function TVCommandCenter() {
             <div className="flex items-center gap-2 mt-4 text-[10px] text-zinc-500 font-bold uppercase tracking-wider">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
               <span>Live Multi-Device Room Sync Active</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 7e. BROADCAST KEYBOARD REMOTE SHORTCUTS HUD MODAL */}
+      {isShortcutsModalOpen && (
+        <div
+          onClick={() => setIsShortcutsModalOpen(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 cursor-pointer animate-fadeIn font-condensed"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative max-w-xl w-full p-6 md:p-8 rounded-xl bg-[#0e1015] border border-zinc-800 shadow-2xl flex flex-col cursor-default"
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-zinc-800/80">
+              <div className="flex items-center gap-2">
+                <Keyboard className="w-5 h-5 text-emerald-400" />
+                <h2 className="text-lg md:text-xl font-black text-white uppercase tracking-tight">
+                  TV Remote &amp; Keyboard Shortcuts
+                </h2>
+              </div>
+              <button
+                onClick={() => setIsShortcutsModalOpen(false)}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors border border-zinc-800 text-xs font-bold uppercase"
+              >
+                <X className="w-4 h-4" />
+                <span className="kbd-shortcut">ESC</span>
+              </button>
+            </div>
+
+            <p className="text-xs text-zinc-400 mt-2 mb-4 leading-relaxed">
+              Control the NFL RedZone Command Center directly from your couch or second screen using your keyboard:
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <div className="p-3 rounded-lg bg-[#0a0b0e] border border-zinc-800/80 flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-bold text-white uppercase block">TV Theater Mode</span>
+                  <span className="text-[10px] text-zinc-500">Toggle borderless fullscreen view</span>
+                </div>
+                <span className="kbd-shortcut text-xs font-black">F</span>
+              </div>
+
+              <div className="p-3 rounded-lg bg-[#0a0b0e] border border-zinc-800/80 flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-bold text-white uppercase block">Auto-Cycle Tabs</span>
+                  <span className="text-[10px] text-zinc-500">Pause or resume tab rotation</span>
+                </div>
+                <span className="kbd-shortcut text-xs font-black">SPACE</span>
+              </div>
+
+              <div className="p-3 rounded-lg bg-[#0a0b0e] border border-zinc-800/80 flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-bold text-white uppercase block">Mute Audio</span>
+                  <span className="text-[10px] text-zinc-500">Toggle touchdown sirens &amp; cash chimes</span>
+                </div>
+                <span className="kbd-shortcut text-xs font-black">M</span>
+              </div>
+
+              <div className="p-3 rounded-lg bg-[#0a0b0e] border border-zinc-800/80 flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-bold text-white uppercase block">Dismiss Modals</span>
+                  <span className="text-[10px] text-zinc-500">Close active alerts and drawers</span>
+                </div>
+                <span className="kbd-shortcut text-xs font-black">ESC</span>
+              </div>
+
+              <div className="p-3 rounded-lg bg-[#0a0b0e] border border-zinc-800/80 flex items-center justify-between sm:col-span-2">
+                <div>
+                  <span className="text-xs font-bold text-white uppercase block">Direct Channel Switching</span>
+                  <span className="text-[10px] text-zinc-500">Jump directly to any tab view:</span>
+                  <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                    <span className="text-[9px] text-zinc-400 font-mono-score">1: Live</span>
+                    <span className="text-[9px] text-zinc-400 font-mono-score">• 2: QB</span>
+                    <span className="text-[9px] text-zinc-400 font-mono-score">• 3: RB</span>
+                    <span className="text-[9px] text-zinc-400 font-mono-score">• 4: WR</span>
+                    <span className="text-[9px] text-zinc-400 font-mono-score">• 5: TE</span>
+                    <span className="text-[9px] text-zinc-400 font-mono-score">• 6: DEF</span>
+                    <span className="text-[9px] text-zinc-400 font-mono-score">• 7: K</span>
+                    <span className="text-[9px] text-zinc-400 font-mono-score">• 8: Room</span>
+                    <span className="text-[9px] text-zinc-400 font-mono-score">• 9: Bets</span>
+                  </div>
+                </div>
+                <span className="kbd-shortcut text-xs font-black shrink-0">1 - 9</span>
+              </div>
+            </div>
+
+            <div className="mt-5 pt-3 border-t border-zinc-800/80 flex items-center justify-between text-[11px] text-zinc-500">
+              <span>Shortcuts are disabled while typing in search boxes.</span>
+              <span className="text-emerald-400 font-bold uppercase">Press ? to toggle</span>
             </div>
           </div>
         </div>
