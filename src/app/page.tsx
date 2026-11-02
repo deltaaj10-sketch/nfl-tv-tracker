@@ -1332,18 +1332,18 @@ const SyncCountdown = React.memo(function SyncCountdown({ onSync, intervalSec = 
 
   return (
     <div className="flex items-center gap-1.5 bg-[#0e1015] px-2.5 py-1 rounded-lg border border-zinc-800/80 shrink-0 text-xs whitespace-nowrap">
-      <Clock className="w-3 h-3 text-cyan-400 shrink-0" />
-      <span className="text-[10px] text-zinc-500 font-semibold uppercase tracking-wider">NEXT SYNC:</span>
-      <span className="font-mono text-cyan-300 font-bold w-4 text-center text-xs">
+      <Clock className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+      <span className="text-[10px] text-zinc-500 font-semibold uppercase tracking-wider hidden sm:inline">SYNC:</span>
+      <span className="font-mono-score text-cyan-300 font-bold w-5 text-center text-xs">
         {countdown}s
       </span>
 
       <button
         onClick={handleManualRefresh}
         title="Force Refresh Data"
-        className="p-0.5 rounded hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
+        className="p-1 rounded-md hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
       >
-        <RefreshCw className={`w-3 h-3 ${isSpinning ? 'animate-spin text-emerald-400' : ''}`} />
+        <RefreshCw className={`w-3.5 h-3.5 ${isSpinning ? 'animate-spin text-emerald-400' : ''}`} />
       </button>
     </div>
   );
@@ -3338,15 +3338,15 @@ export default function TVCommandCenter() {
               </div>
             )}
 
-            {/* Right Section — Slow Continuous Scrolling Game Ticker (FINAL & PRE Games) */}
-            <div className="overflow-hidden flex-1 relative flex items-center">
+            {/* Right Section — Slow Continuous Scrolling Game Ticker (FINAL & PRE Games) with Hover-to-Pause */}
+            <div className="overflow-hidden flex-1 relative flex items-center group">
               {scrollingGames.length === 0 ? (
                 <div className="px-4 text-xs font-semibold text-zinc-500 italic">
                   All NFL games currently LIVE!
                 </div>
               ) : (
                 <div
-                  className="scoreboard-ticker-track flex items-center gap-3 px-3"
+                  className="scoreboard-ticker-track flex items-center gap-3 px-3 group-hover:[animation-play-state:paused]"
                   style={{
                     display: 'flex',
                     width: 'max-content',
@@ -3951,9 +3951,15 @@ export default function TVCommandCenter() {
                               key={`${p.name}-${pIdx}`}
                               className="px-2 py-0.5 rounded-md bg-[#0a0b0e] border border-zinc-800 text-[10px] font-mono-score font-medium text-zinc-300 flex items-center gap-1.5"
                             >
-                              <span>{p.name}</span>
+                              {p.position && (
+                                <span className="text-[9px] font-bold text-zinc-500 uppercase">{p.position}</span>
+                              )}
+                              <span className="text-zinc-200 font-semibold">{p.name}</span>
+                              {p.team && (
+                                <span className="text-[9px] text-zinc-500 font-bold">{p.team}</span>
+                              )}
                               <span className="font-semibold text-emerald-400">
-                                {p.points > 0 ? `${p.points.toFixed(1)} pts` : '0 pts'}
+                                {p.points > 0 ? `${p.points.toFixed(1)} pts` : '0.0 pts'}
                               </span>
                             </span>
                           ))}
@@ -4203,19 +4209,19 @@ export default function TVCommandCenter() {
                       value={bettingSearch}
                       onChange={(e) => setBettingSearch(e.target.value)}
                       placeholder="Search any NFL player, team, or position..."
-                      className="w-full bg-zinc-950 border border-zinc-800 rounded-[4px] pl-9 pr-3 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-700 font-bold"
+                      className="w-full bg-[#0a0b0e] border border-zinc-800 rounded-lg pl-9 pr-3 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-700 font-bold"
                     />
                   </div>
 
                   {/* Filter Pills: Position + Game */}
                   <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
                     {/* Position Pills */}
-                    <div className="flex items-center gap-1 bg-zinc-950 p-0.5 rounded-[4px] border border-zinc-800 shrink-0">
+                    <div className="flex items-center gap-1 bg-[#0a0b0e] p-0.5 rounded-lg border border-zinc-800 shrink-0">
                       {(['ALL', 'QB', 'RB', 'WR', 'TE', 'K'] as const).map((pos) => (
                         <button
                           key={pos}
                           onClick={() => setBettingPosFilter(pos)}
-                          className={`px-2 py-0.5 rounded-[2px] text-[9px] font-condensed uppercase transition-all ${
+                          className={`px-2 py-0.5 rounded-md text-[9px] font-condensed uppercase transition-all ${
                             bettingPosFilter === pos
                               ? 'bg-white text-black font-black'
                               : 'text-zinc-400 hover:text-white font-bold'
@@ -4231,10 +4237,10 @@ export default function TVCommandCenter() {
                       <div className="flex items-center gap-1 overflow-x-auto no-scrollbar shrink-0">
                         <button
                           onClick={() => setBettingGameFilter('ALL')}
-                          className={`px-2 py-1 rounded-[2px] text-[9px] font-condensed uppercase transition-all ${
+                          className={`px-2 py-1 rounded-md text-[9px] font-condensed uppercase transition-all ${
                             bettingGameFilter === 'ALL'
                               ? 'bg-amber-400 text-black font-black'
-                              : 'bg-zinc-950 text-zinc-400 hover:text-white border border-zinc-800 font-bold'
+                              : 'bg-[#0a0b0e] text-zinc-400 hover:text-white border border-zinc-800 font-bold'
                           }`}
                         >
                           All Games
@@ -4246,12 +4252,12 @@ export default function TVCommandCenter() {
                             <button
                               key={g.id}
                               onClick={() => setBettingGameFilter(g.id)}
-                              className={`px-2 py-1 rounded-[2px] text-[9px] font-condensed uppercase transition-all flex items-center gap-1 shrink-0 ${
+                              className={`px-2 py-1 rounded-md text-[9px] font-condensed uppercase transition-all flex items-center gap-1 shrink-0 ${
                                 active
                                   ? 'bg-amber-400 text-black font-black'
                                   : isLive
                                   ? 'bg-emerald-950/80 border border-emerald-500/50 text-emerald-300 font-bold'
-                                  : 'bg-zinc-950 text-zinc-400 hover:text-white border border-zinc-800 font-medium'
+                                  : 'bg-[#0a0b0e] text-zinc-400 hover:text-white border border-zinc-800 font-medium'
                               }`}
                             >
                               {isLive && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />}
@@ -4312,12 +4318,12 @@ export default function TVCommandCenter() {
                                     <span className="text-xs font-condensed font-black text-white truncate">
                                       {player.name} {player.jersey ? `#${player.jersey}` : ''}
                                     </span>
-                                    <span className="text-[9px] font-condensed font-black text-amber-400 px-1 py-0.2 rounded bg-amber-500/10 border border-amber-500/30 shrink-0">
+                                    <span className="text-[9px] font-condensed font-black text-amber-400 px-1.5 py-0.2 rounded-md bg-amber-500/10 border border-amber-500/30 shrink-0">
                                       {player.position}
                                     </span>
                                     {player.injuryStatus && player.injuryStatus !== 'NA' && (
                                       <span
-                                        className={`px-1.5 py-0.2 rounded-[2px] text-[8px] font-black uppercase tracking-wider shrink-0 ${
+                                        className={`px-1.5 py-0.2 rounded-md text-[8px] font-black uppercase tracking-wider shrink-0 ${
                                           player.injuryStatus === 'Out' || player.injuryStatus === 'IR' || player.injuryStatus === 'PUP'
                                             ? 'bg-rose-600 text-white'
                                             : player.injuryStatus === 'Doubtful'
@@ -4342,7 +4348,7 @@ export default function TVCommandCenter() {
 
                               <button
                                 onClick={() => setIsBetsModalOpen(true)}
-                                className="px-2 py-1 rounded-[2px] bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-emerald-300 text-[10px] font-condensed font-black uppercase transition-all shrink-0"
+                                className="px-2.5 py-1 rounded-md bg-emerald-400 hover:bg-emerald-300 text-black text-[10px] font-condensed font-black uppercase transition-all shrink-0"
                               >
                                 + Bet Prop
                               </button>
@@ -4395,7 +4401,7 @@ export default function TVCommandCenter() {
               <div className="flex-1 overflow-y-auto pr-1 pt-2">
                 {savedBets.length === 0 ? (
                   <div className="h-full flex flex-col items-center justify-center gap-3 text-zinc-500 py-12 font-condensed">
-                    <div className="p-3 rounded-[4px] bg-[#0C0D10] border border-zinc-800">
+                    <div className="p-3 rounded-xl bg-[#0a0b0e] border border-zinc-800">
                       <DollarSign className="w-8 h-8 text-emerald-400" />
                     </div>
                     <div className="text-center">
@@ -4409,13 +4415,13 @@ export default function TVCommandCenter() {
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => setIsBetsModalOpen(true)}
-                        className="px-4 py-2 rounded-[4px] bg-emerald-400 hover:bg-emerald-300 text-black font-condensed font-black text-xs uppercase transition-colors"
+                        className="px-4 py-2 rounded-lg bg-emerald-400 hover:bg-emerald-300 text-black font-condensed font-black text-xs uppercase transition-colors"
                       >
                         + Add Your First Bet / Parlay
                       </button>
                       <button
                         onClick={() => setBettingSubView('props')}
-                        className="px-4 py-2 rounded-[4px] bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-white font-condensed font-bold text-xs uppercase transition-colors"
+                        className="px-4 py-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-white font-condensed font-bold text-xs uppercase transition-colors"
                       >
                         Browse Player Props Market
                       </button>
@@ -5203,10 +5209,12 @@ export default function TVCommandCenter() {
               </span>
               <button
                 onClick={() => setActiveTdAlert(null)}
-                className="px-2.5 py-1 rounded-md bg-[#13151f] hover:bg-[#1a1c28] text-zinc-300 hover:text-white text-xs font-condensed font-bold uppercase transition-colors border border-zinc-800 flex items-center gap-1"
+                className="px-2.5 py-1 rounded-md bg-[#13151f] hover:bg-[#1a1c28] text-zinc-300 hover:text-white text-xs font-condensed font-bold uppercase transition-colors border border-zinc-800 flex items-center gap-1.5"
+                title="Dismiss Touchdown Alert (Press Escape)"
               >
                 <X className="w-3 h-3" />
                 <span>CLOSE</span>
+                <span className="kbd-shortcut">ESC</span>
               </button>
             </div>
 
