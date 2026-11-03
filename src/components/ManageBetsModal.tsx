@@ -1049,9 +1049,29 @@ export default function ManageBetsModal({
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-zinc-400 block mb-1 uppercase">
-                    Payout / Odds
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-bold text-zinc-400 uppercase">
+                      Payout / Odds
+                    </label>
+                    {legs.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const wMatch = slipWager.match(/(\d+(?:\.\d+)?)/);
+                          const w = wMatch ? parseFloat(wMatch[1]) : 25;
+                          const mult = Math.pow(1.909, legs.length);
+                          const estPay = Math.round(w * mult);
+                          const estOdds = Math.round((mult - 1) * 100);
+                          setSlipPayout(`$${estPay} (+${estOdds})`);
+                        }}
+                        className="text-[9px] font-bold text-amber-400 hover:text-amber-300 flex items-center gap-0.5 uppercase transition-colors"
+                        title="Auto-calculate estimated parlay payout from legs"
+                      >
+                        <Sparkles className="w-2.5 h-2.5" />
+                        <span>Estimate ({legs.length}L)</span>
+                      </button>
+                    )}
+                  </div>
                   <input
                     type="text"
                     value={slipPayout}

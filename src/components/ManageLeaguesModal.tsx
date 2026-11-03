@@ -133,7 +133,7 @@ export default function ManageLeaguesModal({
         type: 'espn',
         name: espnName.trim() || json.name || `ESPN League ${espnId.trim()}`,
         leagueId: espnId.trim(),
-        season: espnSeason,
+        season: json.season || espnSeason,
         week: parseInt(espnWeek) || 6,
         swid: espnSwid.trim() || undefined,
         espn_s2: espnS2.trim() || undefined,

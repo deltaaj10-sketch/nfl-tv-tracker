@@ -244,7 +244,9 @@ function formatPlayerStatPills(player: FantasyPlayer): string[] {
         pills.push(`${s.completions || 0}/${s.passingAttempts || 0}`);
       }
       pills.push(`${s.passingYards || 0} PASS`);
-      if ((s.passingTouchdowns || 0) > 0) pills.push(`${s.passingTouchdowns} TD`);
+      if ((s.passingTouchdowns || 0) > 0) {
+        pills.push((s.rushingTouchdowns || 0) > 0 ? `${s.passingTouchdowns} PASS TD` : `${s.passingTouchdowns} TD`);
+      }
       if ((s.interceptions || 0) > 0) pills.push(`${s.interceptions} INT`);
     }
 
@@ -253,7 +255,7 @@ function formatPlayerStatPills(player: FantasyPlayer): string[] {
       if (pos === 'QB') {
         const qbRush = `${s.rushingAttempts || 0} CAR • ${s.rushingYards || 0} RUSH`;
         pills.push(qbRush);
-        if ((s.rushingTouchdowns || 0) > 0) pills.push(`${s.rushingTouchdowns} TD`);
+        if ((s.rushingTouchdowns || 0) > 0) pills.push(`${s.rushingTouchdowns} RUSH TD`);
       } else if (pos === 'WR' || pos === 'TE') {
         let wrRush = `${s.rushingAttempts || 0} CAR • ${s.rushingYards || 0} YDS`;
         if ((s.rushingTouchdowns || 0) > 0) wrRush += ` • ${s.rushingTouchdowns} TD`;
@@ -560,10 +562,10 @@ function gradeBetLeg(
     if (raw && leg.statType) {
       if (leg.statType === 'passYds') currentVal = raw.passYds;
       else if (leg.statType === 'passTD') currentVal = raw.passTD;
-      else if (leg.statType === 'passComp') currentVal = raw.passComp ?? player?.stats.completions ?? 0;
-      else if (leg.statType === 'passAtt') currentVal = raw.passAtt ?? player?.stats.passingAttempts ?? 0;
+      else if (leg.statType === 'passComp') currentVal = raw.passComp ?? player?.stats?.completions ?? 0;
+      else if (leg.statType === 'passAtt') currentVal = raw.passAtt ?? player?.stats?.passingAttempts ?? 0;
       else if (leg.statType === 'rushYds') currentVal = raw.rushYds;
-      else if (leg.statType === 'carries') currentVal = raw.carries ?? player?.stats.rushingAttempts ?? 0;
+      else if (leg.statType === 'carries') currentVal = raw.carries ?? player?.stats?.rushingAttempts ?? 0;
       else if (leg.statType === 'recYds') currentVal = raw.recYds;
       else if (leg.statType === 'rec') currentVal = raw.rec;
       else if (leg.statType === 'rushRecYds') currentVal = raw.rushYds + raw.recYds;
@@ -719,7 +721,7 @@ function gradeBetLeg(
     const raw = player?.playerRawStats;
     const tdCount = raw
       ? raw.rushTD + raw.recTD + (raw.anytimeTD ? 1 : 0)
-      : (player?.stats.rushingTouchdowns || 0) + (player?.stats.receivingTouchdowns || 0);
+      : (player?.stats?.rushingTouchdowns || 0) + (player?.stats?.receivingTouchdowns || 0);
 
     if (tdCount > 0) {
       return {
@@ -996,6 +998,18 @@ function gradeBetLeg(
         };
       }
       if (isPost) {
+        if (totalCurrent === target) {
+          return {
+            status: 'cashed',
+            statusText: 'PUSH',
+            badgeStyle: 'bg-blue-500/20 text-blue-300 border-blue-500/50',
+            progressText: `${totalCurrent} / ${target} pts (Push)`,
+            progressPct: 100,
+            gameStatusText: gameClock,
+            liveGameMini,
+            ringCategory: 'cash_active',
+          };
+        }
         return {
           status: 'chalked',
           statusText: 'CHALKED',
@@ -1048,6 +1062,18 @@ function gradeBetLeg(
         };
       }
       if (isPost) {
+        if (totalCurrent === target) {
+          return {
+            status: 'cashed',
+            statusText: 'PUSH',
+            badgeStyle: 'bg-blue-500/20 text-blue-300 border-blue-500/50',
+            progressText: `${totalCurrent} / ${target} pts (Push)`,
+            progressPct: 100,
+            gameStatusText: gameClock,
+            liveGameMini,
+            ringCategory: 'cash_active',
+          };
+        }
         return {
           status: 'cashed',
           statusText: 'CASHED',
@@ -1188,7 +1214,7 @@ interface SyncedLeaguePayload {
 function getPlayerPropsSummary(player: FantasyPlayer) {
   const pos = player.position;
   const raw = player.playerRawStats;
-  const stats = player.stats;
+  const stats = player.stats || {};
 
   if (pos === 'QB') {
     const passYdsTarget = 238.5;
@@ -1713,16 +1739,21 @@ export default function TVCommandCenter() {
   const syncLeaguesData = useCallback(async () => {
     if (syncedLeagues.length === 0) return;
 
+    const currentSlateWeek = data?.season?.week || 6;
+    const currentSlateYear = data?.season?.year ? String(data.season.year) : '2026';
+
     for (const league of syncedLeagues) {
       try {
         let json: SyncedLeaguePayload | null = null;
+        const weekToUse = league.week || currentSlateWeek;
         if (league.type === 'sleeper') {
-          const res = await fetch(`/api/sleeper-league?leagueId=${league.leagueId}&week=${league.week || 6}`);
+          const res = await fetch(`/api/sleeper-league?leagueId=${league.leagueId}&week=${weekToUse}`);
           if (res.ok) {
             json = await res.json();
           }
         } else if (league.type === 'espn') {
-          let url = `/api/espn-league?leagueId=${league.leagueId}&season=${league.season || '2026'}&week=${league.week || 6}`;
+          const seasonToUse = league.season || currentSlateYear;
+          let url = `/api/espn-league?leagueId=${league.leagueId}&season=${seasonToUse}&week=${weekToUse}`;
           if (league.swid) url += `&swid=${encodeURIComponent(league.swid)}`;
           if (league.espn_s2) url += `&espn_s2=${encodeURIComponent(league.espn_s2)}`;
 
@@ -1740,7 +1771,7 @@ export default function TVCommandCenter() {
         console.error(`Error syncing league ${league.name}:`, err);
       }
     }
-  }, [syncedLeagues]);
+  }, [syncedLeagues, data?.season?.week, data?.season?.year]);
 
   // Sync league data when leagues change or periodically
   useEffect(() => {
@@ -2373,6 +2404,7 @@ export default function TVCommandCenter() {
 
       handleUpdateLeagues([...syncedLeagues, newLeague]);
       setInlineSleeperSuccess(`Connected "${newLeague.name}"!`);
+      showToast(`Connected "${newLeague.name}"!`, 'success');
       setInlineSleeperInput('');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to connect Sleeper league.';
@@ -3042,10 +3074,12 @@ export default function TVCommandCenter() {
           let toDisplay = '';
           if (interceptorMatch) {
             toDisplay = `INT by ${interceptorMatch[1]}`;
+          } else if (descLower.includes('fumble')) {
+            toDisplay = playerMatch ? `${playerMatch[1]} Fumble` : `${u.team?.abbreviation || 'DEF'} Fumble`;
           } else if (playerMatch) {
-            toDisplay = `${playerMatch[1]} Turn`;
+            toDisplay = `${playerMatch[1]} Turnover`;
           } else {
-            toDisplay = `${u.team?.abbreviation || 'DEF'} Turn`;
+            toDisplay = `${u.team?.abbreviation || 'DEF'} Turnover`;
           }
 
           items.push({
@@ -3054,6 +3088,7 @@ export default function TVCommandCenter() {
             badgeColor: 'bg-rose-950/80 text-rose-300 border border-rose-500/50',
             title: `${toDisplay} (${matchup})`,
             detail: u.gameClock,
+            highlight: u.fantasyImpact || '-2.0 PTS',
             highlightColor: 'text-rose-400',
           });
         }
@@ -3068,14 +3103,17 @@ export default function TVCommandCenter() {
 
     for (const p of topScorers) {
       const pills = formatPlayerStatPills(p);
+      const isProj = Boolean(p.isProjection || data?.isProjectionsMode);
       items.push({
         id: `stud-${p.id}`,
-        badge: 'STUD',
-        badgeColor: 'bg-amber-950/80 text-amber-300 border border-amber-500/50',
+        badge: isProj ? 'PROJ STUD' : 'STUD',
+        badgeColor: isProj
+          ? 'bg-cyan-950/80 text-cyan-300 border border-cyan-500/50'
+          : 'bg-amber-950/80 text-amber-300 border border-amber-500/50',
         title: `${p.name} (${p.team.abbreviation})`,
         detail: pills.slice(0, 2).join(' • ') || undefined,
-        highlight: `${(p.points[scoringFormat] || 0).toFixed(1)} PTS`,
-        highlightColor: 'text-emerald-400',
+        highlight: `${(p.points[scoringFormat] || 0).toFixed(1)} ${isProj ? 'PROJ' : 'PTS'}`,
+        highlightColor: isProj ? 'text-cyan-400' : 'text-emerald-400',
       });
     }
 
@@ -4226,8 +4264,20 @@ export default function TVCommandCenter() {
                         {/* Fantasy Impact & Ownership Tagging */}
                         <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
                           {upd.fantasyImpact && (
-                            <span className="text-[10px] font-mono-score font-bold text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-2 py-0.5 rounded-md flex items-center gap-1">
-                              <Zap className="w-3 h-3 text-emerald-400" />
+                            <span
+                              className={`text-[10px] font-mono-score font-bold px-2 py-0.5 rounded-md flex items-center gap-1 ${
+                                upd.fantasyImpact.trim().startsWith('-')
+                                  ? 'text-rose-400 bg-rose-950/60 border border-rose-500/30'
+                                  : 'text-emerald-400 bg-emerald-950/60 border border-emerald-500/30'
+                              }`}
+                            >
+                              <Zap
+                                className={`w-3 h-3 ${
+                                  upd.fantasyImpact.trim().startsWith('-')
+                                    ? 'text-rose-400'
+                                    : 'text-emerald-400'
+                                }`}
+                              />
                               <span>{upd.fantasyImpact}</span>
                             </span>
                           )}
@@ -4262,9 +4312,9 @@ export default function TVCommandCenter() {
           </div>
         ) : activeTab === 'room' ? (
           /* TAB 8: ROOM MATCHUPS & ROSTERS (12-COLUMN BROADCAST GRID) */
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-3 h-full overflow-hidden">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-3 h-full overflow-y-auto md:overflow-hidden min-h-0">
             {/* Left 5 Columns: Living Room Friends Leaderboard */}
-            <div className="col-span-12 md:col-span-5 flex flex-col h-full bg-[#0e1015] rounded-xl border border-zinc-800/80 p-3 overflow-hidden">
+            <div className="col-span-12 md:col-span-5 flex flex-col h-full bg-[#0e1015] rounded-xl border border-zinc-800/80 p-3 overflow-hidden min-h-[380px] md:min-h-0">
               <div className="flex items-center justify-between pb-2 border-b border-zinc-800/80 shrink-0">
                 <div className="flex items-center gap-2">
                   <Crown className="w-4 h-4 text-amber-400" />
@@ -4504,7 +4554,7 @@ export default function TVCommandCenter() {
             </div>
 
             {/* Right 7 Columns: Connected League Matchups */}
-            <div className="col-span-12 md:col-span-7 flex flex-col h-full bg-[#0e1015] rounded-xl border border-zinc-800/80 p-3 overflow-hidden">
+            <div className="col-span-12 md:col-span-7 flex flex-col h-full bg-[#0e1015] rounded-xl border border-zinc-800/80 p-3 overflow-hidden min-h-[380px] md:min-h-0">
               <div className="flex items-center justify-between pb-2 border-b border-zinc-800/80 shrink-0">
                 <div className="flex items-center gap-2">
                   <Swords className="w-4 h-4 text-cyan-400" />
@@ -5088,7 +5138,7 @@ export default function TVCommandCenter() {
                     </button>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 pb-2">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pb-2">
                     {filteredSlips.map((slip) => {
                       const summary = getSlipSummary(slip, allActivePlayers, data?.games || []);
                     return (
@@ -5726,6 +5776,7 @@ export default function TVCommandCenter() {
                   if (typeof window !== 'undefined') {
                     navigator.clipboard?.writeText(window.location.origin);
                     setCopiedLink(true);
+                    showToast('Room link copied to clipboard!');
                     setTimeout(() => setCopiedLink(false), 2000);
                   }
                 }}

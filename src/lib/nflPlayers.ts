@@ -270,7 +270,11 @@ export async function getMasterNflPlayers(forceRefresh = false): Promise<MasterP
     }
 
     // De-duplicate by canonical ID
-    const uniquePlayers = Array.from(new Set(Array.from(playerMap.values())));
+    const uniqueById = new Map<string, MasterPlayer>();
+    for (const p of playerMap.values()) {
+      if (p?.id) uniqueById.set(p.id, p);
+    }
+    const uniquePlayers = Array.from(uniqueById.values());
     if (uniquePlayers.length > 300) {
       masterCache = uniquePlayers;
       lastMasterFetchTime = Date.now();
@@ -280,5 +284,9 @@ export async function getMasterNflPlayers(forceRefresh = false): Promise<MasterP
     console.error('Failed to update master NFL player cache:', err);
   }
 
-  return masterCache || Array.from(playerMap.values());
+  const fallbackById = new Map<string, MasterPlayer>();
+  for (const p of playerMap.values()) {
+    if (p?.id) fallbackById.set(p.id, p);
+  }
+  return masterCache || Array.from(fallbackById.values());
 }

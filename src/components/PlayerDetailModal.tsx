@@ -358,7 +358,7 @@ export default function PlayerDetailModal({
                 <div className="p-2 rounded-lg bg-[#0e1015] border border-zinc-800">
                   <span className="text-[10px] text-zinc-500 uppercase font-semibold">TOTAL PTS</span>
                   <p className="text-lg font-mono-score font-bold text-emerald-400 mt-0.5">
-                    {player.points.standard.toFixed(1)}
+                    {(player.points?.standard ?? 0).toFixed(1)}
                   </p>
                 </div>
               </div>
@@ -558,7 +558,13 @@ export default function PlayerDetailModal({
                           </span>
                         </div>
                         {play.fantasyImpact && (
-                          <span className="text-[10px] font-mono-score font-bold text-emerald-400">
+                          <span
+                            className={`text-[10px] font-mono-score font-bold ${
+                              play.fantasyImpact.trim().startsWith('-')
+                                ? 'text-rose-400'
+                                : 'text-emerald-400'
+                            }`}
+                          >
                             {play.fantasyImpact}
                           </span>
                         )}
