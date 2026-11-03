@@ -256,7 +256,7 @@ export default function PlayerDetailModal({
                 PPR
               </span>
               <span className="text-2xl md:text-3xl font-mono-score font-bold text-white mt-0.5">
-                {player.points.ppr.toFixed(1)}
+                {(player.points?.ppr ?? 0).toFixed(1)}
               </span>
               <span className="text-[9px] uppercase tracking-wider font-semibold text-zinc-500">
                 PTS
@@ -274,7 +274,7 @@ export default function PlayerDetailModal({
                 0.5 PPR
               </span>
               <span className="text-2xl md:text-3xl font-mono-score font-bold text-white mt-0.5">
-                {player.points.halfPpr.toFixed(1)}
+                {(player.points?.halfPpr ?? 0).toFixed(1)}
               </span>
               <span className="text-[9px] uppercase tracking-wider font-semibold text-zinc-500">
                 PTS
@@ -292,7 +292,7 @@ export default function PlayerDetailModal({
                 STANDARD
               </span>
               <span className="text-2xl md:text-3xl font-mono-score font-bold text-white mt-0.5">
-                {player.points.standard.toFixed(1)}
+                {(player.points?.standard ?? 0).toFixed(1)}
               </span>
               <span className="text-[9px] uppercase tracking-wider font-semibold text-zinc-500">
                 PTS

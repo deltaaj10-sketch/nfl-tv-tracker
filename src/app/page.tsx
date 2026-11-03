@@ -43,7 +43,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
-import { playBroadcastAlertSound } from '@/lib/soundEffects';
+import { playBroadcastAlertSound, initAudioOnUserGesture } from '@/lib/soundEffects';
 import {
   LiveFantasyResponse,
   FantasyPosition,
@@ -1658,6 +1658,7 @@ export default function TVCommandCenter() {
     };
 
     const handleUserInteraction = () => {
+      initAudioOnUserGesture();
       if (!wakeLockSentinelRef.current || wakeLockSentinelRef.current.released) {
         requestWakeLock();
       }
@@ -2942,9 +2943,9 @@ export default function TVCommandCenter() {
       const nonLive = [...upcoming, ...finalGames];
       return { pinnedLiveGames: live, scrollingGames: nonLive, hasActiveRedZone: rzFound, isUpcomingPinned: false };
     } else if (upcoming.length > 0) {
-      // When NO games are actively LIVE, pin upcoming games (like tonight's primetime game) so users immediately see them!
-      const nonLive = [...upcoming, ...finalGames];
-      return { pinnedLiveGames: upcoming, scrollingGames: nonLive, hasActiveRedZone: false, isUpcomingPinned: true };
+      // When NO games are actively LIVE, pin upcoming games (like tonight's primetime game) on left;
+      // scroll only completed (final) games on right to eliminate duplicate game cards
+      return { pinnedLiveGames: upcoming, scrollingGames: finalGames, hasActiveRedZone: false, isUpcomingPinned: true };
     } else {
       return { pinnedLiveGames: [], scrollingGames: finalGames, hasActiveRedZone: false, isUpcomingPinned: false };
     }
@@ -3573,7 +3574,11 @@ export default function TVCommandCenter() {
             <div className="overflow-hidden flex-1 relative flex items-center group">
               {scrollingGames.length === 0 ? (
                 <div className="px-4 text-xs font-semibold text-zinc-500 italic">
-                  All NFL games currently LIVE!
+                  {pinnedLiveGames.length > 0 && !isUpcomingPinned
+                    ? 'All NFL games currently LIVE!'
+                    : isUpcomingPinned
+                    ? 'All scheduled games upcoming'
+                    : 'No games active'}
                 </div>
               ) : (
                 <div
@@ -3740,7 +3745,7 @@ export default function TVCommandCenter() {
           </div>
         ) : activeTab === 'live' ? (
           /* TAB 1: 12-COLUMN BROADCAST GRID (8-COL STUDS + 4-COL VERTICAL PLAY FEED) */
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-3 h-full overflow-hidden min-h-0">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-3 h-full overflow-y-auto md:overflow-hidden min-h-0">
             {/* LEFT 8 COLUMNS: #1 OVERALL STUDS RIGHT NOW (2x3 Grid) */}
             <div className="col-span-12 md:col-span-7 lg:col-span-8 flex flex-col h-full bg-[#0e1015] rounded-xl border border-zinc-800/80 p-3 overflow-hidden min-h-0">
               <div className="flex items-center justify-between pb-2 border-b border-zinc-800/80 shrink-0">
@@ -4022,7 +4027,7 @@ export default function TVCommandCenter() {
             </div>
 
             {/* RIGHT 4 COLUMNS: VERTICAL LIVE SCORING & BIG PLAYS FEED */}
-            <div className="col-span-12 md:col-span-5 lg:col-span-4 flex flex-col h-full bg-[#0e1015] rounded-xl border border-zinc-800/80 p-3 overflow-hidden min-h-0">
+            <div className="col-span-12 md:col-span-5 lg:col-span-4 flex flex-col min-h-[380px] md:min-h-0 md:h-full bg-[#0e1015] rounded-xl border border-zinc-800/80 p-3 overflow-hidden">
               <div className="flex flex-col gap-1.5 pb-2 border-b border-zinc-800/80 shrink-0">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -4464,9 +4469,16 @@ export default function TVCommandCenter() {
                               onClick={(e) => {
                                 e.stopPropagation();
                                 const athlete = allActivePlayers.find(
-                                  (ap) => ap.name.toLowerCase() === p.name.toLowerCase()
+                                  (ap) =>
+                                    normalize(ap.name) === normalize(p.name) ||
+                                    (p.position === 'DEF' &&
+                                      normalize(ap.team.abbreviation) === normalize(p.team || p.name))
                                 );
-                                if (athlete) setSelectedDetailPlayer(athlete);
+                                if (athlete) {
+                                  setSelectedDetailPlayer(athlete);
+                                } else {
+                                  showToast(`${p.name} (${p.team || 'NFL'}) is on this roster`, 'info');
+                                }
                               }}
                               className="px-2 py-0.5 rounded-md bg-[#0a0b0e] hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 text-[10px] font-mono-score font-medium text-zinc-300 flex items-center gap-1.5 cursor-pointer transition-colors"
                               title={`Click to inspect ${p.name}`}
@@ -5470,7 +5482,7 @@ export default function TVCommandCenter() {
               </div>
             ) : (
               /* 2-Column Grid: Ranks 1-5 (Left) and Ranks 6-10 (Right) - Exactly 5 items per column fitting 100% */
-              <div className="flex-1 grid grid-cols-2 gap-2.5 h-full overflow-hidden min-h-0">
+              <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-2.5 h-full overflow-y-auto md:overflow-hidden min-h-0">
                 {/* Left Column: Ranks 1 to 5 */}
                 <div className="flex flex-col gap-2 h-full justify-between overflow-hidden min-h-0">
                   {sortedLeaderboards?.[activeTab as FantasyPosition]

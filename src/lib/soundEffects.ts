@@ -22,6 +22,16 @@ function getAudioContext(): AudioContext | null {
 }
 
 /**
+ * Unlock Web Audio on user gesture (click, tap, keypress)
+ */
+export function initAudioOnUserGesture(): void {
+  const ctx = getAudioContext();
+  if (ctx && ctx.state === 'suspended') {
+    ctx.resume().catch(() => {});
+  }
+}
+
+/**
  * Play a custom synthesized audio broadcast alert
  * @param type 'touchdown' (stadium fanfare chord) | 'cashed' (cash-register casino chime)
  */

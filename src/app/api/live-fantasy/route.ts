@@ -490,7 +490,7 @@ function calculateTeamDef(
           safeties += 1;
         }
         if (playText.includes('interception return') || playText.includes('fumble return') || playText.includes('kickoff return') || playText.includes('punt return')) {
-          if (defTouchdowns === 0) defTouchdowns += 1;
+          if (!defTDStat) defTouchdowns += 1;
         }
       }
     }
