@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { Redis } from '@upstash/redis';
 import {
   FantasyPosition,
   FantasyPlayer,
@@ -27,6 +28,65 @@ interface CachedRosterAthlete {
   headshot: string;
   jersey?: string;
   teamId: string;
+}
+
+// Upstash Redis Client with Zero-Config In-Memory Map Fallback
+let redisClient: Redis | null = null;
+if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
+  try {
+    redisClient = new Redis({
+      url: process.env.UPSTASH_REDIS_REST_URL,
+      token: process.env.UPSTASH_REDIS_REST_TOKEN,
+    });
+  } catch (err) {
+    console.warn('Failed to initialize Upstash Redis, falling back to in-memory cache:', err);
+    redisClient = null;
+  }
+}
+
+// In-Memory Global Map Fallback
+interface LiveFantasyResponseCacheEntry {
+  payload: LiveFantasyResponse;
+  timestamp: number;
+}
+const inMemoryCache: Map<string, LiveFantasyResponseCacheEntry> =
+  (globalThis as any).__liveFantasyMapCache ||
+  ((globalThis as any).__liveFantasyMapCache = new Map<string, LiveFantasyResponseCacheEntry>());
+
+// Persistent Pre-Game Player Props & Lines Snapshot
+const PROP_SNAPSHOT_KEY = '__nflPropsSnapshot';
+
+async function getCachedFantasyData(cacheKey: string): Promise<LiveFantasyResponse | null> {
+  const now = Date.now();
+  if (redisClient) {
+    try {
+      const cached = await redisClient.get<LiveFantasyResponse>(cacheKey);
+      if (cached && typeof cached === 'object') {
+        return cached;
+      }
+    } catch {
+      // Fallback to memory
+    }
+  }
+  const memEntry = inMemoryCache.get(cacheKey);
+  if (memEntry && now - memEntry.timestamp < 12000) {
+    return memEntry.payload;
+  }
+  return null;
+}
+
+async function setCachedFantasyData(cacheKey: string, payload: LiveFantasyResponse): Promise<void> {
+  const now = Date.now();
+  inMemoryCache.set(cacheKey, { payload, timestamp: now });
+  (globalThis as any).__liveFantasyCache = { payload, timestamp: now };
+
+  if (redisClient) {
+    try {
+      await redisClient.set(cacheKey, payload, { ex: 12 });
+    } catch {
+      // Non-fatal
+    }
+  }
 }
 
 // Global in-memory roster cache to map athlete ID -> official position abbreviation
@@ -586,13 +646,14 @@ export async function GET(request: Request) {
     const forceRefresh = searchParams.get('refresh') === 'true' || forceCron;
     const modeOverride = searchParams.get('mode'); // 'projections' | 'live'
     const weekOverride = searchParams.get('week') ? parseInt(searchParams.get('week')!) : null;
+    const format = searchParams.get('format') || 'ppr';
+    const cacheKey = `live_fantasy_${format}_${modeOverride || 'auto'}_${weekOverride || 'auto'}`;
 
-    const now = Date.now();
-    // 1. 10-Second in-memory response cache: returns in ~2ms and eliminates ESPN rate limits
-    if (!forceRefresh && !modeOverride && !weekOverride) {
-      const cachedResponse = (globalThis as any).__liveFantasyCache as LiveFantasyResponseCache | undefined;
-      if (cachedResponse && now - cachedResponse.timestamp < 10000) {
-        return NextResponse.json(cachedResponse.payload, {
+    // 1. 12-Second response cache (Upstash Redis + in-memory Map fallback): returns in <20ms
+    if (!forceRefresh) {
+      const cachedResponse = await getCachedFantasyData(cacheKey);
+      if (cachedResponse) {
+        return NextResponse.json(cachedResponse, {
           headers: {
             'X-Cache': 'HIT',
             'Cache-Control': 'public, s-maxage=10, stale-while-revalidate=5',
@@ -1804,6 +1865,21 @@ export async function GET(request: Request) {
       return a.name.localeCompare(b.name);
     });
 
+    // Maintain persistent globalThis snapshot of pre-game player prop lines
+    // So when games go FINAL and sportsbooks close live markets, the 625 props stay visible
+    if (allAvailable.length >= 250) {
+      (globalThis as any)[PROP_SNAPSHOT_KEY] = allAvailable;
+    } else if ((globalThis as any)[PROP_SNAPSHOT_KEY] && allAvailable.length < 250) {
+      const snapshot: FantasyPlayer[] = (globalThis as any)[PROP_SNAPSHOT_KEY];
+      const existingIds = new Set(allAvailable.map((p) => p.id));
+      for (const p of snapshot) {
+        if (!existingIds.has(p.id)) {
+          allAvailable.push(p);
+          existingIds.add(p.id);
+        }
+      }
+    }
+
     const responsePayload: LiveFantasyResponse = {
       lastUpdated: new Date().toISOString(),
       season: {
@@ -1821,11 +1897,8 @@ export async function GET(request: Request) {
       projectionsKickoff: windowStatus.earliestKickoff,
     };
 
-    // Store in global 10-second response cache
-    (globalThis as any).__liveFantasyCache = {
-      payload: responsePayload,
-      timestamp: Date.now(),
-    };
+    // Store in 12-second Upstash Redis + in-memory Map cache
+    await setCachedFantasyData(cacheKey, responsePayload);
 
     return NextResponse.json(responsePayload, {
       headers: {

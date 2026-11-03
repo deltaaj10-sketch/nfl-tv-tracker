@@ -64,6 +64,7 @@ import ManageLeaguesModal from '@/components/ManageLeaguesModal';
 import ManageBetsModal from '@/components/ManageBetsModal';
 import PlayerDetailModal from '@/components/PlayerDetailModal';
 import ParlayHedgeCalculator from '@/components/ParlayHedgeCalculator';
+import { getRoomState, syncRoomState } from '@/app/actions/roomActions';
 
 interface TeamColorConfig {
   primary: string;
@@ -1559,6 +1560,15 @@ export default function TVCommandCenter() {
           guestTags: override?.guestTags ?? guestTags,
           savedBets: override?.savedBets ?? savedBets,
         };
+
+        // 1. Invoke Server Action (Upstash Redis + in-memory Map fallback)
+        syncRoomState('default', {
+          slips: payload.savedBets,
+          guestFriends: payload.guestTags,
+          sleeperLeagues: payload.syncedLeagues,
+        }).catch((err) => console.warn('Server action sync error:', err));
+
+        // 2. Also POST to /api/room-state for backwards-compatible REST sync
         const res = await fetch('/api/room-state', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1579,6 +1589,43 @@ export default function TVCommandCenter() {
 
   const fetchRoomState = useCallback(async () => {
     try {
+      // 1. Try Server Action first
+      try {
+        const actionState = await getRoomState('default');
+        if (actionState && actionState.updatedAt > lastRoomStateSyncRef.current) {
+          const hasActionData =
+            (Array.isArray(actionState.sleeperLeagues) && actionState.sleeperLeagues.length > 0) ||
+            (Array.isArray(actionState.guestFriends) && actionState.guestFriends.length > 0) ||
+            (Array.isArray(actionState.slips) && actionState.slips.length > 0);
+
+          if (lastRoomStateSyncRef.current !== 0 || hasActionData) {
+            lastRoomStateSyncRef.current = actionState.updatedAt;
+            if (Array.isArray(actionState.sleeperLeagues)) {
+              setSyncedLeagues(actionState.sleeperLeagues);
+              try {
+                localStorage.setItem('nfl_tv_synced_leagues', JSON.stringify(actionState.sleeperLeagues));
+              } catch {}
+            }
+            if (Array.isArray(actionState.guestFriends)) {
+              setGuestTags(actionState.guestFriends);
+              try {
+                localStorage.setItem('nfl_tv_guest_tags', JSON.stringify(actionState.guestFriends));
+              } catch {}
+            }
+            if (Array.isArray(actionState.slips)) {
+              setSavedBets(actionState.slips);
+              try {
+                localStorage.setItem('nfl_tv_bets', JSON.stringify(actionState.slips));
+              } catch {}
+            }
+            return;
+          }
+        }
+      } catch {
+        // Non-fatal, fallback to REST
+      }
+
+      // 2. Fallback to /api/room-state
       const res = await fetch('/api/room-state', { cache: 'no-store' });
       if (!res.ok) return;
       const json = await res.json();
@@ -3038,7 +3085,12 @@ export default function TVCommandCenter() {
         const descLower = desc.toLowerCase();
         const headlineLower = (u.headline || '').toLowerCase();
         // Skip nullified plays with "No Play"
-        if (descLower.includes('no play') || headlineLower.includes('no play')) {
+        if (
+          descLower.includes('no play') ||
+          headlineLower.includes('no play') ||
+          /\bno\s*play\b/i.test(desc) ||
+          /\bno\s*play\b/i.test(u.headline || '')
+        ) {
           continue;
         }
 
@@ -3082,13 +3134,26 @@ export default function TVCommandCenter() {
             toDisplay = `${u.team?.abbreviation || 'DEF'} Turnover`;
           }
 
+          const cleanTitle = `${toDisplay} (${matchup})`
+            .replace(/\s*\[TURNOVER\]\s*$/i, '')
+            .replace(/\s*\(TURNOVER\)\s*$/i, '')
+            .trim();
+          const cleanDetail = (u.gameClock || '')
+            .replace(/\s*\[TURNOVER\]\s*$/i, '')
+            .replace(/\s*\(TURNOVER\)\s*$/i, '')
+            .trim();
+          const cleanHighlight = (u.fantasyImpact || '-2.0 PTS')
+            .replace(/\s*\[TURNOVER\]\s*$/i, '')
+            .replace(/\s*\(TURNOVER\)\s*$/i, '')
+            .trim();
+
           items.push({
             id: `to-${u.id}`,
             badge: 'TURNOVER',
             badgeColor: 'bg-rose-950/80 text-rose-300 border border-rose-500/50',
-            title: `${toDisplay} (${matchup})`,
-            detail: u.gameClock,
-            highlight: u.fantasyImpact || '-2.0 PTS',
+            title: cleanTitle,
+            detail: cleanDetail,
+            highlight: cleanHighlight,
             highlightColor: 'text-rose-400',
           });
         }
@@ -3783,7 +3848,7 @@ export default function TVCommandCenter() {
           </div>
         ) : activeTab === 'live' ? (
           /* TAB 1: 12-COLUMN BROADCAST GRID (8-COL STUDS + 4-COL VERTICAL PLAY FEED) */
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-3 h-full overflow-y-auto md:overflow-hidden min-h-0">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-3 h-full overflow-hidden min-h-0">
             {/* LEFT 8 COLUMNS: #1 OVERALL STUDS RIGHT NOW (2x3 Grid) */}
             <div className="col-span-12 md:col-span-7 lg:col-span-8 flex flex-col h-full bg-[#0e1015] rounded-xl border border-zinc-800/80 p-3 overflow-hidden min-h-0">
               <div className="flex items-center justify-between pb-2 border-b border-zinc-800/80 shrink-0">
@@ -3835,7 +3900,7 @@ export default function TVCommandCenter() {
               </div>
 
               {/* 2 Columns x 3 Rows Grid */}
-              <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-2.5 pt-2 overflow-y-auto pr-1 min-h-0">
+              <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-2 pt-1.5 overflow-hidden min-h-0">
                 {[
                   { pos: 'QB' as FantasyPosition, label: 'TOP QB' },
                   { pos: 'RB' as FantasyPosition, label: 'TOP RB' },
@@ -4065,7 +4130,7 @@ export default function TVCommandCenter() {
             </div>
 
             {/* RIGHT 4 COLUMNS: VERTICAL LIVE SCORING & BIG PLAYS FEED */}
-            <div className="col-span-12 md:col-span-5 lg:col-span-4 flex flex-col min-h-[380px] md:min-h-0 md:h-full bg-[#0e1015] rounded-xl border border-zinc-800/80 p-3 overflow-hidden">
+            <div className="col-span-12 md:col-span-5 lg:col-span-4 flex flex-col h-full bg-[#0e1015] rounded-xl border border-zinc-800/80 p-3 overflow-hidden min-h-0">
               <div className="flex flex-col gap-1.5 pb-2 border-b border-zinc-800/80 shrink-0">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -4153,7 +4218,7 @@ export default function TVCommandCenter() {
               </div>
 
               {/* Scrollable Vertical Plays List */}
-              <div className="flex-1 flex flex-col gap-2 overflow-y-auto max-h-[calc(100vh-230px)] pr-1 pt-2">
+              <div className="flex-1 flex flex-col gap-2 overflow-y-auto pr-1 pt-2 min-h-0">
                 {filteredLiveUpdates.length === 0 ? (
                   <div className="h-full flex flex-col items-center justify-center text-zinc-500 font-condensed font-medium text-xs py-8 gap-2 text-center">
                     <span>
