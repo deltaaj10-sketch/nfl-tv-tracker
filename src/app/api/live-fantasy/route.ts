@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { Redis } from '@upstash/redis';
 import {
   FantasyPosition,
   FantasyPlayer,
@@ -29,7 +30,24 @@ interface CachedRosterAthlete {
   teamId: string;
 }
 
-// 100% Free Built-In Node.js Server RAM Cache: globalThis.__fantasyCache (zero external packages)
+// Connect to Vercel KV / Upstash Redis if credentials exist
+let redisClient: Redis | null = null;
+const redisUrl = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+const redisToken = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+
+if (redisUrl && redisToken) {
+  try {
+    redisClient = new Redis({
+      url: redisUrl,
+      token: redisToken,
+    });
+  } catch (err) {
+    console.warn('Failed to initialize Vercel KV Redis, using memory cache:', err);
+    redisClient = null;
+  }
+}
+
+// 100% Free Built-In Node.js Server RAM Cache: globalThis.__fantasyCache
 interface FantasyCacheEntry {
   payload: LiveFantasyResponse;
   timestamp: number;
@@ -43,18 +61,38 @@ const propsSnapshot: Map<string, FantasyPlayer> =
   (globalThis as any).__propsSnapshot ||
   ((globalThis as any).__propsSnapshot = new Map<string, FantasyPlayer>());
 
-function getCachedFantasyData(cacheKey: string): LiveFantasyResponse | null {
+async function getCachedFantasyData(cacheKey: string): Promise<LiveFantasyResponse | null> {
+  const now = Date.now();
+  if (redisClient) {
+    try {
+      const cached = await redisClient.get<LiveFantasyResponse>(cacheKey);
+      if (cached && typeof cached === 'object') {
+        fantasyCache.set(cacheKey, { payload: cached, timestamp: now });
+        return cached;
+      }
+    } catch {
+      // Fallback to memory
+    }
+  }
   const entry = fantasyCache.get(cacheKey);
-  if (entry && Date.now() - entry.timestamp < 12000) {
+  if (entry && now - entry.timestamp < 12000) {
     return entry.payload;
   }
   return null;
 }
 
-function setCachedFantasyData(cacheKey: string, payload: LiveFantasyResponse): void {
+async function setCachedFantasyData(cacheKey: string, payload: LiveFantasyResponse): Promise<void> {
   const now = Date.now();
   fantasyCache.set(cacheKey, { payload, timestamp: now });
   (globalThis as any).__liveFantasyCache = { payload, timestamp: now };
+
+  if (redisClient) {
+    try {
+      await redisClient.set(cacheKey, payload, { ex: 12 });
+    } catch {
+      // Non-fatal
+    }
+  }
 }
 
 // Global in-memory roster cache to map athlete ID -> official position abbreviation
@@ -618,9 +656,9 @@ export async function GET(request: Request) {
     const scoringFormat = rawFormat.includes('half') ? 'half' : rawFormat.includes('std') ? 'std' : 'ppr';
     const cacheKey = `fantasy_${scoringFormat}_${modeOverride || 'auto'}_${weekOverride || 'auto'}`;
 
-    // 1. 12-Second Server RAM & Vercel Edge Cache (globalThis.__fantasyCache): returns in <20ms
+    // 1. 12-Second Server RAM & Vercel Edge Cache (globalThis.__fantasyCache & Vercel KV): returns in <20ms
     if (!forceRefresh) {
-      const cachedResponse = getCachedFantasyData(cacheKey);
+      const cachedResponse = await getCachedFantasyData(cacheKey);
       if (cachedResponse) {
         return NextResponse.json(cachedResponse, {
           headers: {
@@ -1866,8 +1904,8 @@ export async function GET(request: Request) {
       projectionsKickoff: windowStatus.earliestKickoff,
     };
 
-    // Store in 12-second Server RAM cache (globalThis.__fantasyCache)
-    setCachedFantasyData(cacheKey, responsePayload);
+    // Store in 12-second Server RAM & Vercel KV cache (globalThis.__fantasyCache)
+    await setCachedFantasyData(cacheKey, responsePayload);
 
     return NextResponse.json(responsePayload, {
       headers: {
