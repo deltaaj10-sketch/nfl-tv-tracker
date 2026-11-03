@@ -1,6 +1,5 @@
 'use server';
 
-import { Redis } from '@upstash/redis';
 import { SyncedLeagueConfig, GuestTagConfig } from '@/types/leagues';
 import { BetSlip } from '@/types/fantasy';
 
@@ -21,21 +20,7 @@ export interface PartialRoomState {
   updatedAt?: number;
 }
 
-// Auto-detect Upstash Redis credentials from environment
-let redisClient: Redis | null = null;
-if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
-  try {
-    redisClient = new Redis({
-      url: process.env.UPSTASH_REDIS_REST_URL,
-      token: process.env.UPSTASH_REDIS_REST_TOKEN,
-    });
-  } catch (err) {
-    console.warn('Failed to initialize Upstash Redis for room actions, falling back to memory store:', err);
-    redisClient = null;
-  }
-}
-
-// Zero-Config Global In-Memory Fallback
+// 100% Free Built-In Node.js Server Memory Map: globalThis.__roomStore (zero external packages)
 const memoryStore: Map<string, RoomState> =
   (globalThis as any).__roomStore ||
   ((globalThis as any).__roomStore = new Map<string, RoomState>());
@@ -44,30 +29,16 @@ const GLOBAL_SHARED_KEY = '__nflSharedRoomState';
 
 /**
  * Retrieve current synced room state for a given room (default 'default')
+ * Backed by built-in globalThis.__roomStore Map + client localStorage persistence
  */
 export async function getRoomState(roomId: string = 'default'): Promise<RoomState> {
-  const roomKey = `nfl_room_${roomId}`;
-
-  // 1. Try Upstash Redis if configured
-  if (redisClient) {
-    try {
-      const data = await redisClient.get<RoomState>(roomKey);
-      if (data && typeof data === 'object') {
-        memoryStore.set(roomId, data);
-        return data;
-      }
-    } catch (err) {
-      console.warn('Error reading from Upstash Redis room store:', err);
-    }
-  }
-
-  // 2. Fall back to in-memory global store
+  // 1. Read from built-in in-memory global store
   const inMemory = memoryStore.get(roomId);
   if (inMemory) {
     return inMemory;
   }
 
-  // 3. Fall back to shared room state from /api/room-state if present
+  // 2. Fall back to shared room state from /api/room-state if present
   const sharedGlobal = (globalThis as any)[GLOBAL_SHARED_KEY];
   if (sharedGlobal) {
     const state: RoomState = {
@@ -80,7 +51,7 @@ export async function getRoomState(roomId: string = 'default'): Promise<RoomStat
     return state;
   }
 
-  // 4. Default empty room state
+  // 3. Default empty room state
   const defaultState: RoomState = {
     slips: [],
     guestFriends: [],
@@ -111,7 +82,7 @@ export async function syncRoomState(
     updatedAt: Date.now(),
   };
 
-  // Update in-memory Map
+  // Update in-memory global Map
   memoryStore.set(roomId, newState);
 
   // Sync to global shared key for /api/room-state compatibility
@@ -121,15 +92,6 @@ export async function syncRoomState(
     savedBets: updatedSlips,
     lastUpdated: newState.updatedAt,
   };
-
-  // Update Upstash Redis with 7-day retention
-  if (redisClient) {
-    try {
-      await redisClient.set(`nfl_room_${roomId}`, newState, { ex: 604800 });
-    } catch (err) {
-      console.warn('Error saving to Upstash Redis room store:', err);
-    }
-  }
 
   return newState;
 }
